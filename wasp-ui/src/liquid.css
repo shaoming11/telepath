@@ -464,39 +464,51 @@ body.wasp-liquid {
 }
 .wasp-liquid .reveal__head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, auto);
-  align-items: end;
-  gap: clamp(24px, 4vw, 54px);
+  min-inline-size: 0;
+  gap: clamp(10px, 2.1vw, 24px);
+  padding-block: clamp(4px, 2vw, 26px) 24px;
+  border-bottom: 1px solid var(--line);
 }
-.wasp-liquid .reveal__headline .kicker { margin-block-end: 12px; }
 .wasp-liquid .reveal__head .score {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: grid;
+  inline-size: max-content;
+  max-inline-size: 100%;
+  grid-template-columns: minmax(0, max-content) auto minmax(0, max-content);
+  gap: clamp(14px, 4.2cqi, 56px);
   align-items: start;
-  gap: 12px clamp(12px, 3vw, 30px);
-  padding: clamp(16px, 3vw, 32px);
-  background: var(--panel);
-  border: 1px solid var(--line-2);
-  border-radius: 23px;
-  box-shadow: inset 0 1px 0 #ffffff12;
+  font-weight: 400;
 }
-.wasp-liquid .reveal__head .score__num > span { font-size: clamp(3rem, 7vw, 6rem); }
+.wasp-liquid .reveal__head .score__num > span {
+  font-size: clamp(4.5rem, 15cqi, 11rem);
+  letter-spacing: -.065em;
+}
+.wasp-liquid .reveal__head .score[data-long=true] .score__num > span {
+  font-size: clamp(3.5rem, 10.5cqi, 8rem);
+}
 .wasp-liquid .reveal__head .score__num small {
-  line-height: 1.35;
-  letter-spacing: .025em;
-  max-inline-size: 16ch;
+  max-inline-size: 21ch;
+  font: 450 clamp(1.02rem, 2.65cqi, 2rem)/1.15 var(--sans);
+  color: var(--fg-2);
+  letter-spacing: -.03em;
+  text-transform: none;
 }
-.wasp-liquid .reveal__head .score__arrow { margin: 0; align-self: center; }
+.wasp-liquid .reveal__head .score__arrow {
+  width: clamp(40px, 7cqi, 80px);
+  height: auto;
+  margin: clamp(21px, 5.8cqi, 65px) 0 0;
+  color: var(--fg-3);
+}
 .wasp-liquid .reveal__head .score__count {
   margin: 0;
-  padding-block-start: 12px;
-  border-top: 1px solid var(--line);
   color: var(--fg-2);
+  font-size: clamp(1rem, 1.9cqi, 1.375rem);
 }
-.wasp-liquid[data-phase=reveal] .reveal__headline { animation: liquid-hero 390ms var(--glide) both; }
 .wasp-liquid[data-phase=reveal] #reveal-title:focus { outline: none; }
-.wasp-liquid[data-phase=reveal] .reveal__head .score { animation: liquid-enter 320ms var(--glide) 50ms both; }
-.wasp-liquid[data-phase=reveal] .score__arrow path { animation: liquid-route 350ms ease 140ms both; }
-.wasp-liquid[data-phase=reveal] :is(.lanes-wrap, .timeline) { animation: liquid-enter 320ms var(--glide) 110ms both; }
+.wasp-liquid .score__arrow-trace { stroke: var(--fg); opacity: 0; }
+.wasp-liquid[data-phase=reveal] .score[data-ready=true] .score__arrow-trace {
+  animation: liquid-route 390ms var(--glide) both;
+}
+.wasp-liquid[data-phase=reveal] :is(.lanes-wrap, .timeline) { animation: liquid-enter 230ms var(--glide) 50ms both; }
 .wasp-liquid[data-phase=reveal] #room-microphone-panel { order: 1; margin-block-end: 32px; }
 .wasp-liquid[data-phase=reveal] #room-microphone-panel:has(#room-transcript[hidden]),
 .wasp-liquid[data-phase=reveal] .room-console :is(.room-console__head, .room-console__input, .room-console__notice) {
@@ -504,8 +516,9 @@ body.wasp-liquid {
 }
 
 @keyframes liquid-route {
-  from { stroke-dasharray: 1; stroke-dashoffset: .86; opacity: .34; }
-  to { stroke-dasharray: 1; stroke-dashoffset: 0; opacity: 1; }
+  from { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: .26; }
+  65% { opacity: .64; }
+  to { stroke-dasharray: 1; stroke-dashoffset: 0; opacity: 0; }
 }
 
 @keyframes liquid-enter {
@@ -528,10 +541,15 @@ body.wasp-liquid {
 @media (max-width: 760px) {
   .wasp-liquid[data-surface="stage"] .frame { border: 0; border-radius: 0; }
   .wasp-liquid[data-surface="stage"] .nav { margin: 8px 12px 0; padding-inline: 12px; }
-  .wasp-liquid .reveal__head { grid-template-columns: minmax(0, 1fr); }
-  .wasp-liquid .reveal__head .score { justify-self: start; inline-size: min(100%, 28rem); }
+  .wasp-liquid .reveal__head .score { inline-size: max-content; grid-template-columns: minmax(0, 1fr); gap: 11px; }
+  .wasp-liquid .reveal__head .score__num > span { font-size: clamp(4rem, 21vw, 6rem); }
+  .wasp-liquid .reveal__head .score[data-long=true] .score__num > span { font-size: clamp(3.5rem, 18vw, 4.5rem); }
+  .wasp-liquid .reveal__head .score__arrow { width: 26px; margin: 4px 0; transform: rotate(90deg); }
   .wasp-liquid .room-console__actions { flex-wrap: wrap; justify-content: flex-start; gap: 7px; }
   .wasp-liquid .room-console__actions button { white-space: normal; }
+}
+@media (max-width: 420px) {
+  .wasp-liquid[data-phase=reveal] .mark--tap span { display: none; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .wasp-liquid :is(.masthead, .live-nav, .nav, .op-toggle) {
