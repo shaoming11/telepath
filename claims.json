@@ -1,45 +1,4 @@
 {
-  "revision": 181,
-  "claims": [
-    {
-      "id": "7e4e0cd8-97b8-4ce7-9853-23e964965492",
-      "owner": "influxtion",
-      "agent": "codex-wasp-real",
-      "branch": "codex/wasp-precision-ui",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/stage.css",
-        "public/phone.css",
-        "public/stage.html",
-        "public/index.html",
-        "hub/server.mjs",
-        "hub/tls.mjs",
-        "scripts/frontend-live.mjs",
-        "scripts/frontend-launch.mjs",
-        "scripts/frontend-wsl.sh",
-        "package.json",
-        "docs/frontend.md",
-        "tests/frontend-live.test.mjs",
-        "tests/transport.test.mjs",
-        "tests/tls.test.mjs"
-      ],
-      "paths": [
-        "docs/frontend.md",
-        "hub/server.mjs",
-        "hub/tls.mjs",
-        "package.json",
-        "public/index.html",
-        "public/phone.css",
-        "public/stage.css",
-        "public/stage.html",
-        "scripts/frontend-launch.mjs",
-        "scripts/frontend-live.mjs",
-        "scripts/frontend-wsl.sh",
-        "tests/frontend-live.test.mjs",
-        "tests/tls.test.mjs",
-        "tests/transport.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T16:49:02.329Z"
-    }
-  ]
+  "revision": 182,
+  "claims": []
 }
