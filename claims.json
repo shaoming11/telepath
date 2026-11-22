@@ -1,4 +1,33 @@
 {
-  "revision": 32,
-  "claims": []
+  "revision": 33,
+  "claims": [
+    {
+      "id": "a1d8348f-1cf3-4b50-8568-a250840d8a67",
+      "owner": "influxtion",
+      "agent": "mac-room-microphone",
+      "branch": "codex/conversation-answers",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "hub",
+        "public/stage.mjs",
+        "public/stage.html",
+        "public/stage.css",
+        "public/phone.mjs",
+        "public/capture.mjs",
+        "tests",
+        "README.md"
+      ],
+      "paths": [
+        "README.md",
+        "hub",
+        "public/capture.mjs",
+        "public/phone.mjs",
+        "public/stage.css",
+        "public/stage.html",
+        "public/stage.mjs",
+        "tests"
+      ],
+      "claimedAt": "2026-11-22T04:14:39.567Z"
+    }
+  ]
 }
