@@ -229,7 +229,7 @@ test('covering a missed point cancels its preview and prevents a repeated remind
   assert.equal(audioFrames('B', 'draft').length, 1);
 });
 
-test('Mac room audio drives grounded answers without phone microphones and stops pending work on pause', async t => {
+test('Mac room audio waits for a request before answering and stops pending work on pause', async t => {
   let callbacks;
   const calls = [];
   const { session, state } = await answerFixture(t, { settings: { roomInput: 'mac' }, audio: {
@@ -242,6 +242,9 @@ test('Mac room audio drives grounded answers without phone microphones and stops
   await session.receiveMic('A', { audio: 'QUJD', level: .2 });
   assert.equal(session.seats.A.transcript.length, 0);
   await session.receiveRoomMic({ audio: 'QUJD', level: .2 });
+  await session.answerQuestion();
+  assert.equal(state().seats.B.pending, null);
+  await session.answerQuestion('B');
   await eventually(() => state().seats.B.pending);
   assert.equal(state().room.transcript[0].text, 'Who buys it? I do not know.');
   assert.equal(state().seats.A.transcript.length, 0);
