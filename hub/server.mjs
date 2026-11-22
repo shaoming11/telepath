@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { appendFile, stat } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16,6 +16,7 @@ import { findLanAddress, hotspotIPv6Peers, resolveTLS } from './tls.mjs';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const RUNTIME = fileURLToPath(new URL('../.runtime/', import.meta.url));
+const DIAG_LOG = resolve(RUNTIME, 'diag.log');
 const MAX_SOCKET_BACKLOG = 2 * 1024 * 1024;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const LOOPBACK_PEERS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -188,6 +189,10 @@ export function createHub({
       if (TEST_AUDIO[path]) path = '/assets/' + TEST_AUDIO[path];
       if (path === '/') path = '/index.html';
       if (path === '/stage') path = '/stage.html';
+      if (path === '/room' || path === '/room.html') {
+        res.writeHead(302, { Location: '/stage#room-microphone-panel', 'Cache-Control': 'no-store' });
+        return res.end();
+      }
       if (path.split('/').some(segment => segment.startsWith('.'))) return respond(req, res, 404, 'text/plain', 'Not found.');
       const absolute = resolve(PUBLIC, '.' + path);
       if (!absolute.startsWith(resolve(PUBLIC) + sep)) return respond(req, res, 404, 'text/plain', 'Not found.');
@@ -302,6 +307,13 @@ export function createHub({
               send(ws, scope({ type: 'signal_ack', id: frame.id, accepted: current, ...reason }));
             }
             if (!current) return;
+            if (role === 'seat' && frame.type === 'diag') {
+              const { type, hubId, sessionId, ...entry } = frame;
+              const line = JSON.stringify({ at: new Date().toISOString(), seat, ...entry });
+              if (typeof entry.kind !== 'string' || line.length > 4096) return;
+              appendFile(DIAG_LOG, line + '\n').catch(() => {});
+              return;
+            }
             if (role === 'seat' && frame.type === 'room_mic_invite') {
               if (session.roomInput === 'mac') {
                 send(ws, scope({ type: 'room_mic_invite', error: 'Start the room mic on the Mac Stage.' }));

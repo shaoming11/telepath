@@ -28,6 +28,7 @@ export function splitDiarizedSegment(message) {
 export function createSpeakerBindings() {
   const aliases = new Map();
   const numbers = new Map();
+  const seats = new Map();
 
   function canonical(speaker) {
     let id = validSpeaker(speaker);
@@ -40,6 +41,9 @@ export function createSpeakerBindings() {
     const target = canonical(to);
     if (!source || !target || source === target) return false;
     if (!numbers.has(target) && numbers.has(source)) numbers.set(target, numbers.get(source));
+    const seat = seats.get(target) ?? seats.get(source);
+    if (seat) seats.set(target, seat);
+    seats.delete(source);
     aliases.set(source, target);
     return true;
   }
@@ -48,8 +52,24 @@ export function createSpeakerBindings() {
     const id = canonical(speaker);
     if (!id) return { speaker: null, label: 'Unassigned speaker' };
     if (!numbers.has(id)) numbers.set(id, numbers.size + 1);
-    return { speaker: id, label: 'Speaker ' + numbers.get(id) };
+    const seat = seats.get(id) ?? null;
+    return { speaker: id, seat, label: seat ? 'Seat ' + seat : 'Speaker ' + numbers.get(id) };
   }
 
-  return { describe, merge };
+  function assign(speaker, seat) {
+    const id = canonical(speaker);
+    if (!numbers.has(id) || ![null, 'A', 'B'].includes(seat)) return false;
+    const previous = seats.get(id);
+    for (const [other, assigned] of seats) {
+      if (other === id || assigned !== seat) continue;
+      seats.delete(other);
+      if (previous) seats.set(other, previous);
+      break;
+    }
+    seats.delete(id);
+    if (seat) seats.set(id, seat);
+    return true;
+  }
+
+  return { assign, describe, merge };
 }

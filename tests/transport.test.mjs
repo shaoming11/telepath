@@ -83,10 +83,12 @@ test('only the owning stage tab can stream room audio; disconnect and stale-sess
   const audioFrames = [];
   const hub = createHub({ env: {}, audio: {
     listen: async (seat, enabled) => ({ listening: enabled }),
-    mic: async (seat, audio, level, callbacks) => { audioFrames.push([seat, audio]); callbacks('Shared room speech.'); },
+    mic: async (seat, audio, level, callbacks) => { audioFrames.push([seat, audio]); callbacks.committed('Shared room speech.'); },
   } });
   context.after(() => hub.close());
   const { stageUrl: base } = await hub.start({ port: 0, host: '127.0.0.1' });
+  const legacyRoom = await fetch(new URL('/room', base), { redirect: 'manual' });
+  assert.equal(legacyRoom.headers.get('location'), '/stage#room-microphone-panel');
   const owner = await open(base, { role: 'stage' });
   const other = await open(base, { role: 'stage' });
   const { state } = await owner.take(stateFrame);
