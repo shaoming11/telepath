@@ -1,5 +1,5 @@
 {
-  "revision": 134,
+  "revision": 135,
   "claims": [
     {
       "id": "44891aaf-5a62-4a09-a382-c1136208184c",
@@ -48,6 +48,20 @@
         "scripts/frontend-launch.mjs"
       ],
       "claimedAt": "2026-11-22T09:26:40.647Z"
+    },
+    {
+      "id": "86a66ef4-ef75-4578-87ef-caba6f89bbb0",
+      "owner": "influxtion",
+      "agent": "codex-precision-line-endings",
+      "branch": "codex/wasp-precision-ui",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "scripts/.gitattributes"
+      ],
+      "paths": [
+        "scripts/.gitattributes"
+      ],
+      "claimedAt": "2026-11-22T09:43:49.061Z"
     }
   ]
 }
