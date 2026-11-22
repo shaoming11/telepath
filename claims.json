@@ -1,5 +1,5 @@
 {
-  "revision": 33,
+  "revision": 34,
   "claims": [
     {
       "id": "a1d8348f-1cf3-4b50-8568-a250840d8a67",
@@ -28,6 +28,24 @@
         "tests"
       ],
       "claimedAt": "2026-11-22T04:14:39.567Z"
+    },
+    {
+      "id": "88579c34-c5b6-48f3-a5ed-84f778484939",
+      "owner": "fireheartjerry",
+      "agent": "codex-monitor-components",
+      "branch": "jerry/airpods-1",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/2",
+      "scopes": [
+        "public/channel-monitor.mjs",
+        "public/channel-monitor.css",
+        "public/phone-audio.mjs"
+      ],
+      "paths": [
+        "public/channel-monitor.css",
+        "public/channel-monitor.mjs",
+        "public/phone-audio.mjs"
+      ],
+      "claimedAt": "2026-11-22T04:15:55.902Z"
     }
   ]
 }
