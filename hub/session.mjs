@@ -38,6 +38,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   pitchRaceMs: 6000,
   pitchVerifyMs: 15_000,
   pitchSpeechMs: 4600,
+  longCueSpeechMs: 16_000,
   pitchPlaybackMs: 8000,
   pitchPlanWaitMs: 120,
   pitchPlanDebounceMs: 220,
@@ -1021,7 +1022,10 @@ export class Session {
       && questionKey(roomTranscript.at(-1)?.text) !== questionKey(this.room.partial.text)) {
       roomTranscript.push({ speaker: 'Room (live partial)', text: this.room.partial.text });
     }
-    const questionHint = roomTranscript.findLast(turn => turn.speaker !== 'Wearer' && looksLikeQuestion(turn.text))?.text ?? '';
+    const questionIndex = roomTranscript.findLastIndex(turn => turn.speaker !== 'Wearer' && looksLikeQuestion(turn.text));
+    const questionHint = roomTranscript[questionIndex]?.text ?? '';
+    const wearerAnswerSoFar = questionIndex < 0 ? '' : roomTranscript.slice(questionIndex + 1)
+      .filter(turn => turn.speaker === 'Wearer').map(turn => turn.text).join(' ');
     const query = [questionHint, ...roomTranscript.slice(-3).map(turn => turn.text)].filter(Boolean).join('\n');
     const corpus = [...this.pitchReferences, ...this.referenceCorpus()];
     const lexical = retrieveProjectReferences(corpus, query, 6, questionHint);
@@ -1029,12 +1033,13 @@ export class Session {
       .flatMap(documents => retrieveVectorReferences(documents, query, 4))
       .sort((a, b) => b.score - a.score).map(result => result.passage);
     const ranked = new Map();
-    for (const passage of [...lexical.slice(0, 3), ...vectors, ...lexical]) {
+    for (const passage of [...lexical.filter(passage => passage.kind === 'code').slice(0, 1),
+      ...lexical.filter(passage => passage.kind !== 'code').slice(0, 3), ...vectors, ...lexical]) {
       if (!ranked.has(passage.id)) ranked.set(passage.id, passage);
       if (ranked.size === 8) break;
     }
     const passages = [...ranked.values()];
-    return { ...context, passages, roomTranscript, questionHint };
+    return { ...context, passages, roomTranscript, questionHint, wearerAnswerSoFar };
   }
 
   fallbackCue(text, question) {
@@ -1117,11 +1122,12 @@ export class Session {
     }) };
   }
 
-  async speakPitchCue(seat, text, signal) {
+  async speakPitchCue(seat, text, signal, timeoutMs = this.settings.pitchSpeechMs) {
     try {
       return toUrl(await withDeadline(deadline => this.audio.speech(seat, text, {
         voice: null, sim: false, role: 'assistant', signal: deadline, whisper: true,
-      }), this.settings.pitchSpeechMs, signal));
+        timeoutMs, whisperTimeoutMs: timeoutMs > this.settings.pitchSpeechMs ? Math.floor(timeoutMs * 2 / 3) : undefined,
+      }), timeoutMs, signal));
     } catch { return null; }
   }
 
@@ -1151,7 +1157,7 @@ export class Session {
         if (oneShot) {
           const result = await withDeadline(deadline => this.codec?.pitchHelp?.({
             signal: deadline, roomTranscript: resolved.roomTranscript, project: resolved.project,
-            passages: resolved.passages,
+            passages: resolved.passages, questionHint: resolved.questionHint, wearerAnswerSoFar: resolved.wearerAnswerSoFar,
           }), this.settings.pitchRaceMs, signal).catch(() => null);
           signal.throwIfAborted();
           let cue;
@@ -1163,7 +1169,18 @@ export class Session {
             && typeof result.answer === 'string' && result.answer.trim()) {
             cue = { answer: result.answer.trim(), sources: [], ungrounded: true };
           }
-          if (!cue && this.coachScenario === 'pitch' && resolved.questionHint) {
+          if (cue && resolved.wearerAnswerSoFar) {
+            const said = new Set(questionKey(resolved.wearerAnswerSoFar).split(' '));
+            const sentences = cue.answer.match(/[^.!?]+[.!?]*/g) ?? [];
+            while (sentences.length) {
+              const words = new Set(questionKey(sentences[0]).split(' '));
+              if (words.size < 6 || [...words].filter(word => said.has(word)).length / words.size < .8) break;
+              sentences.shift();
+            }
+            if (sentences.length) cue.answer = sentences.join('').trim();
+            else cue = null;
+          }
+          if (!cue && this.coachScenario === 'pitch' && resolved.questionHint && !resolved.wearerAnswerSoFar) {
             const known = sourcedProjectCue(resolved.questionHint, resolved.passages, resolved.frontendStack);
             if (known) {
               cue = validateAnswer(known, resolved.passages, resolved.roomTranscript, { allowLongAnswer: true });
@@ -1181,7 +1198,8 @@ export class Session {
           surfacedCue = true;
           state.lastPitchCue = { text: cue.answer, points: [] };
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
-          const url = await this.speakPitchCue(seat, cue.answer, signal);
+          const speechBudget = cue.answer.length > 180 ? this.settings.longCueSpeechMs : this.settings.pitchSpeechMs;
+          const url = await this.speakPitchCue(seat, cue.answer, signal, speechBudget);
           return { ...cue, url, source, timing: { hubMs: Math.round(performance.now() - started) } };
         }
         const cue = await this.racePitchCue(resolved, started, signal).catch(() => null)
@@ -1200,7 +1218,7 @@ export class Session {
         return { ...cue, url, timing: {
           ...cue.timing, speechMs: Math.round(rendered - composed), hubMs: Math.round(rendered - started),
         } };
-      }, this.settings.pitchRaceMs + this.settings.pitchSpeechMs, lifecycle);
+      }, this.settings.pitchRaceMs + (oneShot ? this.settings.longCueSpeechMs : this.settings.pitchSpeechMs), lifecycle);
       if (lifecycle.aborted) return;
       if (!reply) return;
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;

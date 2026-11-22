@@ -75,7 +75,7 @@ The browser rehearsal uses bundled ElevenLabs audio and scripted excerpts. It ca
 
 When switching hotspots, connect the Mac and both phones to the new network, restart the hub, and open the new **Phone join** URL printed in the terminal. The Stage URL stays local to the Mac. On the same checkout, keep `.runtime/tls` so phones can reuse their trusted **Telepath Local Demo** (or **Telepathy Local Demo** on an existing install) root certificate. A fresh checkout creates a new root unless you bring over the existing TLS directory. If you set `TELEPATHY_HOST` manually, update it for the new network or unset it for automatic detection.
 
-The checked-in speech and chime files are ElevenLabs-generated demo assets. Live speech requests Eleven v4 Turbo’s whisper delivery, with Flash as fallback. Coaching cues and teammate messages share the phone’s Voice volume control, which defaults to 90%. Dynamic audio and microphone samples are held in memory.
+The checked-in speech and chime files are ElevenLabs-generated demo assets. Live speech requests whisper delivery from Eleven v4 Turbo and keeps the whisper tag on synthesis retries. Coaching cues and teammate messages share the phone’s Voice volume control, which defaults to 90%. Dynamic audio and microphone samples are held in memory.
 
 ## Agent coordination
 

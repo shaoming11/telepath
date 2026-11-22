@@ -490,6 +490,8 @@ export function createAudio({
       } catch (error) {
         if (signal?.aborted || epoch !== epochBox.n) throw error;
       }
+      const backupModel = whisperModel === 'eleven_v4' ? 'eleven_v3' : 'eleven_v4';
+      return synth(voiceId, '[whispers] ' + text, { model: backupModel, timeoutMs, speed, signal, held });
     }
     return synth(voiceId, text, { timeoutMs, speed, signal, held });
   }
@@ -587,7 +589,7 @@ export function createAudio({
     }
   }
 
-  async function speech(speakerSeat, text, { voice, sim = false, role = 'seat', timeoutMs, signal, whisper = true } = {}) {
+  async function speech(speakerSeat, text, { voice, sim = false, role = 'seat', timeoutMs, signal, whisper = true, whisperTimeoutMs = 1800 } = {}) {
     if (typeof text !== 'string' || !text.trim() || signal?.aborted) return null;
     const epoch = epochBox.n;
     const assistant = ['assistant', 'system', 'draft', 'status', 'codebook', 'announcement'].includes(role);
@@ -613,7 +615,7 @@ export function createAudio({
     asset_holds.add(held);
     try {
       const r = await speakLine(voiceId, text, {
-        whisper, whisperTimeoutMs: 1800,
+        whisper, whisperTimeoutMs,
         timeoutMs, speed: can_speed ? READOUT_SPEED : undefined, signal, held,
       });
       if (epoch !== epochBox.n || signal?.aborted) return null;
@@ -622,7 +624,7 @@ export function createAudio({
       return { url: r.url, source: 'live' };
     } catch (err) {
       if (!signal?.aborted) fail('speech', err, { seat: speakerSeat });
-      if (stock_clip && epoch === epochBox.n && !signal?.aborted) {
+      if (stock_clip && (!whisper || !whisperModel || !client.hasKey()) && epoch === epochBox.n && !signal?.aborted) {
         const url = (await bank()).lookup('assistant', text);
         if (url && epoch === epochBox.n && !signal?.aborted) return { url, source: 'bank' };
       }

@@ -717,7 +717,7 @@ test('tagged ElevenLabs whisper is used for real seat speech and falls back with
   assert.ok(cache.some(item => item.key === 'B:Pitch:R1'));
   assert.deepEqual(fetch_impl.calls.map(call => [call.path, call.json.model_id, call.json.text]), [
     ['/v1/text-to-speech/coachClone', 'eleven_v4_turbo', '[whispers] Slow down'],
-    ['/v1/text-to-speech/coachClone', 'eleven_flash_v2_5', 'Slow down'],
+    ['/v1/text-to-speech/coachClone', 'eleven_v4', '[whispers] Slow down'],
   ]);
   await audio.speech('B', 'Send: Wrap up?', { role: 'assistant' });
   assert.equal(fetch_impl.calls.at(-1).json.model_id, 'eleven_v4_turbo');

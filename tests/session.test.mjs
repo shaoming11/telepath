@@ -1599,6 +1599,8 @@ test('Cue now plays a long sourced answer and gives useful speech if the model c
       if (++attempts === 1) return { status: 'answer', question: 'Who is the buyer?', answer: longAnswer,
         sources: [{ id: passages.find(passage => passage.name === 'brief.md').id, quote: 'The buyer is the sales team lead.' }] };
       if (attempts === 2) return { status: 'unsupported', answer: '', sources: [] };
+      if (attempts === 4) return { status: 'advice', sources: [],
+        answer: 'The buyer is the sales team lead. Let me show what the presenter hears next.' };
       return { status: 'advice', answer: 'Could you clarify which part you want me to show?', sources: [] };
     } },
   });
@@ -1610,11 +1612,15 @@ test('Cue now plays a long sourced answer and gives useful speech if the model c
   await request('long');
   await request('unsupported');
   await request('advice');
+  session.addTranscript('room', 'The buyer is the sales team lead.');
+  session.room.transcript.at(-1).speakers = [{ seat: 'A', label: 'Seat A', text: 'The buyer is the sales team lead.' }];
+  await request('followup');
   const cues = seatFrames.A.filter(frame => frame.kind === 'pitch_help');
-  assert.equal(cues.length, 3);
+  assert.equal(cues.length, 4);
   assert.equal(cues[0].text, longAnswer);
   assert.match(cues[1].text, /show you how it behaves/);
   assert.equal(cues[2].text, 'Could you clarify which part you want me to show?');
+  assert.equal(cues[3].text, 'Let me show what the presenter hears next.');
   assert.ok(!seatFrames.A.some(frame => frame.text?.includes('No supported cue')));
 });
 
