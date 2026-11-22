@@ -314,6 +314,34 @@ test('a receipt binds its press time to the first media event before recognition
   assert.equal(get_element('live-acknowledge').hidden, true);
 });
 
+test('Single begun during a teammate chime does not toggle Question Mode when recognition finishes', async () => {
+  const serverNow = Date.now();
+  const settings = { pitchHelp: true, questionModeAvailable: true, roomInput: 'mac', sessionId: 'chime', serverNow };
+  const base = seat_state(null, settings);
+  socket.receive({ type: 'state', state: base });
+  await settle();
+  socket.sent.length = 0;
+  socket.receive({ type: 'audio', cue: 'soft', text: 'Slow down', url: '/assets/chime-followup.mp3',
+    messageId: 'chime-followup', hubId: base.hubId, sessionId: base.sessionId });
+  await settle();
+  world.advance(140);
+  media_actions.get('nexttrack')();
+  world.advance(1230);
+  await settle();
+  assert.ok(socket.sent.some(frame => frame.type === 'heard' && frame.messageId === 'chime-followup'));
+  assert.ok(socket.sent.every(frame => frame.type !== 'signal'));
+  assert.equal(get_element('live-note').textContent, 'Wait for the whisper before acknowledging.');
+
+  base.seats.A.receipt = { messageId: 'chime-followup', openedAt: serverNow, until: serverNow + 4000 };
+  socket.receive({ type: 'state', state: base });
+  media_actions.get('nexttrack')();
+  world.advance(1250);
+  await settle();
+  const signal = socket.sent.find(frame => frame.type === 'signal');
+  assert.equal(signal?.receiptId, 'chime-followup');
+  assert.equal(signal?.purpose, undefined);
+});
+
 test('triple Next Track discards the unheard draft captured by the first press', async () => {
   const now = Date.now();
   socket.receive({ type: 'state', state: seat_state(draft({ id: 'preview-loading', heardAt: null, expiresAt: now + 5000 })) });

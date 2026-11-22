@@ -348,3 +348,30 @@ test('the private chime precedes speech and the receipt follows the speech start
   world.advance(250);
   assert.deepEqual(heard, ['private-cue']);
 });
+
+test('an incoming whisper exposes the audible chime and gap until actual speech starts', async () => {
+  const engine = await ready_engine();
+  engine.play(fixed('A:Pitch:R1', 'incoming'));
+  await world.flush();
+  assert.equal(engine.incomingChimeActive(), false, 'the chime is still queued');
+  world.advance(60);
+  assert.equal(engine.incomingChimeActive(), true);
+  world.advance(200);
+  assert.equal(engine.incomingChimeActive(), true, 'the chime ended but the whisper has not begun');
+  world.advance(75);
+  assert.equal(engine.incomingChimeActive(), false);
+  assert.deepEqual(heard, ['incoming']);
+});
+
+test('a preview and assistant cue do not expose an incoming teammate chime', async () => {
+  const engine = await ready_engine();
+  engine.play(preview('private-preview'));
+  await world.flush();
+  world.advance(100);
+  assert.equal(engine.incomingChimeActive(), false);
+  engine.clear_session();
+  engine.play({ type: 'audio', kind: 'pitch_help', cue: 'sent', url: '/assets/short.mp3', messageId: 'private-cue' });
+  await world.flush();
+  world.advance(100);
+  assert.equal(engine.incomingChimeActive(), false);
+});
