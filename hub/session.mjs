@@ -146,6 +146,8 @@ export class Session {
     this.questionTurns = [];
     this.questionSpeechPending = false;
     this.questionPartialSeats = new Set();
+    this.roomInput = this.settings.roomInput === 'mac' ? 'mac' : 'phones';
+    this.room = { listening: false, listeningRequested: false, transcription: 'off', listenVersion: 0, level: 0, transcript: [] };
     this.questionState = { status: 'idle' };
     this.dismissedQuestions = new Set();
     this.seats = Object.fromEntries(SEATS.map(seat => [
@@ -161,6 +163,10 @@ export class Session {
       presetPending: this.cacheCandidate?.preset ?? (this.targetPreset.preset !== this.preset ? this.targetPreset.preset : null),
       cacheId: this.activeCache?.id ?? null,
       context: this.context,
+      roomInput: this.roomInput,
+      room: { listening: this.room.listening, listeningRequested: this.room.listeningRequested,
+        transcription: this.room.transcription, level: this.room.level,
+        ...(viewer == null && { transcript: this.room.transcript.slice() }) },
       codebook: BOOKS[this.preset],
       calibration: this.calibration,
       online: Object.fromEntries(SEATS.map(seat => [seat, this.seats[seat].online])),
@@ -659,8 +665,9 @@ export class Session {
   }
 
   addTranscript(seat, value, generation = this.generation) {
-    const state = this.seats[seat];
-    if (this.closed || generation !== this.generation || this.canned || this.phase === 'reveal' || !state.online) return;
+    const state = seat === 'room' ? this.room : this.seats[seat];
+    if (this.closed || generation !== this.generation || this.canned || this.phase === 'reveal'
+        || !state || (seat === 'room' ? !state.listening : !state.online)) return;
     const text = cleanText(typeof value === 'string' ? value : value?.text, 1200);
     if (!text) return;
     const wasSpeaking = this.questionPartialSeats.delete(seat);
@@ -774,7 +781,7 @@ export class Session {
   }
 
   transcriptionCallbacks(seat, generation, listenVersion) {
-    const current = () => generation === this.generation && this.seats[seat].listenVersion === listenVersion;
+    const current = () => generation === this.generation && (seat === 'room' ? this.room : this.seats[seat]).listenVersion === listenVersion;
     const committed = text => { if (current()) this.addTranscript(seat, text, generation); };
     if (!this.references.length || !this.codec?.questionAnswering) return committed;
     return { committed, partial: text => {
@@ -787,6 +794,7 @@ export class Session {
   }
 
   async receiveMic(seat, frame) {
+    if (this.roomInput === 'mac') return;
     const state = this.seats[seat];
     if (!state.listening || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
     state.level = this.levelValue(frame.level);
@@ -798,6 +806,7 @@ export class Session {
   }
 
   async setListening(seat, enabled) {
+    if (this.roomInput === 'mac') return;
     if (!enabled) {
       this.cancelAnswers('listening_stopped');
       this.questionPartialSeats.delete(seat);
@@ -828,6 +837,13 @@ export class Session {
   }
 
   updateTranscriptionStatus({ seat, status } = {}) {
+    if (seat === 'room') {
+      if (this.closed || this.canned || this.phase === 'reveal' || !this.room.listeningRequested || !TRANSCRIPTION_STATUSES.has(status)) return;
+      if (status === 'unavailable') this.stopRoomListening();
+      this.room.transcription = status;
+      this.publish();
+      return;
+    }
     const state = this.seats[seat];
     if (this.closed || this.canned || this.phase === 'reveal' || !state?.online || state.sim || !state.listeningRequested) return;
     if (!TRANSCRIPTION_STATUSES.has(status) || state.transcription === status) return;
@@ -848,7 +864,59 @@ export class Session {
     }
   }
 
+  async setRoomListening(enabled) {
+    if (!enabled) {
+      this.stopRoomListening();
+      this.publish();
+      return;
+    }
+    if (this.closed || this.canned || this.phase === 'reveal' || this.room.listeningRequested) return;
+    this.roomInput = 'mac';
+    for (const seat of SEATS) this.stopListening(seat);
+    this.cancelAnswers('input_changed');
+    this.questionPartialSeats.clear();
+    this.questionSpeechPending = false;
+    const room = this.room;
+    const version = ++room.listenVersion;
+    const generation = this.generation;
+    room.listeningRequested = true;
+    room.transcription = 'waiting';
+    this.publish();
+    try {
+      const result = await this.audio.listen?.('room', true, this.transcriptionCallbacks('room', generation, version));
+      if (generation !== this.generation || version !== room.listenVersion) return;
+      room.listening = typeof this.audio.listen === 'function' && result !== false && result?.listening !== false;
+    } catch { if (generation === this.generation && version === room.listenVersion) room.listening = false; }
+    if (generation !== this.generation || version !== room.listenVersion) return;
+    if (!room.listening) { room.listeningRequested = false; room.transcription = 'unavailable'; }
+    this.publish();
+  }
+
+  async receiveRoomMic(frame) {
+    if (this.roomInput !== 'mac' || !this.room.listening || this.canned || this.phase === 'reveal'
+        || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
+    this.room.level = this.levelValue(frame.level);
+    try {
+      await this.audio.mic?.('room', frame.audio, this.room.level,
+        this.transcriptionCallbacks('room', this.generation, this.room.listenVersion));
+    } catch {}
+  }
+
+  stopRoomListening() {
+    const wasRequested = this.room.listeningRequested;
+    this.room.listenVersion++;
+    this.room.listening = false;
+    this.room.listeningRequested = false;
+    this.room.transcription = 'off';
+    this.room.level = 0;
+    this.questionPartialSeats.delete('room');
+    this.questionSpeechPending = this.questionPartialSeats.size > 0;
+    this.cancelAnswers('room_microphone_stopped');
+    if (wasRequested) { try { Promise.resolve(this.audio.listen?.('room', false)).catch(() => {}); } catch {} }
+  }
+
   finishLive(reason) {
+    this.stopRoomListening();
     this.finishAnnouncement(reason);
     this.cancelScene(reason);
     this.replaceCacheCandidate(null);
@@ -885,23 +953,24 @@ export class Session {
     if (!this.codec?.evaluate || this.sensing || this.phase !== 'live' || this.canned) return;
     if (requestedSeat && !this.canDraft(requestedSeat)) return;
     const started_at = this.now();
-    const { preset, context, seats } = this.snapshot();
+    const { preset, context, seats, room } = this.snapshot();
+    room.transcript = room.transcript.filter(entry => started_at - entry.at <= this.settings.roomContextMs).slice(-12);
     for (const seat of SEATS) {
       seats[seat].transcript = seats[seat].transcript
         .filter(entry => started_at - entry.at <= this.settings.roomContextMs).slice(-12);
       seats[seat].level = this.seats[seat].level;
     }
-    if (!requestedSeat && !SEATS.some(seat => seats[seat].transcript.length || seats[seat].level > 0.015)) return;
+    if (!requestedSeat && !room.transcript.length && !SEATS.some(seat => seats[seat].transcript.length || seats[seat].level > 0.015)) return;
     const generation = this.generation;
     const connections = Object.fromEntries(SEATS.map(seat => [seat, this.seats[seat].connection.signal]));
     const lifecycle = this.liveScope(requestedSeat ? [requestedSeat] : []);
     this.sensing = true;
-    const sim = requestedSeat ? seats[requestedSeat].sim
-      : SEATS.every(seat => !seats[seat].online || seats[seat].sim);
+    const sim = !this.room.listening && (requestedSeat ? seats[requestedSeat].sim
+      : SEATS.every(seat => !seats[seat].online || seats[seat].sim));
     try {
       await withDeadline(async signal => {
         const result = await this.codec.evaluate({
-          preset, context, now: this.now(), requestedSeat, sim, seats, signal,
+          preset, context, now: this.now(), requestedSeat, sim, seats, room, signal,
         });
         if (signal.aborted || generation !== this.generation || preset !== this.preset || context !== this.context || this.phase !== 'live' || this.canned) return;
         for (const person of SEATS) {
@@ -921,6 +990,7 @@ export class Session {
           if (Number.isFinite(candidate?.confidence) && candidate.confidence >= this.settings.draftConfidence && this.canDraft(person)) {
             const text = cleanText(candidate.text, 100);
             const evidence = SEATS.map(seat => this.seats[seat].transcript.at(-1)?.at ?? 0);
+            evidence.push(this.room.transcript.at(-1)?.at ?? 0);
             const fingerprint = JSON.stringify([text, preset, ...evidence]);
             if (text && (requestedSeat || this.seats[person].lastDraftFingerprint !== fingerprint)) {
               await this.previewDraft(person, { kind: 'draft', text, started_at, signal: preview_signal, fingerprint });
@@ -1253,6 +1323,7 @@ export class Session {
   }
 
   clearTimers() {
+    this.stopRoomListening();
     this.cancelAnswers('reset');
     this.finishAnnouncement('reset');
     clearInterval(this.senseTimer);

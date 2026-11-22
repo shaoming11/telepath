@@ -43,12 +43,27 @@
 
   <main id="stage-main">
 
+    <section class="reference-panel" id="room-microphone-panel" aria-labelledby="room-mic-title">
+      <h2 class="kicker" id="room-mic-title">ROOM MICROPHONE</h2>
+      <p>Use this Mac’s microphone for the conversation. Phones handle whispers and approval; their room microphones stay off.</p>
+      <label for="room-mic-device">Microphone input</label>
+      <select id="room-mic-device"><option value="">System default — choose MacBook Microphone in macOS Sound settings</option></select>
+      <div class="reference-actions">
+        <button id="room-mic-start" type="button">Start Mac microphone</button>
+        <button id="room-mic-stop" type="button" disabled>Stop microphone</button>
+      </div>
+      <p id="room-mic-status" role="status" aria-live="polite">Microphone is off. Start it and allow browser access.</p>
+      <label for="room-mic-level">Input level</label>
+      <meter id="room-mic-level" min="0" max="1" value="0">0</meter>
+      <details><summary>Shared room transcript</summary><ul id="room-transcript"></ul></details>
+    </section>
+
     <!-- Lobby -->
     <section class="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>
       <div class="hero">
         <div class="hero__copy">
           <h1 class="display" id="lobby-title"><span class="display__dim">Two seats.</span> One silent channel.</h1>
-          <p class="lede">Tap an earbud and your partner hears you in your own voice. An agent on the hub listens to both rooms, drafts the answer, and waits for your tap before it sends.</p>
+          <p class="lede">Your partner hears you in your own voice. A coach listens through the Mac’s microphone, checks your references, and waits for your tap before sending a whisper.</p>
           <div class="cta">
             <button class="begin" id="begin-button" type="button">
               <span class="begin__label">Begin session</span>

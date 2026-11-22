@@ -69,6 +69,7 @@ export function createHub({
   const assets = new Map();
   const seats = new Map();
   const stage = new Set();
+  let roomOwner = null;
   const hub_id = randomUUID();
   let session;
   const speech = audio ?? createAudio({
@@ -92,7 +93,7 @@ export function createHub({
     },
     audio: speech,
     codec: language,
-    settings,
+    settings: { roomInput: env.TELEPATHY_ROOM_INPUT ?? 'mac', ...settings },
   });
   let info = {};
 
@@ -205,10 +206,29 @@ export function createHub({
             let frame;
             try { frame = JSON.parse(String(raw)); } catch { return; }
             if (!frame || typeof frame.type !== 'string') return;
-            if (role === 'stage' && frame.type !== 'operator') return;
+            if (role === 'stage' && !['operator', 'room_mic'].includes(frame.type)) return;
             const current = (frame.hubId === undefined || frame.hubId === hub_id)
               && (frame.sessionId === undefined || frame.sessionId === session.sessionId);
             const reason = current ? {} : { reason: 'session_changed' };
+            if (role === 'stage' && (frame.type === 'room_mic' || frame.action === 'room_listen')) {
+              if (!current || frame.hubId !== hub_id || frame.sessionId !== session.sessionId) return;
+              if (frame.type === 'room_mic') {
+                if (roomOwner === ws) void session.receiveRoomMic(frame);
+                return;
+              }
+              if (roomOwner && roomOwner !== ws && session.room.listeningRequested) {
+                send(ws, scope({ type: 'operator_ack', action: 'room_listen', accepted: false, reason: 'microphone_owned' }));
+                return;
+              }
+              if (frame.enabled === true) roomOwner = ws;
+              else if (roomOwner !== ws) return;
+              const roomSession = session.sessionId;
+              void session.setRoomListening(frame.enabled === true).then(() => {
+                if (session.sessionId === roomSession) send(ws, scope({ type: 'room_ack', listening: session.room.listening }));
+              }).catch(() => {});
+              if (frame.enabled !== true) roomOwner = null;
+              return;
+            }
             if (role === 'stage' && typeof frame.action === 'string') {
               send(ws, scope({ type: 'operator_ack', action: frame.action, accepted: current, ...reason }));
             }
@@ -220,7 +240,10 @@ export function createHub({
             Promise.resolve(operation).catch(() => {});
           });
           ws.once('close', () => {
-            if (role === 'stage') stage.delete(ws);
+            if (role === 'stage') {
+              stage.delete(ws);
+              if (roomOwner === ws) { roomOwner = null; void session.setRoomListening(false); }
+            }
             else if (seats.get(seat) === ws) {
               seats.delete(seat);
               session.disconnect(seat);

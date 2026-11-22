@@ -10,7 +10,17 @@ Set `ELEVENLABS_API_KEY` and optionally `OPENAI_API_KEY` in the launcher’s env
 
 `TELEPATHY_VOICE_A` and `TELEPATHY_VOICE_B` can name the two presenters’ existing, verified ElevenLabs clones for setup fallback. Those voice IDs are not deleted. Session-created clones are deleted on reset or a normal exit. When a clone is unavailable the UI labels any fallback. Keep the operator’s canned take ready for a service or hardware failure.
 
-The hub uses OpenAI for text when its key is present. Set `TELEPATHY_LLM=local` to keep the room-read text on the Mac via Apple’s local language model, or `TELEPATHY_LLM=off` for fixed messages only. Both physical seats stream PCM to ElevenLabs for transcription whenever listening is enabled. The hub supplies the LLM with a short rolling window from each seat. No recording or transcript is saved to disk by the app.
+The hub uses OpenAI for text when its key is present. Set `TELEPATHY_LLM=local` to keep the room-read text on the Mac via Apple’s local language model, or `TELEPATHY_LLM=off` for fixed messages only. By default, the stage captures the Mac's microphone and the hub sends its PCM audio to ElevenLabs for transcription. Phone room microphones remain off; phones still play whispers and handle approval. No recording or transcript is saved to disk by the app.
+
+## Listen through the Mac microphone
+
+Open the printed local stage URL on the Mac. In **Room microphone**, click **Start Mac microphone** and allow browser microphone access. Choose **MacBook Microphone** as the macOS Sound input (not AirPods), or select that device in the stage's input menu. If device names were hidden before permission, stop the microphone, select the now-labelled Mac input, and start it again. The input meter should move and **Shared room transcript** should fill as you speak. This can be checked in the lobby before connecting phones.
+
+Load the references and prepare seats A and B as usual, then begin the session. The shared room transcript drives both question answers and missed-point reminders through the existing private preview and approval flow. Use the phones' on-screen Send/Discard and fixed-message buttons if earbud gestures are unavailable. Phone microphone permission is only needed if you choose to record a voice sample; premade voices avoid that step.
+
+**Stop microphone**, Reveal, Reset, losing the stage connection or closing its tab stops room listening and cancels pending answers. Start the microphone again for a new session or after reconnecting. Only one stage tab owns capture at a time. Browser capture needs the local `localhost`/`127.0.0.1` stage URL or trusted HTTPS. On macOS, also allow the browser under System Settings → Privacy & Security → Microphone. An ElevenLabs key is still required for transcription.
+
+To explicitly return to the old phone-microphone mode, start the hub with `TELEPATHY_ROOM_INPUT=phones`. Starting the Mac microphone switches the running session to Mac input again.
 
 ## Answer questions from your documents
 

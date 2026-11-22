@@ -75,6 +75,20 @@ function make_capture(extra = {}) {
 
 afterEach(() => { delete globalThis.__context; });
 
+test('stage capture can select the built-in microphone and enable room echo cancellation', async () => {
+  const constraints = { audio: { deviceId: { exact: 'mac-built-in' }, echoCancellation: true } };
+  const { capture } = make_capture({ get_constraints: () => constraints });
+  const starting = capture.start();
+  const stream = fake_stream();
+  stream.track.label = 'MacBook Microphone';
+  media.gates[0].resolve(stream);
+  assert.equal(await starting, true);
+  assert.deepEqual(media.calls[0], constraints);
+  assert.equal(capture.deviceLabel, 'MacBook Microphone');
+  capture.stop();
+  assert.equal(stream.track.stopped, true);
+});
+
 test('stop during the permission prompt leaves no open microphone behind', async () => {
   const { capture } = make_capture();
   const starting = capture.start();

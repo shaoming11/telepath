@@ -67,7 +67,7 @@ function resume_context(context) {
   ]);
 }
 
-export function createCapture({ get_context, frame_ms, on_frame, on_level, on_state }) {
+export function createCapture({ get_context, frame_ms, on_frame, on_level, on_state, get_constraints }) {
   const prepared_contexts = new WeakSet();
   let status = 'idle';
   let stream = null;
@@ -160,7 +160,7 @@ export function createCapture({ get_context, frame_ms, on_frame, on_level, on_st
     set_status('requesting');
     set_audio_session('play-and-record');
     try {
-      acquired = await navigator.mediaDevices.getUserMedia(MIC_CONSTRAINTS);
+      acquired = await navigator.mediaDevices.getUserMedia(get_constraints?.() ?? MIC_CONSTRAINTS);
       if (cancelled()) {
         stop_tracks(acquired);
         return false;
@@ -250,6 +250,7 @@ export function createCapture({ get_context, frame_ms, on_frame, on_level, on_st
     },
     cancel_record() { fail_recording('Recording cancelled.'); },
     get status() { return status; },
+    get deviceLabel() { return stream?.getAudioTracks()?.[0]?.label ?? ''; },
     get open() { return Boolean(stream); },
     get opening() { return Boolean(opening) && opening_token === epoch; },
     get recording() { return Boolean(recording); },

@@ -278,6 +278,23 @@ test('Reveal releases the physical mic and the next take resumes previously cons
   assert.equal(mic_tracks.at(-1).readyState, 'live');
 });
 
+test('Mac input releases the phone room microphone and leaves approval controls available', async () => {
+  const current = mic_tracks.at(-1);
+  socket.sent.length = 0;
+  socket.receive({ type: 'state', state: seat_state(draft({ heardAt: 1800, expiresAt: 999999 }), {
+    roomInput: 'mac', room: { listening: true, transcription: 'live' },
+  }) });
+  await settle();
+  assert.equal(current.readyState, 'ended');
+  assert.match(get_element('live-listen-text').textContent, /Mac listening/);
+  assert.equal(get_element('draft-send').disabled, false);
+  assert.equal(socket.sent.some(frame => frame.type === 'listen' && frame.enabled), false);
+  const count = mic_tracks.length;
+  socket.receive({ type: 'state', state: seat_state(null, { roomInput: 'mac', room: { transcription: 'off' }, phase: 'lobby', sessionId: '3' }) });
+  await settle();
+  assert.equal(mic_tracks.length, count);
+});
+
 test.after(() => {
   restore();
   Object.defineProperty(globalThis, 'location', saved_location);
