@@ -53,6 +53,7 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
   const dots = useRef<(Mesh | null)[]>([]);
   const hold = useRef<Mesh>(null);
   const whispers = useRef<(Mesh | null)[]>([]);
+  const thread = useRef<Mesh>(null);
   const look = useMemo(() => new Vector3(), []);
   const point = useMemo(() => new Vector3(), []);
 
@@ -102,7 +103,7 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
       const uniforms = (pulse.material as ShaderMaterial).uniforms;
       uniforms.uHead.value = back > 0 ? 1.2 : travel * 1.04;
       uniforms.uGain.value = back > 0 ? 0 : HDR * flying * alive;
-      uniforms.uTrace.value = back > 0 ? back * 0.55 : 0.2 * alive * ramp(t, pulse.launch, pulse.launch + 0.2);
+      uniforms.uTrace.value = back > 0 ? back * 0.55 * (1 - ramp(reveal, 0.85, 1)) : 0.2 * alive * ramp(t, pulse.launch, pulse.launch + 0.2);
       const tube = tubes.current[i];
       if (tube) {
         const flat = pulse.inReveal ? 1 - reveal * 0.985 : 1;
@@ -170,6 +171,12 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
       return tap.seat === seat && since >= 0 ? sum + Math.exp(-since * 5) * Math.sin(since * 22) * 0.07 : sum;
     }, 0);
     const apart = spread * REVEAL_SPREAD;
+    if (thread.current) {
+      const drawn = ramp(reveal, 0.7, 1);
+      thread.current.visible = drawn > 0;
+      thread.current.scale.x = 2 * (Math.abs(A_POS.x) + apart) - 1.1;
+      (thread.current.material as MeshBasicMaterial).opacity = drawn * 0.5;
+    }
     if (budA.current) {
       budA.current.position.set(A_POS.x - apart, A_POS.y + Math.sin(t * 0.52) * 0.06, A_POS.z);
       budA.current.rotation.set(0.05 + nudge("A"), 0.55 + Math.sin(t * 0.31) * 0.22, 0.16 + nudge("A"));
@@ -260,6 +267,11 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
       <mesh ref={hold} position={[B_POS.x, B_POS.y, 0.6]} rotation={[0, -0.35, 0]}>
         <ringGeometry args={[0.66, 0.674, 96, 1, 0, Math.PI * 1.5]} />
         <meshBasicMaterial color={new Color("#ffffff").multiplyScalar(HDR * 0.7)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
+      </mesh>
+
+      <mesh ref={thread} position={[0, REVEAL_Y, 0.2]}>
+        <boxGeometry args={[1, 0.014, 0.014]} />
+        <meshBasicMaterial color="#8e8e93" transparent depthWrite={false} />
       </mesh>
 
       {REVEAL_PULSES.map((pulse, i) => (
