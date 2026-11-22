@@ -241,7 +241,7 @@ export class Session {
           lastIn: visible ? state.lastIn : null, lastOut: visible ? state.lastOut : null,
         }];
       })),
-      canBegin: !this.referencesLoading && SEATS.every(seat => this.isReady(seat)),
+      canBegin: this.canBegin(),
       startedAt: this.startedAt,
       canned: this.canned,
       ...(viewer == null && { announcement: this.snapshotAnnouncement(), canReplay: this.canReplay() }),
@@ -301,7 +301,13 @@ export class Session {
   isReady(seat) {
     const state = this.seats[seat];
     return Boolean(state.online && state.wantsReady && state.earbuds && state.calibrated
-      && USABLE_VOICES.has(state.voice) && this.activeCache && state.cacheId === this.activeCache.id);
+      && USABLE_VOICES.has(state.voice)
+      && (this.coachScenario === 'social' || this.activeCache && state.cacheId === this.activeCache.id));
+  }
+
+  canBegin() {
+    return this.coachScenario === 'social' ? this.isReady('A')
+      : !this.referencesLoading && SEATS.every(seat => this.isReady(seat));
   }
 
   async connect(seat, sim = false) {
@@ -1819,7 +1825,7 @@ export class Session {
       this.publish();
     }, this.settings.announcementPlaybackMs);
     announcement.timer.unref();
-    this.append('announcement', { seat: null, source: 'operator', text });
+    this.append('announcement', { seat: null, source: 'operator', text, messageId: announcement.id });
     for (const [seat, connection] of targets) {
       if (connection.signal.aborted) continue;
       this.cue(seat, 'system', {
@@ -1901,7 +1907,7 @@ export class Session {
     if (this.closed || !frame) return;
     switch (frame.action) {
       case 'begin':
-        if (this.phase !== 'lobby' || this.referencesLoading || !SEATS.every(seat => this.isReady(seat))) return;
+        if (this.phase !== 'lobby' || !this.canBegin()) return;
         this.phase = 'live';
         this.startedAt = this.now();
         this.startSensing();

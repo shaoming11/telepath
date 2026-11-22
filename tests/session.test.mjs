@@ -1651,6 +1651,34 @@ function scenarioCodec(onRequest, answer) {
   } });
 }
 
+test('Stranger Interview sends only the conversation to OpenAI and whispers one follow-up', async t => {
+  const requests = [];
+  const codec = scenarioCodec((body, input) => requests.push({ body, input }),
+    () => ({ status: 'answer', question: '', answer: 'Ask what got them into outdoor climbing.',
+      sources: [{ id: '1', quote: 'I spent the weekend climbing in Squamish.' }], responseQuote: '' }));
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac', coachScenario: 'social' },
+    codec, audio: { listen: async () => ({ listening: true }) },
+  });
+  t.after(() => session.close());
+  session.references = await parseReferences([{ name: 'private.md', data: Buffer.from('Private project note.').toString('base64') }]);
+  session.research = { enabled: true, observe: () => assert.fail('Stranger Interview must not do research') };
+  session.disconnect('B');
+  session.activeCache = null;
+  session.phase = 'lobby';
+  assert.equal(session.snapshot().canBegin, true);
+  await session.handleStage({ action: 'begin' });
+  assert.equal(session.phase, 'live');
+  await session.setRoomListening(true);
+  session.addTranscript('room', 'I spent the weekend climbing in Squamish.');
+  await act('A', { type: 'signal', signal: 'R1', id: 'stranger' });
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].input, { roomTranscript: [{ speaker: 'Room', text: 'I spent the weekend climbing in Squamish.' }] });
+  assert.match(requests[0].body.instructions, /getting to know a stranger/);
+  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help')?.text, 'Ask what got them into outdoor climbing.');
+  assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
+});
+
 test('social scenario whispers an ungrounded conversation prompt without any uploaded documents', async t => {
   const spoken = 'Ask what got them into climbing.';
   let instructions, modelInput;

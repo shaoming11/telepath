@@ -34,7 +34,7 @@ export const OPERATOR_ACTIONS = Object.freeze([
 export const COACH_SCENARIOS = Object.freeze({
   pitch: 'Pitch Q&A: answers from the Telepath brief and your uploads',
   interview: 'Interview: answers from your uploaded persona documents only',
-  social: 'Networking or conversation: topics and questions to ask, no documents needed',
+  social: 'Stranger Interview: ask follow-up questions from the conversation alone',
 });
 
 const SIGNAL_ROLES = Object.freeze({

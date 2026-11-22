@@ -222,6 +222,9 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath, W
       const modelInput = stranger ? { roomTranscript } : { ...context, passages, ...(roomTranscript && { roomTranscript }) };
       const raw = await fromOpenAI(env, fetchImpl, JSON.stringify(modelInput),
         signal, roomTranscript ? 'room_cue' : 'pitch_help', instructions);
+      if (stranger && (raw?.status === 'answer' || raw?.status === 'advice')) {
+        return { ...raw, status: 'advice', sources: [] };
+      }
       if (roomTranscript) return raw;
       if (scenario === 'social') return validateSocialCue(raw, passages);
       if (raw.status === 'answer' && typeof raw.answer === 'string'

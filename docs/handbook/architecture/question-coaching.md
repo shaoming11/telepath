@@ -11,3 +11,9 @@ The room transcript lives in session memory and is cleared on reset. The vector 
 ## Playback
 
 After the answer is validated, ElevenLabs synthesizes a whisper. Cue now plays as soon as the phone decodes the whisper. It uses the same Voice volume as teammate messages. Only the requesting seat receives the answer. If playback fails, the written answer stays visible. Cues require another gesture, so the presenter chooses when to hear one.
+
+## Stranger Interview
+
+Select **Stranger Interview** on the Mac Stage and use the same Cue now gesture. The hub sends only the room conversation to OpenAI. The model suggests one open follow-up based on what the other person volunteered. This mode skips document retrieval, vector search, and background research.
+
+The Mac Stage shows the live signal timeline and phone playback acknowledgements. Enable **Mac speakers** to play new cues aloud during the demo. The Stage pauses mic forwarding during playback and resumes when it ends. Individual cues can also be replayed from the timeline.

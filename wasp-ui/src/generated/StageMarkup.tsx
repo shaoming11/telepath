@@ -82,7 +82,7 @@ export function StageMarkup() {
               <select id="coach-scenario">
                 <option value="pitch">{"Pitch Q&A"}</option>
                 <option value="interview">Interview</option>
-                <option value="social">{"Networking & conversation"}</option>
+                <option value="social">Stranger Interview</option>
               </select>
               <p className="reference-note" id="coach-scenario-note"></p>
               <p className="reference-note" id="research-setup-note" hidden></p>
