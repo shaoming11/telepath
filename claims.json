@@ -1,5 +1,5 @@
 {
-  "revision": 110,
+  "revision": 111,
   "claims": [
     {
       "id": "1de997b5-3f95-411d-a390-3dba874864d8",
@@ -16,32 +16,6 @@
         "video"
       ],
       "claimedAt": "2026-11-22T06:27:03.141Z"
-    },
-    {
-      "id": "f46909bc-a565-40c2-a223-7c73cc67ff3f",
-      "owner": "fireheartjerry",
-      "agent": "codex-wasp-draft-clock",
-      "branch": "jerry/wasp-liquid-glass",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/phone.mjs",
-        "public/index.html",
-        "tests/phone-session.test.mjs",
-        "wasp-ui/src/generated/PhoneMarkup.tsx",
-        "wasp-ui/src/liquid.css",
-        "wasp-ui/vite.config.ts",
-        "scripts/build-wasp-ui"
-      ],
-      "paths": [
-        "public/index.html",
-        "public/phone.mjs",
-        "scripts/build-wasp-ui",
-        "tests/phone-session.test.mjs",
-        "wasp-ui/src/generated/PhoneMarkup.tsx",
-        "wasp-ui/src/liquid.css",
-        "wasp-ui/vite.config.ts"
-      ],
-      "claimedAt": "2026-11-22T07:20:22.419Z"
     }
   ]
 }
