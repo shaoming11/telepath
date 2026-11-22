@@ -46,7 +46,8 @@ function Stats({ state }) {
     </dl>
   );
 }
-function Seat({ seat, live }) {
+function Seat({ seat, live, canned = false }) {
+  const offline = live && !canned && !seat.online;
   const s = seat.key;
   return (
     <section className={"seat-card " + (s === "A" ? "amber" : "blue")}>
@@ -54,15 +55,19 @@ function Seat({ seat, live }) {
         <span className="seat-code">{s}</span>
         <div>
           <h3>{seat.name}</h3>
-          <small>
-            {seatSummary(seat).text}
+          <small aria-live={live ? "polite" : undefined}>
+            {offline ? "Seat offline" : seatSummary(seat).text}
             {seat.sim ? " · Simulated" : ""}
           </small>
         </div>
       </div>
       {live ? (
         <>
-          <p>{seat.situation || roomStatus(seat)}</p>
+          <p>
+            {offline
+              ? "Keep the phone page open. If prompted, choose the same seat and finish setup."
+              : seat.situation || roomStatus(seat)}
+          </p>
           {seat.pending && (
             <blockquote>
               {seat.pending.heardAt == null
@@ -339,7 +344,12 @@ function Live({ state, action }) {
       <Stats state={state} />
       <div className="pair">
         {SEATS.map((s) => (
-          <Seat live key={s} seat={state.seats[s]} />
+          <Seat
+            live
+            canned={Boolean(state.canned)}
+            key={s}
+            seat={state.seats[s]}
+          />
         ))}
       </div>
       <section className="panel">
@@ -594,4 +604,3 @@ export function Stage({ back }) {
     </main>
   );
 }
-

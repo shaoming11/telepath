@@ -18,7 +18,8 @@ The operator sends Sound check and waits for both seats’ playback confirmation
 
 ## If the room takes a different path
 
-The Live phone controls have the same named signals when Bluetooth callbacks are unavailable. If a seat drops, let it rejoin and finish caching before sending the next fixed cue. If live question answering is unavailable, finish the fixed exchange and show its actual Reveal. For a separate demonstration of the approval sequence, open **Operator → Canned take** and identify it as the bundled rehearsal.
+The Live phone controls have the same named signals when Bluetooth callbacks are unavailable. If the stage reports a seat offline, keep its phone page open. If the phone asks for setup, choose the same seat, finish the prompts and let its cache become ready before sending the next cue. If live question answering is unavailable, finish the fixed exchange and show its actual Reveal. For a separate demonstration of the approval sequence, open **Operator → Canned take** and identify it as the bundled rehearsal.
 
 The cinematic illustration follows the parallel five-beat direction at 832bb27. The live cues follow the original Telepathy pitch sheet at cb4dee8. The independently written six-beat presenter edition has its own room cues in NARRATIVE.md.
+
 
