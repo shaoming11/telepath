@@ -136,12 +136,13 @@ export function createHub({
   let project;
   let projectTimer;
   let projectReloading = false;
+  const frontend = waspClient ? 'wasp' : 'classic';
 
   async function refreshProjectReferences() {
     if (projectReloading) return;
     projectReloading = true;
     try {
-      const next = await buildProjectReferences({ previous: project, root: projectRoot });
+      const next = await buildProjectReferences({ previous: project, root: projectRoot, frontend });
       if (!projectTimer) return;
       if (next.index.version !== project.index.version) {
         session.pitchReferences = next.documents;
@@ -410,7 +411,7 @@ export function createHub({
         throw new Error('Wasp client is missing. Run ./scripts/build-wasp-ui first.');
       }
       if (ledgerPath) await speech.sweepLedger?.();
-      project = await buildProjectReferences({ root: projectRoot });
+      project = await buildProjectReferences({ root: projectRoot, frontend });
       session.pitchReferences = project.documents;
       const http_address = await listen(http, port, host);
       const https_address = https ? await listen(https, tlsPort, host) : null;
@@ -431,7 +432,7 @@ export function createHub({
         localPort: http_address.port,
         tlsPort: https_address?.port ?? null,
         codec: language.mode ?? 'injected',
-        frontend: waspClient ? 'wasp' : 'classic',
+        frontend,
         voicePreview: true,
         roomMic: true,
         roomInput: session.roomInput,

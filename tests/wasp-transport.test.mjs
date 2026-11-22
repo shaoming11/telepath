@@ -30,4 +30,19 @@ test('the Wasp client owns phone and Stage navigations while the hub retains ses
   assert.equal((await hit('/assets/keepalive.wav', { headers: { Range: 'bytes=0-1' } })).status, 206);
   assert.equal((await hit('/stage.mjs')).status, 200);
   assert.equal((await hit('/wasp-assets/missing.js')).status, 404);
+  const classic = createHub({ env: {}, lan: '127.0.0.1' });
+  t.after(() => classic.close());
+  assert.equal((await classic.start({ host: '127.0.0.1', port: 0 })).frontend, 'classic');
+  const question = 'How did you build the UI?';
+  for (const [session, answer, source] of [[hub.session, /Wasp builds React routes/, /Wasp frontend/],
+    [classic.session, /HTML, CSS, and JavaScript modules/, /classic browser client/]]) {
+    const at = Date.now();
+    session.room.transcript.push({ text: question, at });
+    const context = session.pitchContext('A', at);
+    assert.match(context.project, answer);
+    assert.equal(context.passages[0].id, context.frontendStack.id);
+    const cue = await session.composePitchCue(context, AbortSignal.timeout(1000), performance.now());
+    assert.match(cue.answer, answer);
+    assert.match(cue.sources[0].name, source);
+  }
 });

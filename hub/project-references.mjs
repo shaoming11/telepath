@@ -3,6 +3,10 @@ import { lstat, readFile, readdir } from 'node:fs/promises';
 import { createTextReference, warmReferenceIndex } from './references.mjs';
 
 const ROOT = new URL('../', import.meta.url);
+const FRONTEND_DOCS = {
+  classic: ['docs/frontend-classic.md', 'Telepathy classic browser client.md', 0.3, 'frontend'],
+  wasp: ['docs/wasp-ui.md', 'Telepathy Wasp frontend.md', 0.3, 'frontend'],
+};
 const CORE_DOCS = [
   ['docs/technical-reference.md', 'Telepathy technical reference.md', 0.3],
   ['docs/telepathy-pitch-brief.md', 'Telepathy pitch brief.md', 0],
@@ -55,9 +59,10 @@ function sourceReference(path, text, id) {
   return { id, name: path, kind: 'code', priority: 0, characters: text.length, chunks };
 }
 
-export async function buildProjectReferences({ previous, root = ROOT } = {}) {
+export async function buildProjectReferences({ previous, root = ROOT, frontend = 'classic' } = {}) {
   const handbook = await handbookPaths('docs/handbook', root);
-  const entries = [...CORE_DOCS, ...handbook.map(path => [path, path, 0.1]), ...SOURCE_FILES.map(path => [path, path, 0, true])];
+  const entries = [FRONTEND_DOCS[frontend], ...CORE_DOCS, ...handbook.map(path => [path, path, 0.1]),
+    ...SOURCE_FILES.map(path => [path, path, 0, 'code'])];
   const fingerprint = JSON.stringify(await Promise.all(entries.map(async ([path]) => {
     const stat = await lstat(new URL(path, root));
     if (!stat.isFile()) throw new Error('Project reference must be a regular file: ' + path);
@@ -67,7 +72,7 @@ export async function buildProjectReferences({ previous, root = ROOT } = {}) {
   let bytes = 0;
   const version = createHash('sha256');
   const documents = [];
-  for (const [path, name, priority, code] of entries) {
+  for (const [path, name, priority, kind = path === 'docs/spec.md' ? 'historical' : 'document'] of entries) {
     const url = new URL(path, root);
     const data = await readFile(url);
     const text = data.toString('utf8');
@@ -76,8 +81,8 @@ export async function buildProjectReferences({ previous, root = ROOT } = {}) {
     if (SECRET.test(text)) throw new Error('Secret-like content in project reference: ' + path);
     const id = createHash('sha256').update(path + '\0').update(data).digest('hex').slice(0, 16);
     version.update(id);
-    documents.push(code ? sourceReference(path, text, id)
-      : createTextReference(name, text, { id, markdown: true, priority, kind: path === 'docs/spec.md' ? 'historical' : 'document' }));
+    documents.push(kind === 'code' ? sourceReference(path, text, id)
+      : createTextReference(name, text, { id, markdown: true, priority, kind }));
   }
   warmReferenceIndex(documents);
   return { documents, fingerprint, index: {

@@ -1,4 +1,4 @@
-import { BUILD_STORY_EVIDENCE, BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isUsefulPitchCue, looksLikeQuestion, missingBuildPoint, sameQuestion, sourcedProjectCue } from './pitch-question.mjs';
+import { BUILD_STORY_EVIDENCE, BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, missingBuildPoint, sameQuestion, sourcedProjectCue } from './pitch-question.mjs';
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
@@ -889,12 +889,19 @@ export class Session {
       turns.push({ speaker: 'Room (live partial)', text: partial.text });
     }
     const recent = turns.slice(-6);
-    const earlier = recallRoomTurns(history.filter(turn => !recent.includes(turn)), recent.at(-1)?.text ?? '');
+    const latest = recent.at(-1)?.text ?? '';
+    const earlier = recallRoomTurns(history.filter(turn => !recent.includes(turn)), latest);
     const query = recent.slice(-3).map(turn => turn.text).join(' ') || 'Telepathy live pitch demo';
-    const passages = retrieveProjectReferences([...this.references, ...this.pitchReferences], query, 7, recent.at(-1)?.text);
-    const project = this.pitchReferences.find(doc => doc.name === 'Telepathy technical reference.md')
+    let passages = retrieveProjectReferences([...this.references, ...this.pitchReferences], query, 7, latest);
+    const frontendStack = this.pitchReferences.find(doc => doc.kind === 'frontend')
+      ?.chunks.find(chunk => chunk.heading === 'Active frontend stack');
+    if (frontendStack && isFrontendStackQuestion(latest)) {
+      passages = [frontendStack, ...passages.filter(passage => passage.id !== frontendStack.id)].slice(0, 7);
+    }
+    const overview = this.pitchReferences.find(doc => doc.name === 'Telepathy technical reference.md')
       ?.chunks.find(chunk => chunk.heading === 'Project overview')?.text;
-    return { passages, recent, earlier, project, context: normalizePitchHelp({
+    const project = [overview, frontendStack?.text].filter(Boolean).join('\n\n') || undefined;
+    return { passages, recent, earlier, project, frontendStack, context: normalizePitchHelp({
       type: 'pitch_help', seat, elapsedSeconds: Math.min(86400, Math.max(0, Math.floor((began - this.startedAt) / 1000))),
       turns: recent, passages,
     }) };
@@ -1073,9 +1080,9 @@ export class Session {
     }
   }
 
-  async composePitchCue({ context, passages, recent, earlier, project }, signal, started, realtime) {
+  async composePitchCue({ context, passages, recent, earlier, project, frontendStack }, signal, started, realtime) {
     const question = recent.at(-1)?.text ?? '';
-    const known = sourcedProjectCue(question, passages);
+    const known = sourcedProjectCue(question, passages, frontendStack);
     if (known) {
       return { ...validateAnswer(known, passages, recent), source: 'project-reference', timing: {} };
     }
