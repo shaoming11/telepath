@@ -1,5 +1,5 @@
 {
-  "revision": 105,
+  "revision": 106,
   "claims": [
     {
       "id": "1de997b5-3f95-411d-a390-3dba874864d8",
@@ -16,6 +16,34 @@
         "video"
       ],
       "claimedAt": "2026-11-22T06:27:03.141Z"
+    },
+    {
+      "id": "96ee9e4f-108b-4710-b622-2491c29ce8f0",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-announcements",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "public/stage.mjs",
+        "public/stage.html",
+        "scripts/generate-wasp-surfaces.py",
+        "wasp-ui/src/StageAnnouncement.tsx",
+        "wasp-ui/src/generated/StageMarkup.tsx",
+        "wasp-ui/src/liquid.css",
+        "tests/stage-view.test.mjs",
+        "tests/wasp-markup.test.mjs"
+      ],
+      "paths": [
+        "public/stage.html",
+        "public/stage.mjs",
+        "scripts/generate-wasp-surfaces.py",
+        "tests/stage-view.test.mjs",
+        "tests/wasp-markup.test.mjs",
+        "wasp-ui/src/StageAnnouncement.tsx",
+        "wasp-ui/src/generated/StageMarkup.tsx",
+        "wasp-ui/src/liquid.css"
+      ],
+      "claimedAt": "2026-11-22T07:11:13.409Z"
     }
   ]
 }
