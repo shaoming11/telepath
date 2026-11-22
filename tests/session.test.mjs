@@ -25,7 +25,7 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, setti
     now: () => now,
   });
 
-  const state = () => stageFrames.at(-1)?.state;
+  const state = () => stageFrames.findLast(frame => frame.type === 'state')?.state;
   const act = (seat, frame) => session.handleSeat(seat, frame);
   const audioFrames = (seat, cue) => seatFrames[seat].filter(frame => frame.type === 'audio' && frame.cue === cue);
   const ack = seat => {
@@ -64,6 +64,38 @@ test('the Mac room mic stays active while the phone sends signals and ignores ph
   await act('A', { type: 'signal', signal: 'R1', id: 'while-mac-listens' });
   assert.equal(audioFrames('B', 'soft').length, 1);
   assert.equal(state().seats.A.listening, true);
+});
+
+test('the shared mic uses one diarized stream and updates speaker labels without duplicating transcript', async t => {
+  const calls = [];
+  let callbacks;
+  const { session, state, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false },
+    settings: { sharedRoomMic: true },
+    audio: { listen: async (seat, enabled, cb, options) => {
+      calls.push([seat, enabled, options?.diarize ?? false]);
+      if (enabled) callbacks = cb;
+      return true;
+    } },
+  });
+  t.after(() => session.close());
+  await session.setListening('A', true, 'phone');
+  await session.setListening('A', true, 'companion');
+  await session.setListening('B', true, 'companion');
+  assert.deepEqual(calls, [['A', true, true], ['A', false, false], ['B', true, true]]);
+  callbacks.committed('First. Second.', { streamId: 4, segment: 0 });
+  callbacks.diarized({ segment_index: 0, words: [
+    { speaker_id: 'speaker_0', text: 'First.' },
+    { speaker_id: null, type: 'spacing', text: ' ' },
+    { speaker_id: 'speaker_1', text: 'Second.' },
+  ] }, 4);
+  assert.equal(state().seats.B.transcript.length, 1);
+  assert.deepEqual(state().seats.B.transcript[0].speakers.map(run => run.label), ['Speaker 1', 'Speaker 2']);
+  const seat_a_monitor = seatFrames.A.findLast(frame => frame.type === 'monitor').monitor;
+  assert.deepEqual(Object.keys(seat_a_monitor.seats), ['A']);
+  assert.deepEqual(seat_a_monitor.seats.A.speakers, ['Speaker 1', 'Speaker 2']);
+  callbacks.merged({ from_speaker_id: 'speaker_0', to_speaker_id: 'speaker_1' }, 4);
+  assert.equal(state().seats.B.transcript[0].speakers[0].speaker, 'speaker_1');
 });
 
 test('a verified voice preview goes only to its owner as speaking audio', async t => {

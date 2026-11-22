@@ -10,6 +10,7 @@
   <title>Telepathy</title>
   <link rel="preload" href="./fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="./phone.css">
+  <link rel="stylesheet" href="./channel-monitor.css">
 </head>
 <body>
   <audio id="keepalive" src="/assets/keepalive.wav" loop playsinline preload="auto"></audio>
@@ -205,6 +206,8 @@
           <div><dt>Room</dt><dd class="listen" id="live-listen" data-state="off"><i class="dot" aria-hidden="true"></i><span id="live-listen-text"></span></dd></div>
           <div><dt>Messages</dt><dd id="live-cache"></dd></div>
         </dl>
+
+        <section class="channel-monitor channel-monitor--phone" id="phone-monitor" aria-label="Live audio and context"></section>
 
         <div class="lock-controls" id="lock-controls" hidden>
           <button id="lock-controls-toggle" type="button" aria-pressed="false">Enable lock-screen controls</button>

@@ -3,6 +3,7 @@ import { createNetworkLink, DEFAULT_NETWORK } from './network.mjs';
 import { createCapture } from './capture.mjs';
 import { createCalibration } from './calibrate.mjs';
 import { createAudioEngine, createDraftTracker } from './phone-audio.mjs';
+import { mountChannelMonitor } from './channel-monitor.mjs';
 import { AIRPODS_1_PLAYBACK_URL } from './earbuds/airpods-1/input.mjs';
 import {
   APP_TIMING, APP_TIMING_LIMITS, CONSENT_KEY, CONSENT_TEXT, DEFAULT_VOLUMES, PATTERN_LABELS, PRESETS,
@@ -27,6 +28,7 @@ const SOCKET_OPEN = 1;
 const SOCKET_MOVED = 4001;
 const SCOPED_FRAMES = new Set([
   'signal', 'heard', 'cache_ready', 'voice', 'voice_preview', 'room_mic_invite', 'mic', 'setup', 'listen', 'configure', 'preset', 'calibration', 'sim_transcript',
+  'audio_monitor',
 ]);
 
 const $ = id => document.getElementById(id);
@@ -82,6 +84,11 @@ const ui = {
 };
 
 let connection = null;
+let monitor_snapshot = null;
+let phone_monitor = null;
+let monitor_seat = null;
+let last_output_phase;
+let last_output_at = 0;
 const gesture_scopes = new Map();
 const awaiting_signal_ack = new Map();
 const SIGNAL_ACK_MS = 1800;
@@ -520,6 +527,12 @@ function is_stale_frame(frame) {
 
 function handle_frame(frame, source) {
   switch (frame?.type) {
+    case 'monitor':
+      if (!is_stale_frame(frame)) {
+        monitor_snapshot = frame.monitor;
+        render_monitor();
+      }
+      return;
     case 'state': return on_state(frame.state, source);
     case 'cache':
       // The hub sends a reconnecting seat its manifest before the first state. Hold it until that state
@@ -566,6 +579,7 @@ function on_state(next, source) {
   }
   const new_session = previous && (previous.sessionId !== next.sessionId || previous.hubId !== next.hubId);
   if (new_session) {
+    monitor_snapshot = null;
     audio.clear_session();
     drafts.reset();
     input.reset();
@@ -589,7 +603,9 @@ function on_state(next, source) {
     if (ui.lock_controls) set_lock_controls(false, { restore_mic: false });
     if (capture.open || capture.opening || ui.listen_wanted) stop_mic();
   }
-  if (!source.synced || new_session || previous?.sessionId !== next.sessionId) reconcile(next, source);
+  const first_state = !source.synced;
+  if (first_state || new_session || previous?.sessionId !== next.sessionId) reconcile(next, source);
+  if (first_state && !next.sharedRoomMic && !is_sim() && has_consent() && !capture.open) void start_mic();
   for (const frame of source.early_cache.splice(0)) {
     if (!is_stale_frame(frame)) void on_cache(frame, source);
   }
@@ -808,9 +824,10 @@ function on_capture_state(status, detail) {
 
 async function start_mic({ for_sample = false } = {}) {
   const external_mic = my_state()?.roomMicSource === 'companion';
+  const shared_room = ui.state?.sharedRoomMic || ui.hub_info?.sharedRoomMic;
   if (is_sim() || (!for_sample && (ui.lock_controls || ui.calibration_playback || external_mic)) || !has_consent()
-    || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
-  ui.listen_wanted = !ui.lock_controls && !external_mic;
+    || (!for_sample && shared_room) || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
+  ui.listen_wanted = !ui.lock_controls && !external_mic && !shared_room;
   const opened = await capture.start();
   if (opened) sync_listen();
   return opened;
@@ -943,7 +960,6 @@ function join(seat) {
   save_settings();
   arm_media();
   connect();
-  if (!is_sim() && has_consent()) void start_mic();
   go(next_setup_screen(), { from: 'setup' });
 }
 
@@ -1398,7 +1414,30 @@ function render_live() {
   render_message('out', mine?.lastOut, 'last_out_id');
   set_text($('live-note'), ui.note);
   render_signals();
+  render_monitor();
   $('sim-room').hidden = !is_sim();
+}
+
+function render_monitor(output = audio.getOutputActivity()) {
+  if (ui.screen !== 'live' || !ui.seat) return;
+  if (monitor_seat !== ui.seat) {
+    monitor_seat = ui.seat;
+    phone_monitor = mountChannelMonitor($('phone-monitor'), [ui.seat]);
+  }
+  phone_monitor?.update(monitor_snapshot, { [ui.seat]: output });
+}
+
+function sample_output() {
+  if (!ui.seat) return;
+  const output = audio.getOutputActivity();
+  const now = performance.now();
+  if (output.phase !== last_output_phase || output.phase !== 'idle' && now - last_output_at >= 500) {
+    if (send({ type: 'audio_monitor', ...output })) {
+      last_output_phase = output.phase;
+      last_output_at = now;
+    }
+  }
+  render_monitor(output);
 }
 
 function render_codebook() {
@@ -1460,11 +1499,11 @@ function render_settings() {
     radio.checked = radio.value === settings.gesture_model;
   }
   $('settings-drafts').checked = settings.drafts;
-  $('settings-listen-row').hidden = is_sim();
+  $('settings-listen-row').hidden = is_sim() || Boolean(ui.state?.sharedRoomMic || ui.hub_info?.sharedRoomMic);
   $('settings-listen').checked = capture.open && ui.listen_wanted;
   $('settings-listen').disabled = my_state()?.roomMicSource === 'companion';
   $('settings-voice-preview').hidden = !ui.hub_info?.voicePreview;
-  $('settings-room-invite').hidden = is_sim() || !ui.hub_info?.roomMic;
+  $('settings-room-invite').hidden = is_sim() || !ui.hub_info?.roomMic || Boolean(ui.state?.sharedRoomMic || ui.hub_info.sharedRoomMic);
   for (const name of ['cue', 'voice']) {
     const field = $('settings-volume-' + name);
     if (document.activeElement !== field) field.value = String(settings.volumes[name]);
@@ -1696,6 +1735,7 @@ function bind_events() {
 function start() {
   build_settings_groups();
   bind_events();
+  setInterval(sample_output, 250).unref?.();
   void probe_hub();
   if (DIRECT_CALIBRATION) {
     const seat = QUERY.get('seat');

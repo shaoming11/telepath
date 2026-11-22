@@ -801,6 +801,7 @@ export function createAudio({
   // ---- realtime transcription (Scribe v2 Realtime, one socket per seat)
 
   const stt = new Map();
+  let sttStreamSequence = 0;
   const sttState = (seat) => {
     let s = stt.get(seat);
     if (!s) {
@@ -808,6 +809,7 @@ export function createAudio({
         enabled: undefined, gen: 0, ws: null, open: false, connecting: false, handshake_timer: null,
         queue: [], queued: 0, attempts: 0, nextAt: 0, fatal: null, cb: null, lastPartial: '',
         status: 'off', status_code: null, reportedNoKey: false, last_pong_at: 0, ping_at: null,
+        diarize: false, streamId: null,
       };
       stt.set(seat, s);
     }
@@ -816,7 +818,10 @@ export function createAudio({
 
   const normalizeCb = (cb) => {
     if (typeof cb === 'function') return { committed: cb, partial: null };
-    if (cb && typeof cb === 'object') return { committed: cb.committed ?? cb.onCommitted ?? null, partial: cb.partial ?? cb.onPartial ?? null };
+    if (cb && typeof cb === 'object') return {
+      committed: cb.committed ?? cb.onCommitted ?? null, partial: cb.partial ?? cb.onPartial ?? null,
+      diarized: cb.diarized, merged: cb.merged,
+    };
     return null;
   };
 
@@ -946,7 +951,8 @@ export function createAudio({
       return;
     }
     if (gen !== s.gen) return;
-    const params = new URLSearchParams({ model_id: STT_MODEL, audio_format: 'pcm_16000', commit_strategy: 'vad' });
+    const params = new URLSearchParams({ model_id: s.diarize ? 'scribe_v3_live' : STT_MODEL, audio_format: 'pcm_16000', commit_strategy: 'vad' });
+    if (s.diarize) params.set('diarize', 'true');
     if (vadSilenceSecs) params.set('vad_silence_threshold_secs', String(vadSilenceSecs));
     let ws;
     try {
@@ -982,6 +988,7 @@ export function createAudio({
         clearTimeout(s.handshake_timer);
         s.handshake_timer = null;
         s.open = true;
+        s.streamId = ++sttStreamSequence;
         s.connecting = false;
         s.last_pong_at = now();
         const cutoff = now() - queueMaxAgeMs;
@@ -999,7 +1006,14 @@ export function createAudio({
       } else if (type === 'committed_transcript' && s.open) {
         const text = String(msg.text ?? '').trim();
         s.lastPartial = '';
-        if (text) s.cb?.committed?.(text, { partial: false, level: s.level });
+        if (text) s.cb?.committed?.(text, {
+          partial: false, level: s.level,
+          ...(s.diarize && { streamId: s.streamId, segment: msg.segment_index }),
+        });
+      } else if (type === 'diarized_transcript' && s.open && s.diarize) {
+        s.cb?.diarized?.(msg, s.streamId);
+      } else if (type === 'speakers_merged' && s.open && s.diarize) {
+        s.cb?.merged?.(msg, s.streamId);
       } else if (type && type !== 'committed_transcript_with_timestamps' && (FATAL_STT.has(type) || /error|exceeded|throttled|limited|overflow|exhausted|insufficient/.test(type))) {
         fail('stt', new AudioError(`scribe ${type}: ${msg.error ?? ''}`, { code: type }), { seat });
         if (FATAL_STT.has(type)) sttDisconnected(seat, s, type, { fatal: true });
@@ -1024,7 +1038,7 @@ export function createAudio({
     else on(ws, 'pong', pong);
   }
 
-  async function listen(seat, enabled, onTranscript) {
+  async function listen(seat, enabled, onTranscript, { diarize = false } = {}) {
     if (!isSeat(seat)) return { listening: false };
     const s = sttState(seat);
     if (!enabled) {
@@ -1036,6 +1050,7 @@ export function createAudio({
       return { listening: false };
     }
     if (s.enabled !== true) teardownStt(seat, true);
+    s.diarize = diarize;
     const cb = normalizeCb(onTranscript);
     if (cb) s.cb = cb;
     return { listening: true }; // the socket opens on the first real mic frame

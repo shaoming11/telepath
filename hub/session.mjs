@@ -3,6 +3,8 @@ import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, part
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
 import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcements.mjs';
 import { normalizePitch, recommendLocally } from '../maritime/policy.mjs';
+import { createSessionMonitor } from '../monitor/session.mjs';
+import { createSpeakerBindings, splitDiarizedSegment } from '../monitor/speakers.mjs';
 
 const DEFAULT_SETTINGS = Object.freeze({
   draftCooldownMs: 30_000,
@@ -112,10 +114,12 @@ export class Session {
     this.senseTimer = null;
     this.cannedTimers = new Set();
     this.closed = false;
+    this.monitor = createSessionMonitor(now);
     this.initialize();
   }
 
   initialize(connections = {}) {
+    this.monitor.reset();
     this.generation += 1;
     this.sessionId = String(this.generation);
     this.lifecycle = new AbortController();
@@ -144,6 +148,7 @@ export class Session {
   snapshot(viewer) {
     return {
       sessionId: this.sessionId,
+      sharedRoomMic: Boolean(this.settings.sharedRoomMic),
       ...(this.setupReset && { setupReset: this.setupReset }),
       phase: this.phase,
       preset: this.preset,
@@ -187,10 +192,23 @@ export class Session {
   publish() {
     if (this.closed) return;
     this.syncCacheGenerations();
+    this.publishMonitor();
     this.emitStage({ type: 'state', state: this.snapshot() });
     for (const seat of SEATS) {
       if (this.seats[seat].online) this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
     }
+  }
+
+  publishMonitor() {
+    if (this.closed) return;
+    this.emitStage(this.monitorFrame());
+    for (const seat of SEATS) {
+      if (this.seats[seat].online) this.emitSeat(seat, this.monitorFrame(seat));
+    }
+  }
+
+  monitorFrame(viewer) {
+    return { type: 'monitor', monitor: this.monitor.snapshot(this.seats, viewer, { sharedRoom: this.settings.sharedRoomMic }) };
   }
 
   append(kind, fields) {
@@ -243,6 +261,7 @@ export class Session {
     const state = this.seats[seat];
     state.connection.abort();
     state.online = false;
+    this.monitor.clearSeat(seat);
     state.cacheId = null;
     state.receipt = null;
     state.awaitingHeard.clear();
@@ -412,6 +431,9 @@ export class Session {
       case 'voice': return this.recordVoice(seat, frame);
       case 'voice_preview': return this.previewVoice(seat);
       case 'mic': return this.receiveMic(seat, frame);
+      case 'audio_monitor':
+        if (this.monitor.updateOutput(seat, frame)) this.publishMonitor();
+        return;
       case 'calibration': return this.applyCalibration(frame.profile);
       case 'listen': return this.setListening(seat, frame.enabled === true);
       case 'sim_transcript':
@@ -664,12 +686,39 @@ export class Session {
     }
   }
 
-  addTranscript(seat, value, generation = this.generation) {
+  addTranscript(seat, value, generation = this.generation, meta) {
     const state = this.seats[seat];
     if (this.closed || generation !== this.generation || this.canned || this.phase === 'reveal' || !state.online) return;
     const text = cleanText(typeof value === 'string' ? value : value?.text, 1200);
     if (!text) return;
-    state.transcript.push({ at: this.now(), text });
+    this.monitor.updatePartial(seat, '');
+    state.transcript.push({
+      at: this.now(), text,
+      ...(Number.isInteger(meta?.segment) && { streamId: meta.streamId, segment: meta.segment }),
+    });
+    this.publish();
+  }
+
+  updateDiarization(seat, streamId, message, merged = false) {
+    const state = this.seats[seat];
+    if (state.speakerStream !== streamId) {
+      state.speakerStream = streamId;
+      state.speakerBindings = createSpeakerBindings();
+    }
+    const bindings = state.speakerBindings;
+    if (merged) {
+      if (!bindings.merge(message.from_speaker_id, message.to_speaker_id)) return;
+      for (const entry of state.transcript) {
+        if (entry.streamId === streamId && entry.speakers) {
+          entry.speakers = entry.speakers.map(run => ({ text: run.text, ...bindings.describe(run.speaker) }));
+        }
+      }
+    } else {
+      const segment = splitDiarizedSegment(message);
+      const entry = segment && state.transcript.findLast(item => item.streamId === streamId && item.segment === segment.index);
+      if (!entry) return;
+      entry.speakers = segment.runs.map(run => ({ text: run.text, ...bindings.describe(run.speaker) }));
+    }
     this.publish();
   }
 
@@ -681,12 +730,15 @@ export class Session {
     const state = this.seats[seat];
     if (!state.listening || state.roomMicSource !== source || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
     state.level = this.levelValue(frame.level);
+    this.monitor.updateInput(seat, state.level);
+    this.publishMonitor();
     const generation = this.generation;
     const listen_version = state.listenVersion;
     try {
-      await this.audio.mic?.(seat, frame.audio, state.level, text => {
+      const committed = state.roomMicSource === 'companion' && this.settings.sharedRoomMic ? undefined : text => {
         if (state.listenVersion === listen_version) this.addTranscript(seat, text, generation);
-      });
+      };
+      await this.audio.mic?.(seat, frame.audio, state.level, committed);
     } catch {}
   }
 
@@ -699,9 +751,14 @@ export class Session {
       return;
     }
     if (!state.online || state.sim || this.canned || this.phase === 'reveal') return;
+    if (this.settings.sharedRoomMic && source === 'phone') return;
     if (state.listeningRequested) {
       if (source !== 'companion' || state.roomMicSource === 'companion') return;
       this.stopListening(seat);
+    }
+    const diarize = source === 'companion' && Boolean(this.settings.sharedRoomMic);
+    if (diarize) {
+      for (const other of SEATS) if (other !== seat && this.seats[other].roomMicSource === 'companion') this.stopListening(other);
     }
     const generation = this.generation;
     const listen_version = ++state.listenVersion;
@@ -710,9 +767,21 @@ export class Session {
     state.transcription = 'waiting';
     this.publish();
     try {
-      const listening = await this.audio.listen?.(seat, true, text => {
-        if (state.listenVersion === listen_version) this.addTranscript(seat, text, generation);
-      });
+      const fresh = () => generation === this.generation && state.listenVersion === listen_version;
+      const committed = (text, meta) => {
+        if (fresh()) this.addTranscript(seat, text, generation, meta);
+      };
+      const callbacks = diarize ? {
+        committed,
+        partial: text => {
+          if (!fresh()) return;
+          this.monitor.updatePartial(seat, text);
+          this.publishMonitor();
+        },
+        diarized: (message, stream) => { if (fresh()) this.updateDiarization(seat, stream, message); },
+        merged: (message, stream) => { if (fresh()) this.updateDiarization(seat, stream, message, true); },
+      } : committed;
+      const listening = await this.audio.listen?.(seat, true, callbacks, { diarize });
       if (generation !== this.generation || listen_version !== state.listenVersion || !state.online) return;
       state.listening = typeof this.audio.listen === 'function' && listening !== false && listening?.listening !== false;
     } catch {
@@ -744,6 +813,7 @@ export class Session {
     state.roomMicSource = null;
     state.transcription = 'off';
     state.level = 0;
+    this.monitor.updatePartial(seat, '');
     if (was_requested) {
       try { Promise.resolve(this.audio.listen?.(seat, false)).catch(() => {}); } catch {}
     }
@@ -756,6 +826,7 @@ export class Session {
     this.targetPreset = { preset: this.preset, context: this.context };
     clearInterval(this.senseTimer);
     this.senseTimer = null;
+    this.monitor.setAnalysis('idle', 'Context review paused');
     for (const seat of SEATS) {
       const state = this.seats[seat];
       state.receipt = null;
@@ -795,6 +866,8 @@ export class Session {
     this.sensing = true;
     const sim = requestedSeat ? seats[requestedSeat].sim
       : SEATS.every(seat => !seats[seat].online || seats[seat].sim);
+    this.monitor.startAnalysis(seats, { preset, mode: sim ? 'Simulation' : this.codec.mode ?? 'Live model', requestedSeat });
+    this.publishMonitor();
     try {
       await withDeadline(async signal => {
         const result = await this.codec.evaluate({
@@ -811,6 +884,11 @@ export class Session {
         }
         this.publish();
         const suggestions = requestedSeat ? [requestedSeat] : SEATS;
+        if (suggestions.some(person => Number.isFinite(result?.candidates?.[person]?.confidence)
+          && result.candidates[person].confidence >= this.settings.draftConfidence && this.canDraft(person))) {
+          this.monitor.setAnalysis('drafting', 'Preparing a preview');
+          this.publishMonitor();
+        }
         await Promise.all(suggestions.map(async person => {
           if (connections[person].aborted) return;
           const preview_signal = AbortSignal.any([signal, connections[person]]);
@@ -834,7 +912,15 @@ export class Session {
           }
         }));
       }, this.settings.serviceTimeoutMs, lifecycle);
+      if (generation === this.generation && !lifecycle.aborted) {
+        this.monitor.setAnalysis('ready', 'Context review complete');
+        this.publishMonitor();
+      }
     } catch {
+      if (generation === this.generation && !lifecycle.aborted) {
+        this.monitor.setAnalysis('error', 'The room context review did not finish');
+        this.publishMonitor();
+      }
     } finally {
       if (generation === this.generation) this.sensing = false;
     }
