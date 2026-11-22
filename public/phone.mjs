@@ -191,6 +191,8 @@ function read_json(storage, key) {
 
 function load_settings() {
   const saved = read_json(sessionStorage, STORAGE_KEY);
+  const volumes = { ...DEFAULT_VOLUMES, ...saved.volumes };
+  if (volumes.voice === 0.58) volumes.voice = DEFAULT_VOLUMES.voice;
   const forced = QUERY.get('sim') === '1' ? 'sim' : QUERY.get('real') === '1' || DIRECT_CALIBRATION ? 'real' : null;
   const saved_input = saved.input_mode === 'sim' ? 'sim' : 'real';
   const input_mode = forced ?? saved_input;
@@ -209,7 +211,7 @@ function load_settings() {
     mode: input_mode === 'sim' && saved.mode === 1 ? 1 : 2,
     gesture_model: saved.gesture_model === 'pro' ? 'pro' : 'next-only',
     drafts: saved.drafts !== false,
-    volumes: { ...DEFAULT_VOLUMES, ...saved.volumes },
+    volumes,
     timing: { ...DEFAULT_TIMING, ...saved.timing, ...personal_timing },
     emulator: { ...DEFAULT_EMULATOR, ...saved.emulator },
     network: { ...DEFAULT_NETWORK, enabled: input_mode === 'sim', ...saved.network },

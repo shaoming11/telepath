@@ -486,7 +486,7 @@ export function createAudio({
     const epoch = epochBox.n;
     if (whisper && whisperModel && whisperModel !== TTS_MODEL) {
       try {
-        return await synth(voiceId, '[whispers] ' + text, { model: whisperModel, timeoutMs: whisperTimeoutMs, signal, held });
+        return await synth(voiceId, '[whispers] ' + text, { model: whisperModel, timeoutMs: whisperTimeoutMs, speed, signal, held });
       } catch (error) {
         if (signal?.aborted || epoch !== epochBox.n) throw error;
       }
@@ -587,7 +587,7 @@ export function createAudio({
     }
   }
 
-  async function speech(speakerSeat, text, { voice, sim = false, role = 'seat', timeoutMs, signal, whisper = false } = {}) {
+  async function speech(speakerSeat, text, { voice, sim = false, role = 'seat', timeoutMs, signal, whisper = true } = {}) {
     if (typeof text !== 'string' || !text.trim() || signal?.aborted) return null;
     const epoch = epochBox.n;
     const assistant = ['assistant', 'system', 'draft', 'status', 'codebook', 'announcement'].includes(role);
@@ -595,7 +595,7 @@ export function createAudio({
     const real_voice = assistant ? assistantVoiceId() : resolveVoice(speakerSeat, voice);
     const bundled_voice = !assistant && !real_voice && allowBundledFallback && STOCK_VOICES[speakerSeat]?.id;
     const stock_clip = (can_speed || role === 'announcement') && real_voice === STOCK_VOICES.assistant.id;
-    if (sim || bundled_voice || stock_clip) {
+    if (sim || bundled_voice || (stock_clip && (!whisper || !whisperModel || !client.hasKey()))) {
       const url = (await bank()).lookup(assistant ? 'assistant' : speakerSeat, text);
       if (epoch !== epochBox.n || signal?.aborted) return null;
       if (url) return { url, source: 'bank' };
@@ -613,7 +613,7 @@ export function createAudio({
     asset_holds.add(held);
     try {
       const r = await speakLine(voiceId, text, {
-        whisper: whisper || !assistant && role !== 'voice-preview', whisperTimeoutMs: whisper ? 1800 : 2100,
+        whisper, whisperTimeoutMs: 1800,
         timeoutMs, speed: can_speed ? READOUT_SPEED : undefined, signal, held,
       });
       if (epoch !== epochBox.n || signal?.aborted) return null;
@@ -622,6 +622,10 @@ export function createAudio({
       return { url: r.url, source: 'live' };
     } catch (err) {
       if (!signal?.aborted) fail('speech', err, { seat: speakerSeat });
+      if (stock_clip && epoch === epochBox.n && !signal?.aborted) {
+        const url = (await bank()).lookup('assistant', text);
+        if (url && epoch === epochBox.n && !signal?.aborted) return { url, source: 'bank' };
+      }
       return null;
     } finally {
       asset_holds.delete(held);
