@@ -18,7 +18,9 @@ The Stage room console is also React-owned. The capture controller handles micro
 
 The Wasp phone highlights a private cue on the `telepathy:pitch-speech-start` event. Calibration shows received earbud events immediately and shows acceptance after the timing check. Sources: wasp-ui/src/PhonePitchControls.tsx, wasp-ui/src/CalibrationTrial.tsx.
 
-The Stage keeps the last announcement visible while composing another. A seat shows playback started after it acknowledges Web Audio playback. The reveal separates browser-confirmed cues from queued cues and labels canned results as scripted. Sources: wasp-ui/src/StageAnnouncement.tsx, wasp-ui/src/StageRevealHeader.tsx.
+The Live phone shows **Send**, **Discard**, and **Acknowledge whisper** above the monitor when they are available. The cue controls scroll separately from the navigation row.
+
+The Operator dock keeps the Stage controls available and retains the last announcement while you compose another. Each seat reports when Web Audio starts. Reveal puts confirmed bit and word counts first and labels canned results as scripted.
 
 The launcher compares a hash of the build inputs before reusing the compiled Wasp client. The Node hub compresses transport by serving precompressed hashed scripts and styles to browsers that accept gzip. Sources: scripts/build-wasp-ui, hub/server.mjs.
 
@@ -32,14 +34,28 @@ Use Node.js 24.22.1 or later, npm, and Python 3. The first build downloads the p
 ./start-wasp
 ```
 
-The launcher builds the Wasp client when the artifact is missing or its build inputs changed. The hub then prints Stage and phone addresses as usual. To force a rebuild, run `./scripts/build-wasp-ui`. If you change the source HTML, run `python3 scripts/generate-wasp-surfaces.py` before building. The generator preserves the controller hooks in the React surfaces. Wasp output and staged client files live in ignored build folders.
+The launcher builds the Wasp client when the artifact is missing or its inputs change. The hub prints the Stage and phone addresses when it starts. Wasp can refresh its dependency lockfile on a first build. The launcher records the resolved dependencies for the next start.
+
+To force a rebuild, run `./scripts/build-wasp-ui`. If you edit the source HTML, run `python3 scripts/generate-wasp-surfaces.py` before building. The generator preserves the controller hooks in the React surfaces. Wasp output and staged client files live in ignored build folders.
 
 The regular `./start` command opens the classic frontend. To test the Wasp presentation against an isolated hub instead of the live rehearsal, start a separate port with provider credentials absent from that process.
 
 ```sh
 npm test
 npm run rehearse -- --fast --runs=1
+npm run rehearse:faults -- --tls --fast --cycles=5
 ```
+
+## Rehearse on two phones
+
+1. Put the Mac and both phones on the same private hotspot. Open the printed Stage address on the Mac and the printed HTTPS phone address in Safari. Install and trust **Telepathy Local Demo** on each iPhone if prompted. [iPhone certificate steps](rehearsal.md)
+2. Pair each set of AirPods with its own phone. Join as Seat A for the presenter and Seat B for the coach. Choose **Use the premade voice**, select the earbud model, and tap **Test audio**. Each person should hear the test in their own earbuds.
+3. For AirPods 1, map double-tap to **Next Track** in Bluetooth settings. Run two double-event trials and two triple-event trials after the initial check. For AirPods Pro, check single, double, and triple squeezes. Choose **Pitch** and tap **Ready** on both phones.
+4. On Stage, select the MacBook microphone under **Device and transcript**. Click **Start listening** and confirm that speech appears. Begin the session once both seats are ready.
+5. Have the coach send **Slow down**. On the presenter’s phone, tap **Acknowledge whisper** after it plays. Arm **Question Mode** and have a third person ask about the project. Verify that only the presenter gets the answer cue. Use the coach’s private **Send** action to approve a draft.
+6. Open **Operator**, send **Thirty seconds left**, and confirm playback from both seats before clicking **Reveal**. Test **Canned take** with both phone tabs closed.
+
+The branch passed a local two-seat rehearsal using the iPhone SE and iPhone 17 Pro Safari simulators with fixture transcription and bundled audio. That test checked browser playback, which starts the Stage receipt. The five-run physical check still needs both phones, both AirPods pairs, and the live provider configuration.
 
 ## Visual direction
 
