@@ -1,4 +1,19 @@
 {
-  "revision": 172,
-  "claims": []
+  "revision": 173,
+  "claims": [
+    {
+      "id": "c9435e77-5893-45e6-b3f4-d89c9bd2af1f",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-stage-recovery-guide",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "docs/wasp-ui.md"
+      ],
+      "paths": [
+        "docs/wasp-ui.md"
+      ],
+      "claimedAt": "2026-11-22T12:20:13.871Z"
+    }
+  ]
 }
