@@ -552,7 +552,8 @@ export function seatSteps(seat: SeatState): SetupStep[] {
   return [
     {
       label: "Voice",
-      value: seat.voice === "ready" ? "Cloned voice" : seat.voice === "fallback" ? "Premade voice" : seat.voice ?? "Not started",
+      value: seat.voice === "ready" ? "Cloned voice" : seat.voice === "fallback" ? "Premade voice"
+        : seat.voice === "building" ? "Building" : seat.voice === "error" ? "Failed" : "Not started",
       done: voiceDone, flag: seat.voice === "error",
     },
     {
