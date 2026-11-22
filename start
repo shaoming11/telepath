@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+
+if ! node -e 'if (Number(process.versions.node.split(".")[0]) < 22) process.exit(1)' 2>/dev/null; then
+  printf '%s\n' 'Telepathy needs Node.js 22 or later.' >&2
+  exit 1
+fi
+
+if ! node -e 'require.resolve("ws")' 2>/dev/null; then
+  npm ci --no-audit --no-fund
+fi
+
+mkdir -p .runtime
+chmod 700 .runtime
+if [[ "${TELEPATHY_LLM:-}" != "off" && "$(uname -s)" == "Darwin" ]] && command -v xcrun >/dev/null; then
+  if [[ ! -x .runtime/room-model || hub/RoomModel.swift -nt .runtime/room-model ]]; then
+    if ! xcrun swiftc hub/RoomModel.swift -o .runtime/room-model 2>.runtime/room-model-build.log; then
+      printf '%s\n' 'The local Mac text model is unavailable. OpenAI or emulated room sense can still run.' >&2
+    fi
+  fi
+  if [[ -x .runtime/room-model ]]; then export TELEPATHY_ROOM_MODEL="$PWD/.runtime/room-model"; fi
+fi
+
+args=()
+for env_path in "${TELEPATHY_ENV_FILE:-.env.local}" "${TELEPATHY_OPENAI_ENV_FILE:-.env.openai.local}"; do
+  if [[ -f "$env_path" ]]; then args+=("--env-file=$env_path"); fi
+done
+runner=(node)
+if [[ "$(uname -s)" == "Darwin" ]] && command -v caffeinate >/dev/null; then
+  runner=(caffeinate -i node)
+fi
+if [[ ${#args[@]} -gt 0 ]]; then exec "${runner[@]}" "${args[@]}" hub/server.mjs; fi
+exec "${runner[@]}" hub/server.mjs

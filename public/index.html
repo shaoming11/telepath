@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#10100F">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Telepathy</title>
+  <link rel="stylesheet" href="./phone.css">
+</head>
+<body>
+  <audio id="keepalive" src="/assets/keepalive.wav" loop playsinline preload="auto"></audio>
+
+  <div class="app" id="app">
+    <header class="masthead">
+      <button class="back" id="nav-back" type="button" aria-label="Back" hidden>
+        <span aria-hidden="true">&larr;</span>
+      </button>
+      <span class="wordmark">Telepathy</span>
+      <span class="masthead-seat" id="masthead-seat"></span>
+      <span class="connection" id="connection" role="status" data-state="off">
+        <i class="dot" aria-hidden="true"></i><span id="connection-text">Hub</span>
+      </span>
+    </header>
+
+    <div class="banner" id="banner" role="alert" hidden>
+      <p id="banner-text"></p>
+      <button id="banner-action" type="button" hidden></button>
+    </div>
+
+    <main class="screens">
+      <section class="screen screen-join" id="screen-join" data-screen="join" hidden>
+        <h1 class="display">Pick your seat</h1>
+        <div class="seat-grid">
+          <button class="seat" type="button" data-seat="A"><span>A</span></button>
+          <button class="seat" type="button" data-seat="B"><span>B</span></button>
+        </div>
+        <fieldset class="segmented">
+          <legend>Input</legend>
+          <label><input type="radio" name="input_mode" value="sim"><span>Simulated</span></label>
+          <label><input type="radio" name="input_mode" value="real"><span>Earbuds</span></label>
+        </fieldset>
+        <p class="meta" id="join-status" role="status"></p>
+        <p class="meta" id="join-secure" hidden></p>
+      </section>
+
+      <section class="screen" id="screen-voice" data-screen="voice" hidden>
+        <header class="step-head"><span class="step-index" id="voice-step">1 / 4</span><h2>Voice</h2></header>
+        <label class="check" id="voice-consent-row">
+          <input type="checkbox" id="voice-consent">
+          <span id="voice-consent-text"></span>
+        </label>
+        <p class="script" id="voice-script"></p>
+        <div class="progress" aria-hidden="true"><i id="voice-bar"></i></div>
+        <p class="meta" id="voice-status" role="status"></p>
+        <div class="actions">
+          <button class="primary" id="voice-record" type="button">Read for 30 seconds</button>
+          <button id="voice-room" type="button">Room sample only</button>
+          <button id="voice-cancel" type="button" hidden>Cancel</button>
+          <button id="voice-skip" type="button">Use the premade voice</button>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-earbuds" data-screen="earbuds" hidden>
+        <header class="step-head"><span class="step-index">2 / 4</span><h2>Earbuds</h2></header>
+        <fieldset class="choice">
+          <legend>How many are you wearing</legend>
+          <label><input type="radio" name="earbud_mode" value="2"><span><strong>Two earbuds</strong><small>Left and right taps carry different signals</small></span></label>
+          <label><input type="radio" name="earbud_mode" value="1"><span><strong>One earbud</strong><small>Tap count and rhythm carry the signals</small></span></label>
+        </fieldset>
+        <div class="split">
+          <button id="test-left" type="button">Test left</button>
+          <button id="test-right" type="button">Test right</button>
+        </div>
+        <p class="meta" id="earbuds-status" role="status"></p>
+        <div class="actions">
+          <button class="primary" id="earbuds-next" type="button">Continue</button>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-calibrate" data-screen="calibrate" hidden>
+        <header class="step-head"><span class="step-index" id="cal-step">3 / 4</span><h2>Calibrate</h2></header>
+
+        <div class="cal-section" id="cal-intro">
+          <div class="split" id="cal-seat" hidden>
+            <button type="button" data-cal-seat="A">Seat A</button>
+            <button type="button" data-cal-seat="B">Seat B</button>
+          </div>
+          <fieldset class="choice">
+            <legend>Length</legend>
+            <label><input type="radio" name="cal_scope" value="mode" checked><span><strong>This earbud mode</strong><small>About 2 minutes</small></span></label>
+            <label><input type="radio" name="cal_scope" value="both"><span><strong>Both modes</strong><small>About 5 minutes</small></span></label>
+          </fieldset>
+          <label class="check" id="cal-emulate-row">
+            <input type="checkbox" id="cal-emulate">
+            <span>Let the emulator tap</span>
+          </label>
+          <p class="meta" id="cal-start-hint" role="status"></p>
+          <p class="fineprint" id="cal-measure"></p>
+          <div class="actions">
+            <button class="primary" id="cal-start" type="button">Start</button>
+            <button id="cal-skip" type="button">Skip and use defaults</button>
+          </div>
+        </div>
+
+        <div class="cal-section cal-run" id="cal-run" hidden>
+          <div class="cal-top">
+            <span id="cal-count"></span>
+            <span class="cal-phase" id="cal-phase" role="status" aria-live="assertive"></span>
+          </div>
+          <h3 class="cal-pattern" id="cal-pattern"></h3>
+          <p class="meta" id="cal-detail"></p>
+          <div class="progress" aria-hidden="true"><i id="cal-bar"></i></div>
+          <ol class="ticks" id="cal-ticks"></ol>
+          <div class="actions">
+            <button id="cal-stop" type="button">Stop</button>
+          </div>
+        </div>
+
+        <div class="cal-section" id="cal-result" hidden>
+          <h3 class="cal-verdict" id="cal-verdict"></h3>
+          <p class="meta" id="cal-applied" role="status"></p>
+          <dl class="metrics" id="cal-metrics"></dl>
+          <div class="actions">
+            <button class="primary" id="cal-done" type="button">Done</button>
+            <button id="cal-apply" type="button" hidden>Apply anyway</button>
+            <button id="cal-download" type="button">Download JSON</button>
+            <button id="cal-again" type="button">Run again</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-preset" data-screen="preset" hidden>
+        <header class="step-head"><span class="step-index">4 / 4</span><h2>Preset</h2></header>
+        <div class="preset-list" id="preset-list"></div>
+        <label class="field" id="preset-custom-row" hidden>
+          <span>Context, one line</span>
+          <input id="preset-custom" type="text" maxlength="240" autocomplete="off" enterkeyhint="done">
+        </label>
+        <p class="meta" id="preset-status" role="status"></p>
+        <div class="actions">
+          <button class="primary" id="preset-next" type="button">Ready</button>
+        </div>
+      </section>
+
+      <section class="screen screen-live" id="screen-live" data-screen="live" hidden>
+        <div class="live-head">
+          <strong class="live-preset" id="live-preset">Pitch</strong>
+          <span class="live-phase" id="live-phase"></span>
+        </div>
+        <dl class="facts">
+          <div><dt>Partner</dt><dd id="live-partner"></dd></div>
+          <div><dt>Room</dt><dd class="listen" id="live-listen" data-state="off"><i class="dot" aria-hidden="true"></i><span id="live-listen-text"></span></dd></div>
+          <div><dt>Messages</dt><dd id="live-cache"></dd></div>
+        </dl>
+
+        <div class="draft" id="live-draft" hidden>
+          <div class="draft-clock" aria-hidden="true"><i id="live-draft-clock"></i></div>
+          <span class="label" id="live-draft-label">Send this?</span>
+          <p id="live-draft-text"></p>
+          <div class="split">
+            <button class="primary" id="draft-send" type="button">Send</button>
+            <button id="draft-discard" type="button">Discard</button>
+          </div>
+        </div>
+
+        <article class="message" id="live-in">
+          <header><span class="label">In</span><time id="live-in-time"></time></header>
+          <p id="live-in-text"></p>
+        </article>
+        <article class="message" id="live-out">
+          <header><span class="label">Out</span><time id="live-out-time"></time></header>
+          <p id="live-out-text"></p>
+        </article>
+
+        <p class="live-note" id="live-note" role="status"></p>
+
+        <div class="signals" id="signals" role="group" aria-label="Send a signal"></div>
+
+        <form class="room-input" id="sim-room" hidden>
+          <label for="sim-text">Room</label>
+          <input id="sim-text" type="text" maxlength="240" autocomplete="off" enterkeyhint="send" placeholder="Type what the room hears">
+          <button type="submit">Say</button>
+        </form>
+
+        <nav class="live-nav" aria-label="Seat screens">
+          <button type="button" data-go="codebook">Codebook</button>
+          <button type="button" data-go="log">Log</button>
+          <button type="button" data-go="settings">Settings</button>
+        </nav>
+      </section>
+
+      <section class="screen" id="screen-codebook" data-screen="codebook" hidden>
+        <header class="step-head"><span class="step-index" id="codebook-context"></span><h2>Codebook</h2></header>
+        <ol class="codebook" id="codebook-list"></ol>
+      </section>
+
+      <section class="screen" id="screen-log" data-screen="log" hidden>
+        <header class="step-head"><span class="step-index" id="log-count"></span><h2>Log</h2></header>
+        <ol class="log" id="log-list"></ol>
+        <p class="meta" id="log-empty">Nothing sent yet.</p>
+      </section>
+
+      <section class="screen" id="screen-settings" data-screen="settings" hidden>
+        <header class="step-head"><span class="step-index" id="settings-context"></span><h2>Settings</h2></header>
+
+        <fieldset class="segmented">
+          <legend>Earbuds</legend>
+          <label><input type="radio" name="settings_mode" value="2"><span>Two</span></label>
+          <label><input type="radio" name="settings_mode" value="1"><span>One</span></label>
+        </fieldset>
+
+        <label class="row-toggle"><span>AI drafts</span><input type="checkbox" id="settings-drafts"></label>
+        <label class="row-toggle" id="settings-listen-row"><span>Listen to the room</span><input type="checkbox" id="settings-listen"></label>
+
+        <label class="range"><span>Sounds</span><input type="range" id="settings-volume-cue" min="0" max="1" step="0.05"><output id="settings-volume-cue-value"></output></label>
+        <label class="range"><span>Voices</span><input type="range" id="settings-volume-voice" min="0" max="1" step="0.05"><output id="settings-volume-voice-value"></output></label>
+
+        <div class="split">
+          <button id="settings-voice" type="button">Re-record voice</button>
+          <button id="settings-calibrate" type="button">Re-calibrate</button>
+        </div>
+
+        <p class="meta" id="settings-profile" role="status"></p>
+        <div id="settings-groups"></div>
+        <dl class="metrics" id="settings-network"></dl>
+      </section>
+    </main>
+  </div>
+
+  <noscript><p class="meta">Telepathy needs JavaScript.</p></noscript>
+  <script type="module" src="./phone.mjs"></script>
+</body>
+</html>
