@@ -48,6 +48,15 @@ function audioRange(header, size) {
   return { start, end };
 }
 
+function acceptsGzip(header = '') {
+  const encodings = new Map(header.split(',').map(value => {
+    const [name, weight] = value.trim().toLowerCase().split(/\s*;\s*q\s*=\s*/);
+    return [name, weight === undefined ? 1 : Number(weight)];
+  }));
+  const gzip = encodings.get('gzip') ?? encodings.get('*') ?? 0;
+  return gzip > 0 && !(encodings.get('identity') > gzip);
+}
+
 function send(socket, frame) {
   if (socket?.readyState !== WebSocket.OPEN) return false;
   if (socket.bufferedAmount > MAX_SOCKET_BACKLOG) {
@@ -245,6 +254,19 @@ export function createHub({
         'Content-Type': mime, 'Content-Length': file.size, 'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
       };
+      let served = absolute;
+      if (publicRoot === waspClient && /^\/wasp-assets\/[^/]+-[\w-]{8,}\.(?:js|css)$/.test(path)) {
+        headers['Cache-Control'] = 'public, max-age=31536000, immutable';
+        headers.Vary = 'Accept-Encoding';
+        if (acceptsGzip(req.headers['accept-encoding'])) {
+          const compressed = await stat(absolute + '.gz').catch(() => null);
+          if (compressed?.isFile()) {
+            served = absolute + '.gz';
+            headers['Content-Length'] = compressed.size;
+            headers['Content-Encoding'] = 'gzip';
+          }
+        }
+      }
       if (audio_file) headers['Accept-Ranges'] = 'bytes';
       if (range) {
         if (range.start > range.end || range.start >= file.size) {
@@ -258,7 +280,7 @@ export function createHub({
       }
       res.writeHead(range ? 206 : 200, headers);
       if (req.method === 'HEAD') res.end();
-      else createReadStream(absolute, range ?? {}).on('error', () => res.destroy()).pipe(res);
+      else createReadStream(served, range ?? {}).on('error', () => res.destroy()).pipe(res);
     } catch {
       if (!res.headersSent) respond(req, res, 404, 'text/plain', 'Not found.');
       else res.destroy();
