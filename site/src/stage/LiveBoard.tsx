@@ -36,18 +36,20 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function BoardSeat({ seat, base, children }: { seat: SeatState; base: number | null; children: React.ReactNode }) {
+function BoardSeat({ seat, base, flash, canned, children }: {
+  seat: SeatState; base: number | null; flash: string | null; canned: boolean; children: React.ReactNode;
+}) {
   const lines = seat.transcript.slice(-TRANSCRIPT_LINES);
-  const badges = [
+  const badges = canned ? ["Recorded take"] : [
     seat.online ? "Online" : "Offline",
     seat.online ? roomStatus(seat) : null,
     seat.mode ? (seat.mode === 1 ? "1 earbud" : "2 earbuds") : null,
     seat.drafts === false ? "Drafts off" : null,
   ].filter(Boolean);
   return (
-    <section className="st-seat" data-seat={seat.key} data-online={seat.online} data-pending={Boolean(seat.pending)} aria-label={seat.name}>
+    <section className="st-seat" data-seat={seat.key} data-online={seat.online || canned} data-pending={Boolean(seat.pending)} aria-label={seat.name}>
       <header className="st-seat__head">
-        <span className="st-seat__key">{seat.key}</span>
+        <span className="st-seat__key" key={flash ?? "idle"} data-flash={flash ? true : undefined}>{seat.key}</span>
         <h2>{seat.name}</h2>
       </header>
       <p className="st-seat__badges">{badges.join(" · ")}</p>
@@ -93,6 +95,7 @@ export function LiveBoard({ hub }: { hub: Hub }) {
   const latest = [...state.log].reverse().find(entry => entry.kind === "message") ?? null;
   const entries = state.log.slice(-160).reverse();
   const pending = state.presetPending && state.presetPending !== state.preset;
+  const heardBy = (key: string) => (pulse && (pulse.kind === "message" || pulse.kind === "replay") && pulse.from && pulse.from !== key ? pulse.key : null);
   const draftSeat = state.seats.A.pending ? "A" : state.seats.B.pending ? "B" : null;
 
   return (
@@ -113,7 +116,7 @@ export function LiveBoard({ hub }: { hub: Hub }) {
       </div>
 
       <div className="st-board">
-        <BoardSeat seat={state.seats.A} base={base}>
+        <BoardSeat seat={state.seats.A} base={base} flash={heardBy("A")} canned={Boolean(state.canned)}>
           <SeatMeters seat="A" value={view.monitor?.seats?.A} showRoom={view.showRoom("A")} />
         </BoardSeat>
 
@@ -163,7 +166,7 @@ export function LiveBoard({ hub }: { hub: Hub }) {
           </ol>
         </section>
 
-        <BoardSeat seat={state.seats.B} base={base}>
+        <BoardSeat seat={state.seats.B} base={base} flash={heardBy("B")} canned={Boolean(state.canned)}>
           <SeatMeters seat="B" value={view.monitor?.seats?.B} showRoom={view.showRoom("B")} />
         </BoardSeat>
       </div>
