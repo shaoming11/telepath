@@ -92,13 +92,16 @@ body.wasp-liquid[data-solid-surfaces] {
 
 .wasp-liquid[data-surface="phone"] .app { background: var(--base); }
 .wasp-liquid[data-surface="phone"] .masthead {
-  top: 7px;
+  top: 0;
   height: 52px;
-  margin: 7px 8px 0;
-  padding-inline: 13px;
-  border: 1px solid var(--glass-edge);
-  border-radius: 18px;
-  box-shadow: 0 5px 28px #0005, inset 0 1px 0 #e4edff1c;
+  margin: 0;
+  padding-inline: 18px;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  border-radius: 0;
+  background: var(--base);
+  box-shadow: none;
+  backdrop-filter: none;
 }
 .wasp-liquid .screen.enter:not(#screen-calibrate) { animation: liquid-enter 240ms var(--glide) both; }
 .wasp-liquid .screen h2 { letter-spacing: -.04em; }
@@ -132,10 +135,10 @@ body.wasp-liquid[data-solid-surfaces] {
 .wasp-liquid #screen-preset .actions { margin-block-start: 0; padding-block-start: 2px; }
 
 .wasp-liquid[data-surface="phone"] :is(.signal, .draft, .pitch-notes, .cal-trial, .cal-check, .last, .channel-monitor) {
-  border-radius: 17px;
+  border-radius: 9px;
 }
 
-.wasp-liquid[data-surface="phone"] :is(button, select):not(.back) { border-radius: 13px; }
+.wasp-liquid[data-surface="phone"] :is(button, select):not(.back) { border-radius: 8px; }
 .wasp-liquid[data-surface="phone"] .facts { grid-template-columns: .86fr 1.28fr .86fr; }
 .wasp-liquid #screen-calibrate :is(button, select) { border-radius: 13px; }
 .wasp-liquid #screen-calibrate .cal-check[data-checking=true] {
@@ -195,9 +198,11 @@ body.wasp-liquid[data-solid-surfaces] {
 .wasp-liquid #cal-summary[data-result=saved] { animation: liquid-enter 230ms var(--glide) both; }
 
 .wasp-liquid .live-nav {
-  margin-inline: 6px;
-  border: 1px solid var(--glass-edge);
-  border-radius: 20px 20px 0 0;
+  margin-inline: 0;
+  border: 0;
+  border-top: 1px solid var(--line-2);
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .wasp-liquid .pitch-panel { display: grid; min-width: 0; gap: 7px; }
@@ -337,8 +342,8 @@ body.wasp-liquid[data-solid-surfaces] {
 }
 
 .wasp-liquid[data-surface="stage"] .frame {
-  border: 1px solid var(--line-2);
-  border-radius: 23px;
+  border: 0;
+  border-radius: 0;
   background: var(--base);
 }
 
@@ -346,10 +351,14 @@ body.wasp-liquid[data-solid-surfaces] {
   position: relative;
   height: auto;
   min-height: 60px;
-  margin: 12px var(--pad) 0;
-  padding: 7px 16px;
-  border: 1px solid var(--glass-edge);
-  border-radius: 20px;
+  margin: 0 var(--pad);
+  padding: 7px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 .wasp-liquid[data-surface="stage"] .hero {
@@ -372,11 +381,17 @@ body.wasp-liquid[data-solid-surfaces] {
   grid-row: 1;
   padding: 16px;
   border: 1px solid var(--line-2);
-  border-radius: 14px;
+  border-radius: 8px;
   background: var(--panel);
 }
 .wasp-liquid[data-surface="stage"] .join__url { font-size: clamp(14px, 1.55cqi, 19px); }
-.wasp-liquid[data-surface="stage"] .stage-inspector { border-radius: 12px; }
+.wasp-liquid[data-surface="stage"] .stage-inspector {
+  padding-inline: 0;
+  border: 0;
+  border-top: 1px solid var(--line-2);
+  border-radius: 0;
+  background: transparent;
+}
 .wasp-liquid[data-surface="stage"] .stage-inspector > summary::marker { color: var(--fg-2); }
 .wasp-liquid[data-surface="stage"] .stage-inspector--live #stage-monitor { margin: 8px 0 12px; }
 .wasp-liquid[data-surface="stage"] .stage-inspector--live .board { padding-inline: 0; }
@@ -453,10 +468,18 @@ body.wasp-liquid[data-solid-surfaces] {
   .wasp-liquid .channel-monitor--phone .channel-seat__meters[data-room=true] { grid-template-columns: minmax(0, 1fr); }
 }
 
-.wasp-liquid .room-console { border-radius: 17px; overflow: hidden; }
+.wasp-liquid[data-surface="stage"] .room-console {
+  --console-gutter: 0px;
+  margin-inline: var(--pad);
+  border: 0;
+  border-bottom: 1px solid var(--line-2);
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+}
 .wasp-liquid :is(.room-console, .reference-panel) :is(button, select) { border-radius: 10px; }
 .wasp-liquid .room-console__head { padding-block: 11px; }
-.wasp-liquid .room-console__head h2 { font-size: clamp(19px, 2.1cqi, 24px); }
+.wasp-liquid .room-console__head h2 { font-size: 1rem; letter-spacing: -.015em; }
 .wasp-liquid .room-console__actions button { min-block-size: 44px; }
 .wasp-liquid .room-console__state::before { border-radius: 50%; }
 .wasp-liquid[data-surface=stage] .room-console__actions .room-console__start {
@@ -768,8 +791,6 @@ body.wasp-liquid[data-solid-surfaces] {
 @media (max-width: 760px) {
   .wasp-liquid[data-surface="stage"] .frame { border: 0; border-radius: 0; }
   .wasp-liquid[data-surface="stage"] .nav {
-    margin: 8px 12px 0;
-    padding-inline: 12px;
     flex-wrap: wrap;
     row-gap: 6px;
   }
@@ -844,6 +865,7 @@ body.wasp-liquid[data-solid-surfaces] {
 .wasp-liquid[data-surface="stage"] :is(#begin-button, #reveal-button) {
   gap: 0;
   overflow: hidden;
+  border-radius: 8px;
   background-color: #f1f3f5;
   transition-property: box-shadow, transform;
 }
@@ -865,7 +887,10 @@ body.wasp-liquid[data-solid-surfaces] {
 
 .wasp-liquid[data-surface="stage"] .stage-pair__plate {
   min-block-size: clamp(210px, 38dvh, 370px);
-  border-radius: 16px;
+  border: 0;
+  border-top: 2px solid var(--pair-seat);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--panel) 65%, var(--base));
 }
 
 @container frame (max-width: 700px) {
