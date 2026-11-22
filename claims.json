@@ -1,34 +1,6 @@
 {
-  "revision": 129,
+  "revision": 130,
   "claims": [
-    {
-      "id": "2eaf7062-a1d8-45e7-a99c-b9846401c3fd",
-      "owner": "fireheartjerry",
-      "agent": "codex-wasp-live-monitor",
-      "branch": "jerry/wasp-liquid-glass",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/channel-monitor.mjs",
-        "scripts/generate-wasp-surfaces.py",
-        "wasp-ui/src/ChannelMonitor.tsx",
-        "wasp-ui/src/generated/PhoneMarkup.tsx",
-        "wasp-ui/src/generated/StageMarkup.tsx",
-        "wasp-ui/src/liquid.css",
-        "tests/wasp-markup.test.mjs",
-        "tests/channel-monitor.test.mjs"
-      ],
-      "paths": [
-        "public/channel-monitor.mjs",
-        "scripts/generate-wasp-surfaces.py",
-        "tests/channel-monitor.test.mjs",
-        "tests/wasp-markup.test.mjs",
-        "wasp-ui/src/ChannelMonitor.tsx",
-        "wasp-ui/src/generated/PhoneMarkup.tsx",
-        "wasp-ui/src/generated/StageMarkup.tsx",
-        "wasp-ui/src/liquid.css"
-      ],
-      "claimedAt": "2026-11-22T08:37:19.164Z"
-    },
     {
       "id": "29b3898d-c9d1-458c-a7ee-7065baf43a78",
       "owner": "fireheartjerry",
