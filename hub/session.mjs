@@ -224,7 +224,7 @@ export class Session {
           questionMode: visible && Boolean(state.questionMode),
           lastPitchCue: visible ? state.lastPitchCue : null,
           receipt: visible && state.receipt?.until >= this.now()
-            ? { messageId: state.receipt.messageId, until: state.receipt.until }
+            ? { messageId: state.receipt.messageId, openedAt: state.receipt.openedAt, until: state.receipt.until }
             : null,
           lastIn: visible ? state.lastIn : null, lastOut: visible ? state.lastOut : null,
         }];

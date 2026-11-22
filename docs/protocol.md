@@ -17,6 +17,8 @@ The Mac serves the stage at `/stage` and the seats at `/`. The stage socket acce
 
 Phone frames include the most recent `hubId` and `sessionId` once known. The first event in a gesture records those identifiers. Disconnects, reset and hub restarts cancel old work.
 
+When a heard draft and an active receipt overlap, Single follows the most recent playback report. A tie favors the receipt. The phone still offers **Send** and **Acknowledge whisper** for explicit selection. For an earbud acknowledgement, `receiptPressedAt` records the first event against the hub clock. The hub can accept a bounded recognition delay for that same receipt when the press started in its window.
+
 ## Stage to hub
 
 The loopback stage sends `{type:"operator",action}`. Supported actions are `begin`, `preset`, `inject`, `replay`, `canned`, `reset`, `reveal`, and `announce`. An announcement carries up to 140 characters of text. The hub uses one neutral voice clip for both connected seats and tracks which seats started playback. It counts zero tap bits.
