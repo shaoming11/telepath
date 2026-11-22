@@ -34,7 +34,7 @@ export const OPERATOR_ACTIONS = Object.freeze([
 export const COACH_SCENARIOS = Object.freeze({
   pitch: 'Pitch Q&A: answers from the Telepath brief and your uploads',
   interview: 'Interview: answers from your uploaded persona documents only',
-  social: 'Date or small talk: topics and questions to ask, no documents needed',
+  social: 'Networking or conversation: topics and questions to ask, no documents needed',
 });
 
 const SIGNAL_ROLES = Object.freeze({
@@ -725,7 +725,7 @@ function boot() {
     get_constraints: () => ({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true,
       ...(byId('room-mic-device').value ? { deviceId: { exact: byId('room-mic-device').value } } : {}) } }),
     on_frame: frame => {
-      if (roomWanted && state.room.listening && socket?.bufferedAmount < 256_000) sendRoomFrame({ type: 'room_mic', ...frame });
+      if (!stageReplayActive && roomWanted && state.room.listening && socket?.bufferedAmount < 256_000) sendRoomFrame({ type: 'room_mic', ...frame });
     },
     on_level: setRoomLevel,
     on_state: (next, detail) => {
@@ -1756,6 +1756,7 @@ function boot() {
 
   function setLink(next) {
     linkState = next;
+    document.dispatchEvent(new CustomEvent('telepathy:stage-link', { detail: next }));
     schedule();
   }
 
@@ -1845,6 +1846,7 @@ function boot() {
         ui.opCoachBeat.value = next.coach?.beat ?? PITCH_BEATS[0];
       }
       state = next;
+      document.dispatchEvent(new CustomEvent('telepathy:stage-state', { detail: frame.state }));
       schedule();
       return;
     }
@@ -1907,6 +1909,12 @@ function boot() {
     next.addEventListener('error', () => { if (socket === next) setLink('offline'); });
   }
 
+  document.addEventListener('telepathy:stage-action', event => {
+    const { action, options } = event.detail ?? {};
+    if (['begin', 'reveal', 'coach_scenario'].includes(action)) send(action, options);
+  });
+  let stageReplayActive = false;
+  document.addEventListener('telepathy:stage-replay', event => { stageReplayActive = event.detail === true; });
   wireOperator();
   applyInfo(null);
   render();

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { StageReplay } from './stage-replay.mjs';
 import { createResearch } from './research.mjs';
 import { createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
@@ -95,6 +97,7 @@ export function createHub({
   waspClient = env.TELEPATHY_WASP_UI === 'on' ? WASP_CLIENT : null,
 } = {}) {
   const assets = new Map();
+  const replays = new StageReplay();
   const seats = new Map();
   const roomMics = new Map();
   const roomInvites = new Map();
@@ -126,14 +129,35 @@ export function createHub({
       transcription: target.transcription,
     }));
   }
+  function rememberAudio(seat, frame) {
+    if (frame.type !== 'audio' || !frame.messageId || !frame.text) return;
+    const url = frame.url ?? session.activeCache?.bank[seat === 'A' ? 'B' : 'A']?.find(item => item.key === frame.key)?.url;
+    if (!url?.startsWith('/assets/')) return;
+    const name = url.slice('/assets/'.length);
+    if (!/^[\w.-]+$/.test(name)) return;
+    let asset = assets.get(name);
+    if (!asset) {
+      try { asset = { mime: 'audio/mpeg', buffer: readFileSync(resolve(PUBLIC, 'assets', name)) }; }
+      catch { return; }
+    }
+    replays.add(session.sessionId, frame, seat, asset);
+  }
+  const stageState = state => ({ ...state, stageAudio: replays.snapshot(state.sessionId) });
   session = new Session({
-    emitSeat: (seat, frame) => send(seats.get(seat), scope(frame)),
+    emitSeat: (seat, frame) => {
+      rememberAudio(seat, frame);
+      return send(seats.get(seat), scope(frame));
+    },
     emitStage: frame => {
       const speaker = frame.voiceRole ?? frame.key?.split(':')[0];
       const voiced = frame.type === 'audio' && !frame.url && Object.hasOwn(STOCK_VOICES, speaker)
         ? { ...frame, url: '/assets/' + bankFileName(speaker, STOCK_VOICES[speaker].id, frame.text) }
         : frame;
-      const tagged = scope(voiced);
+      if (voiced.type === 'audio' && session.canned) {
+        const entry = session.log.findLast(item => item.kind === 'message' && item.text === voiced.text);
+        if (entry) rememberAudio(entry.to, { ...voiced, messageId: entry.messageId });
+      }
+      const tagged = scope(voiced.type === 'state' ? { ...voiced, state: stageState(voiced.state) } : voiced);
       stage.forEach(socket => send(socket, tagged));
       if (frame.type === 'state') roomMics.forEach((socket, seat) => sendRoomMicState(socket, seat, frame.state));
     },
@@ -215,6 +239,11 @@ export function createHub({
     try {
       const request_url = new URL(req.url, 'http://localhost');
       let path = decodeURIComponent(request_url.pathname);
+      if (path.startsWith('/stage-replay/')) {
+        if (!LOOPBACK_PEERS.has(req.socket.remoteAddress)) return respond(req, res, 403, 'text/plain', 'Stage replay is local only.');
+        const clip = replays.get(path, session.sessionId);
+        return clip ? respond(req, res, 200, clip.mime, clip.buffer) : respond(req, res, 404, 'text/plain', 'Replay expired.');
+      }
       if (path === '/info') return respond(req, res, 200, TYPES['.json'], JSON.stringify(info));
       if (path === '/room-mic.html' && !LOOPBACK_PEERS.has(req.socket.remoteAddress)
         && !validRoomInvite(request_url.searchParams.get('seat'), request_url.searchParams.get('token'))) {
@@ -321,7 +350,7 @@ export function createHub({
           ws.on('pong', () => { ws.alive = true; });
           if (role === 'stage') {
             stage.add(ws);
-            send(ws, scope({ type: 'state', state: session.snapshot() }));
+            send(ws, scope({ type: 'state', state: stageState(session.snapshot()) }));
             send(ws, scope(session.monitorFrame()));
           } else if (role === 'room-mic') {
             roomMics.get(seat)?.close(4001, 'Room mic moved to another tab');
