@@ -1,20 +1,6 @@
 {
-  "revision": 130,
+  "revision": 131,
   "claims": [
-    {
-      "id": "29b3898d-c9d1-458c-a7ee-7065baf43a78",
-      "owner": "fireheartjerry",
-      "agent": "codex-wasp-monitor-handoff",
-      "branch": "jerry/wasp-liquid-glass",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub/session.mjs"
-      ],
-      "paths": [
-        "hub/session.mjs"
-      ],
-      "claimedAt": "2026-11-22T09:17:07.175Z"
-    },
     {
       "id": "44891aaf-5a62-4a09-a382-c1136208184c",
       "owner": "influxtion",
