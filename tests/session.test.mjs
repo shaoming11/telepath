@@ -1858,3 +1858,36 @@ test('social Question Mode whispers after a spoken question and keeps the cue wh
   await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
   assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').text, spoken);
 });
+
+test('interview Question Mode redrafts while the question grows and plays the latest draft without a new call', async t => {
+  let room;
+  const drafts = [];
+  const quote = 'Cut end-to-end audio latency from 220 ms to 90 ms.';
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, pitchRevisionMinMs: 0, coachScenario: 'interview' },
+    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
+      speech: async () => '/assets/interview.mp3' },
+    codec: {
+      openPitchRealtime: () => assert.fail('interview mode must not open the pitch Realtime session'),
+      pitchHelp: async input => {
+        const latest = input.turns.at(-1).text;
+        drafts.push(latest);
+        return { status: 'answer', question: latest, answer: 'Draft ' + drafts.length + '. Lead with the latency win.',
+          sources: [{ id: input.passages[0].id, quote }], responseQuote: '' };
+      },
+    },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('Telepathy brief.').toString('base64') }]);
+  session.references = await parseReferences([{ name: 'persona.md', data: Buffer.from(quote).toString('base64') }]);
+  await session.setRoomListening(true);
+  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
+  room.partial('What is the hardest');
+  await eventually(() => drafts.length === 1);
+  room.partial('What is the hardest latency problem you');
+  await eventually(() => drafts.length === 2);
+  room.committed('What is the hardest latency problem you solved?');
+  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
+  assert.equal(drafts.length, 2);
+  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').text, 'Draft 2. Lead with the latency win.');
+});
