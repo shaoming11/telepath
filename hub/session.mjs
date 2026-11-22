@@ -33,7 +33,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   pitchHelpTimeoutMs: 4800,
   pitchComposeMs: 1850,
   pitchRaceMs: 6000,
-  pitchVerifyMs: 10_000,
+  pitchVerifyMs: 15_000,
   pitchSpeechMs: 4600,
   pitchPlaybackMs: 8000,
   pitchPauseBudgetMs: 12_000,
@@ -1184,12 +1184,12 @@ export class Session {
       { name: 'Maritime', source: 'maritime', draft: deadline => this.coach.draftPitchCue(context, { signal: deadline }),
         verify: this.coach.verifyPitchCue?.bind(this.coach) },
     ];
-    const drafts = providers.map(provider => withDeadline(provider.draft, this.settings.pitchRaceMs, signal));
+    const drafts = providers.map(provider => withDeadline(provider.draft, this.settings.pitchVerifyMs, signal));
     const candidates = drafts.map((draft, index) => draft.then(raw => {
       const cue = validate(raw);
       return { ...cue, source: raw.source === 'openai-realtime' ? raw.source : providers[index].source, timing: raw.timing ?? {}, index };
     }));
-    const winner = await Promise.any(candidates);
+    const winner = await withDeadline(() => Promise.any(candidates), this.settings.pitchRaceMs, signal);
     const index = 1 - winner.index;
     const reviewer = providers[index];
     return { ...winner, verify: reviewer.verify && (async deadline => {

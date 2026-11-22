@@ -5,7 +5,7 @@ import { COACH_CUES, CUE_REVIEW_INSTRUCTIONS, normalizeCueRequest, normalizePitc
 const MAX_BODY_BYTES = 24_000;
 const MAX_TELEMETRY_BYTES = 8192;
 const MAX_REASON_LENGTH = 160;
-const MODEL_TIMEOUT_MS = 4000;
+const MODEL_TIMEOUT_MS = 8500;
 const DEFAULT_MODEL = 'gpt-5-mini';
 const INSTRUCTIONS = [
   'You are the backstage coach for a two-minute Telepathy pitch.',
@@ -68,7 +68,7 @@ async function infer(input, instructions, { endpoint, key, model, fetchImpl, tim
           { role: 'user', content: JSON.stringify(input) },
         ],
         response_format: { type: 'json_object' },
-        reasoning_effort: 'low',
+        reasoning_effort: model === DEFAULT_MODEL ? 'minimal' : 'low',
         max_completion_tokens: 400,
         store: false,
       }),
