@@ -69,6 +69,7 @@ body.wasp-liquid {
 }
 
 .wasp-liquid[data-surface="phone"] :is(button, select):not(.back) { border-radius: 13px; }
+.wasp-liquid[data-surface="phone"] .facts { grid-template-columns: .86fr 1.28fr .86fr; }
 .wasp-liquid #screen-calibrate :is(button, select) { border-radius: 13px; }
 .wasp-liquid #screen-calibrate .cal-check[data-checking=true] {
   border-color: color-mix(in srgb, var(--seat) 48%, var(--line-2));

@@ -153,6 +153,18 @@ test('a draft that has not been heard is shown but cannot be approved until the 
   assert.equal(get_element('draft-send').disabled, false);
 });
 
+test('repeated discard clicks target the same draft and never become a codebook gesture', async () => {
+  socket.receive({ type: 'state', state: seat_state(draft({ id: 'current-preview' })) });
+  await settle();
+  socket.sent.length = 0;
+  get_element('draft-discard').listeners.click[0]();
+  get_element('draft-discard').listeners.click[0]();
+  world.advance(1300);
+  await settle();
+  const signals = socket.sent.filter(frame => frame.type === 'signal');
+  assert.deepEqual(signals.map(frame => [frame.signal, frame.draftId]), [['L1', 'current-preview'], ['L1', 'current-preview']]);
+});
+
 test('a draft whose clearing state never arrives still leaves the screen', async () => {
   socket.receive({ type: 'state', state: seat_state(draft({ id: 'draft-9', heardAt: 1800, expiresAt: 7800 })) });
   await settle();

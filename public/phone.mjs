@@ -330,7 +330,7 @@ function on_media_play() {
   void audio.resume();
 }
 
-function on_signal(signal, trace, toggle_question_mode = false) {
+function on_signal(signal, trace, toggle_question_mode = false, draft_id = null) {
   diag('signal', { signal, calibrating: calibration.active() });
   if (calibration.active()) {
     calibration.note_signal(signal);
@@ -358,6 +358,7 @@ function on_signal(signal, trace, toggle_question_mode = false) {
   ui.signal_count += 1;
   const id = ui.seat + '-' + Date.now().toString(36) + '-' + ui.signal_count;
   const { previewWaiting, pitchHelp, ...intent } = scope;
+  if (draft_id) intent.draftId = draft_id;
   if (!send({ type: 'signal', signal, id, ...intent, ...(pitch_help && { purpose: question_mode ? 'question_mode' : 'pitch_help' }) })) {
     audio.play_cue('error');
     show_note('Signal did not reach the hub.');
@@ -396,6 +397,13 @@ function touch_signal(signal) {
   if (signal === 'BACK') resume_anchor();
   touch_emulator.configure(touch_profile());
   touch_emulator.signal(signal, settings.mode);
+}
+
+function touch_draft(approve) {
+  const pending = my_state()?.pending;
+  if (!drafts.visible(pending) || (approve && !drafts.can_approve(pending))) return;
+  const signal = approve ? 'R1' : settings.mode === 1 ? 'R2' : 'L1';
+  on_signal(signal, undefined, false, pending.id);
 }
 
 function set_playback_state(state) {
@@ -1379,7 +1387,7 @@ function render_signals() {
   set_text(mode_button.querySelector('b'), armed ? 'Question mode on' : 'Question mode');
   set_text(mode_button.querySelector('span'), armed ? 'Listening for questions. Tap to stop.' : 'Prepare while the judge speaks');
 
-  const key = settings.mode + settings.gesture_model + String(pitch_help) + JSON.stringify(codebook);
+  const key = settings.mode + settings.gesture_model + String(pitch_help) + String(ui.state?.questionModeAvailable) + JSON.stringify(codebook);
   if (ui.signals_key !== key) {
     ui.signals_key = key;
     host.replaceChildren(...order.map(signal => {
@@ -1392,7 +1400,8 @@ function render_signals() {
       name.textContent = signal === 'LR' && pitch_help ? 'What should I say?' : SIGNAL_LABELS[signal];
       const meaning = document.createElement('span');
       meaning.textContent = signal === 'LR' && pitch_help
-        ? settings.gesture_model === 'pro' ? 'Single stem squeeze' : 'One next-track event'
+        ? ui.state?.questionModeAvailable ? 'Get a private cue now'
+          : settings.gesture_model === 'pro' ? 'Single stem squeeze' : 'One next-track event'
         : codebook[signal] ?? SYSTEM_MEANINGS[signal] ?? '';
       button.append(name, meaning);
       button.setAttribute('aria-label', name.textContent + ' · ' + meaning.textContent);
@@ -1477,7 +1486,7 @@ function render_live() {
   render_draft(mine?.pending ?? null);
   render_message('in', mine?.lastIn, 'last_in_id');
   render_message('out', mine?.lastOut, 'last_out_id');
-  set_text($('live-note'), ui.note);
+  set_text($('live-note'), cue?.text === ui.note ? '' : ui.note);
   render_signals();
   render_monitor();
   $('sim-room').hidden = !is_sim();
@@ -1699,8 +1708,8 @@ function bind_events() {
     const button = event.target.closest('[data-signal]');
     if (button && !button.disabled) touch_signal(button.dataset.signal);
   });
-  $('draft-send').addEventListener('click', () => touch_signal('R1'));
-  $('draft-discard').addEventListener('click', () => touch_signal(settings.mode === 1 ? 'R2' : 'L1'));
+  $('draft-send').addEventListener('click', () => touch_draft(true));
+  $('draft-discard').addEventListener('click', () => touch_draft(false));
   $('sim-room').addEventListener('submit', event => {
     event.preventDefault();
     const field = $('sim-text');
