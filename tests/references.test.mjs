@@ -7,7 +7,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createHub } from '../hub/server.mjs';
 import { test } from 'node:test';
 import { exactExcerptQuotes, packReferenceEvidence, parseReferences, retrieveProjectReferences, retrieveReferences } from '../hub/references.mjs';
-import { buildProjectReferences } from '../hub/project-references.mjs';
+import { buildProjectReferences, createWaspSourceSnapshot, WASP_SOURCE_SNAPSHOT } from '../hub/project-references.mjs';
 import { isFrontendStackQuestion, sourcedProjectCue } from '../hub/pitch-question.mjs';
 import { validateAnswer } from '../hub/questions.mjs';
 import { createCodec } from '../hub/codec.mjs';
@@ -184,15 +184,19 @@ test('the rebuilt project index includes recursive docs and selects exact source
   assert.ok(!packed.some(passage => passage.kind === 'code' || /original product specification/.test(passage.name)));
 });
 
-test('a running hub refreshes newly added nested notes and retains a good index after an invalid change', async t => {
+test('a running Wasp hub refreshes notes and only cites component code from the served build', async t => {
   const temp = await mkdtemp(join(tmpdir(), 'telepathy-index-test-'));
   const root = pathToFileURL(temp + '/');
-  const hub = createHub({ env: {}, lan: '127.0.0.1', projectRoot: root, projectRefreshMs: 15 });
+  const waspClient = join(temp, 'client');
+  const hub = createHub({ env: {}, lan: '127.0.0.1', projectRoot: root, projectRefreshMs: 15, waspClient });
   t.after(async () => {
     await hub.close();
     await rm(temp, { recursive: true, force: true });
   });
-  const { documents } = await buildProjectReferences();
+  const { documents } = await buildProjectReferences({ frontend: 'wasp' });
+  await mkdir(waspClient);
+  const index = '<title>Fixture client</title>';
+  await writeFile(join(waspClient, 'index.html'), index);
   await cp(new URL('../docs/', import.meta.url), join(temp, 'docs'), {
     recursive: true, filter: path => !path.includes('/screens'),
   });
@@ -202,9 +206,25 @@ test('a running hub refreshes newly added nested notes and retains a good index 
     await mkdir(dirname(dest), { recursive: true });
     await copyFile(new URL('../' + doc.name, import.meta.url), dest);
   }
+  await writeFile(join(waspClient, WASP_SOURCE_SNAPSHOT), await createWaspSourceSnapshot(index, root));
   const info = await hub.start({ host: '127.0.0.1', port: 0 });
   const originalVersion = info.referenceIndex.version;
+  const utterance = 'Where does the StageAnnouncement component render per-seat receipts?';
+  const at = Date.now();
+  hub.session.room.transcript.push({ text: utterance, at });
+  const cue = await hub.session.composePitchCue(hub.session.pitchContext('A', at), AbortSignal.timeout(1000), performance.now(), {
+    async generate(input) {
+      const source = input.passages.find(item => item.kind === 'code');
+      assert.match(source?.name ?? '', /^wasp-ui\/src\/StageAnnouncement\.tsx:/);
+      return { status: 'answer', question: utterance, answer: 'StageAnnouncement maps the receipt to one row per seat.',
+        sources: [{ id: source.id, quote: 'receipt.seats.map(row => (' }] };
+    },
+  });
+  assert.equal(cue?.source, 'openai-realtime');
+  assert.match(cue.sources[0].name, /^wasp-ui\/src\/StageAnnouncement\.tsx:/);
+  hub.session.room.transcript.length = 0;
   const infoURL = new URL('/info', info.stageUrl);
+  assert.equal((await fetch(new URL('/' + WASP_SOURCE_SNAPSHOT, info.stageUrl))).status, 404);
   async function waitFor(predicate) {
     for (let attempt = 0; attempt < 80; attempt++) {
       const status = await fetch(infoURL).then(response => response.json());
@@ -218,9 +238,24 @@ test('a running hub refreshes newly added nested notes and retains a good index 
   const updated = await waitFor(status => status.referenceIndex.version !== originalVersion);
   const question = 'How many steps are in lighthouse calibration?';
   assert.ok(retrieveProjectReferences(hub.session.pitchReferences, question, 4).some(passage => /lighthouse calibration uses a six-step/.test(passage.text)));
+  const component = join(temp, 'wasp-ui/src/StageAnnouncement.tsx');
+  await appendFile(component, '\nexport const fixtureNotice = "The lighthouse receipt is printed in cyan.";\n');
+  await delay(45);
+  assert.equal((await fetch(infoURL).then(response => response.json())).referenceIndex.version, updated.referenceIndex.version);
+  assert.ok(!hub.session.pitchReferences.find(doc => doc.name === 'wasp-ui/src/StageAnnouncement.tsx')
+    .chunks.some(chunk => chunk.text.includes('fixtureNotice')));
+  const rebuilt = '<title>Updated fixture client</title>';
+  await writeFile(join(waspClient, WASP_SOURCE_SNAPSHOT), await createWaspSourceSnapshot(rebuilt, root));
+  const mismatched = await waitFor(status => status.referenceRefresh === 'using-last-good-index');
+  assert.equal(mismatched.referenceIndex.version, updated.referenceIndex.version);
+  await writeFile(join(waspClient, 'index.html'), rebuilt);
+  const refreshed = await waitFor(status => status.referenceIndex.version !== updated.referenceIndex.version && status.referenceRefresh === 'ready');
+  const codeQuestion = 'Where does wasp-ui/src/StageAnnouncement.tsx declare fixtureNotice?';
+  const codeEvidence = packReferenceEvidence(retrieveProjectReferences(hub.session.pitchReferences, codeQuestion), codeQuestion);
+  assert.ok(codeEvidence.some(passage => passage.kind === 'code' && passage.text.includes('The lighthouse receipt is printed in cyan.')));
   await appendFile(path, '\n-----BEGIN PRIVATE KEY-----\n');
   const rejected = await waitFor(status => status.referenceRefresh === 'using-last-good-index');
-  assert.equal(rejected.referenceIndex.version, updated.referenceIndex.version);
+  assert.equal(rejected.referenceIndex.version, refreshed.referenceIndex.version);
   assert.ok(retrieveProjectReferences(hub.session.pitchReferences, question, 4).some(passage => /lighthouse calibration uses a six-step/.test(passage.text)));
 });
 
@@ -255,4 +290,36 @@ test('the loaded frontend owns the stack passage and corpus fingerprint', async 
   for (const text of ['How does the UI use the microphone?', 'Why did you choose Wasp?', 'How did you build the project?']) {
     assert.ok(!isFrontendStackQuestion(text), text);
   }
+});
+
+test('the Wasp frontend retrieves compact implementation excerpts while classic omits Wasp code', async t => {
+  const { documents, index } = await buildProjectReferences({ frontend: 'wasp' });
+  const { documents: classic } = await buildProjectReferences();
+  const checks = [
+    ['Where are the Wasp PhoneRoute and StageRoute declared?', 'wasp-ui/main.wasp.ts', "route('PhoneRoute'"],
+    ['Where does the React PhoneSurface insert the media controller script?', 'wasp-ui/src/Surfaces.tsx', 'controller.src'],
+    ['In PhonePitchControls, what event triggers the highlight when speech begins?', 'wasp-ui/src/PhonePitchControls.tsx',
+      "document.addEventListener('telepathy:pitch-speech-start'"],
+    ['Which React component keeps the microphone input meter from rebuilding the transcript?', 'wasp-ui/src/StageRoomConsole.tsx', 'function RoomInputMeter'],
+    ['Where does the StageAnnouncement component render per-seat receipts?', 'wasp-ui/src/StageAnnouncement.tsx', 'receipt.seats.map'],
+    ['What does CalibrationTrial display while it is checking the timing?', 'wasp-ui/src/CalibrationTrial.tsx', 'Checking timing'],
+    ['Where is the StageRevealHeader score announced for screen readers?', 'wasp-ui/src/StageRevealHeader.tsx', 'aria-live="polite"'],
+    ['What source file checks whether a Wasp build needs refreshing?', 'scripts/build-wasp-ui', 'source.sha256'],
+  ];
+  let bytes = 0;
+  for (const [question, source, mechanism] of checks) {
+    const candidates = retrieveProjectReferences(documents, question);
+    const evidence = packReferenceEvidence(candidates, question);
+    const snippets = evidence.filter(passage => passage.kind === 'code');
+    assert.equal(snippets.length, 1, question);
+    const [snippet] = snippets;
+    assert.ok(snippet.name.startsWith(source + ':') && snippet.text.includes(mechanism), question);
+    assert.ok(snippet.text.length <= 360 && candidates.some(passage => passage.id === snippet.id && passage.text.includes(snippet.text)));
+    bytes += Buffer.byteLength(JSON.stringify(evidence));
+  }
+  assert.ok(classic.every(doc => !doc.name.startsWith('wasp-ui/') && doc.name !== 'scripts/build-wasp-ui'));
+  assert.ok(documents.every(doc => !/\/generated\/|node_modules|\.runtime|\.env/.test(doc.name)));
+  assert.equal(retrieveProjectReferences(classic, 'Where are the seat receipts in wasp-ui/src/StageAnnouncement.tsx?')
+    .some(passage => passage.kind === 'code'), false);
+  t.diagnostic(JSON.stringify({ queries: checks.length, recoveredFacts: checks.length, packedBytes: bytes, indexedBytes: index.bytes }));
 });

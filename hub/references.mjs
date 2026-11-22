@@ -17,14 +17,32 @@ const ALIASES = [
   [/calibrat|timing.*train|old(?:er)? hardware/i, 'calibration successful doubles triples retry'],
   [/who (?:can hear|gets|receives)|private.*(?:cue|voice)|generated voice/i, 'private cue requesting seat'],
   [/(?:judge|question).*(?:speak|finish|playback)|playback.*(?:judge|question)/i, 'committed transcript question partial playback'],
+  [/screen reader|aria live/i, 'aria live polite status'],
+  [/speech.*(?:start|begin)|(?:start|begin).*speech/i, 'speech start'],
+  [/\bwasp\b.*\b(?:rebuild|refresh|refreshing|stale|build inputs)\b/i, 'fingerprint source sha256 ensure'],
 ];
 const INDEXES = new WeakMap();
 const SENTENCES = new Intl.Segmenter('en', { granularity: 'sentence' });
 const EVIDENCE_CHARS = 360;
+const SOURCE_FILE = /\.(?:mjs|tsx?|css)$/i;
 
 function terms(text) {
   return (text.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? []).filter(word => !STOP_WORDS.has(word))
     .map(word => word.length > 4 ? word.replace(/s$/, '') : word);
+}
+
+function codeTerms(text) {
+  return [...terms(text), ...terms(text.replace(/([\p{Ll}\d])([\p{Lu}])/gu, '$1 $2'))];
+}
+
+function adjacentTerms(text) {
+  const words = terms(text);
+  return words.slice(0, -1).map((word, index) => ' ' + word + ' ' + words[index + 1] + ' ');
+}
+
+function codeQueryPhrases(question) {
+  const aliases = ALIASES.filter(([pattern]) => pattern.test(question)).flatMap(([, expansion]) => adjacentTerms(expansion));
+  return [...new Set([...adjacentTerms(question), ...aliases])];
 }
 
 function queryTerms(query, focus) {
@@ -48,19 +66,47 @@ export function recallRoomTurns(turns, question, limit = 2) {
 }
 
 function codeIdentifiers(text) {
-  return [...new Set(text.match(/\b(?:[\w.-]+\/)+(?:[\w.-]+\.mjs)\b|\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+\b|\b[a-z][a-z\d]+[A-Z][\w$]*\b/g) ?? [])];
+  return [...new Set(text.match(/\b(?:[\w.-]+\/)*[\w.-]+\.(?:mjs|tsx?|css)\b|\bscripts\/build-wasp-ui\b|\b[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+\b|\b[A-Za-z][a-z\d]+[A-Z][\w$]*\b/g) ?? [])];
+}
+
+function isSourcePath(identifier) {
+  return SOURCE_FILE.test(identifier) || identifier === 'scripts/build-wasp-ui';
+}
+
+function matchesSource(name, identifier) {
+  const file = name.split(':', 1)[0].toLowerCase();
+  const hint = identifier.toLowerCase();
+  return file === hint || file.endsWith('/' + hint);
 }
 
 function codeMatch(text, name, identifiers) {
   return identifiers.reduce((score, identifier) => {
-    if (identifier.endsWith('.mjs')) return score + (name.startsWith(identifier + ':') ? 12 : 0);
+    if (isSourcePath(identifier)) return score + (matchesSource(name, identifier) ? 40 : 0);
     if (!text.includes(identifier)) return score;
+    if (/^[A-Z]/.test(identifier)) return score + 2;
     const definition = text.split('\n').some(line => {
       const clean = line.trim().replace(/^(?:export )?(?:async )?(?:function )?/, '');
       return clean.startsWith(identifier + '(') && clean.includes('{');
     });
     return score + (definition ? 28 : 18);
   }, 0);
+}
+
+function bestCodeWindow(passage, tokens, identifiers, phrases) {
+  const lines = passage.text.split('\n');
+  let best;
+  for (let index = 0; index < lines.length; index++) {
+    const text = lines.slice(index, index + 4).join('\n').trim().slice(0, EVIDENCE_CHARS);
+    if (text.length < 8) continue;
+    const words = codeTerms(text);
+    const searchable = ' ' + words.join(' ') + ' ';
+    const detach = text.includes('removeEventListener') && !text.includes('addEventListener') && !tokens.has('remove') && !tokens.has('cleanup');
+    const score = [...new Set(words)].reduce((sum, word) => sum + (tokens.get(word) ?? 0), 0)
+      + phrases.reduce((sum, phrase) => sum + (searchable.includes(phrase) ? 3 : 0), 0)
+      + codeMatch(text, passage.name, identifiers) - Number(detach);
+    if (!best || score >= best.score) best = { text, score };
+  }
+  return best;
 }
 
 function indexChunks(document) {
@@ -72,9 +118,10 @@ function indexChunks(document) {
       weight: document.priority ?? 0,
       postings,
     };
+    const tokenize = document.kind === 'code' ? codeTerms : terms;
     for (const [index, chunk] of indexed.chunks.entries()) {
-      const weights = new Map([...new Set(terms(chunk.text))].map(word => [word, 1]));
-      for (const word of new Set(terms(chunk.heading ?? ''))) weights.set(word, (weights.get(word) ?? 0) + 0.75);
+      const weights = new Map([...new Set(tokenize(chunk.text))].map(word => [word, 1]));
+      for (const word of new Set(tokenize(chunk.heading ?? ''))) weights.set(word, (weights.get(word) ?? 0) + 0.75);
       for (const [word, weight] of weights) {
         if (!postings.has(word)) postings.set(word, []);
         postings.get(word).push({ index, weight });
@@ -173,11 +220,23 @@ export function retrieveProjectReferences(documents, query, limit = 7, focus = '
   const question = focus || query;
   const includeHistory = /\b(?:original|historical|initial|first) (?:brief|spec(?:ification)?|design|plan)\b|\bspec\.md\b/i.test(question);
   const prose = documents.filter(document => document.kind !== 'code' && (includeHistory || document.kind !== 'historical'));
-  const code = documents.filter(document => document.kind === 'code');
   const ranked = retrieveReferences(prose, query, limit, focus);
   const identifiers = codeIdentifiers(question);
-  if (!code.length || limit < 2 || (!identifiers.length && !/\b(?:code|source file|handler|module|function|class|implementation)\b/i.test(question))) return ranked;
-  const snippets = retrieveReferences(code, query, Math.min(2, limit - 1), focus, identifiers);
+  const paths = identifiers.filter(isSourcePath);
+  const code = documents.filter(document => document.kind === 'code' && (!paths.length || paths.some(path => matchesSource(document.name, path))));
+  if (!code.length || limit < 2 || (!identifiers.length && !/\b(?:code|source file|handler|module|function|class|component|implementation)\b/i.test(question))) return ranked;
+  const components = identifiers.filter(identifier => /^[A-Z][\w$]*$/.test(identifier));
+  const owners = paths.length ? [] : code.filter(doc => components.some(component => matchesSource(doc.name, component + '.tsx')));
+  const codePool = owners.length ? owners : code;
+  const initial = retrieveReferences(codePool, query, 4, focus, identifiers);
+  const primary = codePool.find(document => document.chunks.includes(initial[0]));
+  const additional = primary ? retrieveReferences([primary], query, 5, focus, identifiers) : [];
+  const tokens = queryTerms(question);
+  const phrases = codeQueryPhrases(question);
+  const windowIdentifiers = identifiers.filter(identifier => !/^[A-Z][\w$]*$/.test(identifier));
+  const snippets = [...new Set([...initial, ...additional])].map((passage, rank) => ({
+    passage, score: (bestCodeWindow(passage, tokens, windowIdentifiers, phrases)?.score ?? 0) + 1 / (rank + 2),
+  })).sort((a, b) => b.score - a.score).slice(0, Math.min(2, limit - 1)).map(row => row.passage);
   const insertAt = Math.min(3, limit - snippets.length);
   return [...ranked.slice(0, insertAt), ...snippets, ...ranked.slice(insertAt)].slice(0, limit);
 }
@@ -187,7 +246,7 @@ export function packReferenceEvidence(passages, question, limit = 4) {
   const code = passages.filter(passage => passage.kind === 'code');
   const candidates = passages.filter(passage => passage.kind !== 'code').flatMap((passage, rank) => {
     const body = passage.text.replace(/^#{1,4} [^\n]+\n+/, '')
-      .split(/\bSources: (?=(?:hub|public|docs|scripts|maritime)\/)/, 1)[0].trim();
+      .split(/\bSources: (?=(?:hub|public|docs|scripts|maritime|wasp-ui)\/)/, 1)[0].trim();
     const sentences = [...SENTENCES.segment(body)];
     const windows = [];
     for (let i = 0; i < sentences.length; i++) {
@@ -222,18 +281,13 @@ export function packReferenceEvidence(passages, question, limit = 4) {
   }
   const result = chosen.map(item => item.passage);
   if (code.length && result.length < limit) {
-    const passage = code[0];
-    const lines = passage.text.split('\n');
-    let best = '';
-    let bestScore = -Infinity;
-    const identifiers = codeIdentifiers(question);
-    for (let i = 0; i < lines.length; i++) {
-      const text = lines.slice(i, i + 4).join('\n').trim().slice(0, EVIDENCE_CHARS);
-      const score = [...new Set(terms(text))].reduce((sum, word) => sum + (tokens.get(word) ?? 0), 0)
-        + codeMatch(text, passage.name, identifiers);
-      if (text.length >= 8 && score > bestScore) { best = text; bestScore = score; }
-    }
-    if (best) result.push({ ...passage, text: best });
+    const identifiers = codeIdentifiers(question).filter(identifier => !/^[A-Z][\w$]*$/.test(identifier));
+    const phrases = codeQueryPhrases(question);
+    const best = code.map((passage, rank) => {
+      const window = bestCodeWindow(passage, tokens, identifiers, phrases);
+      return window && { passage, text: window.text, score: window.score + 1 / (rank + 2) };
+    }).filter(Boolean).sort((a, b) => b.score - a.score)[0];
+    if (best) result.push({ ...best.passage, text: best.text });
   }
   return result;
 }

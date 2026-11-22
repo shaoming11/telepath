@@ -14,6 +14,16 @@ Question Mode and the private cue panel are React-owned. The phone controller pu
 
 The Stage room console is also React-owned. The capture controller handles microphone permission, selected-device constraints, and hub scope. The input meter gets its own audio-level updates, so audio frames do not rebuild the transcript or replace the focused speaker controls.
 
+## Session evidence in the interface
+
+The Wasp phone highlights a private cue on the `telepathy:pitch-speech-start` event. Calibration shows received earbud events immediately and shows acceptance after the timing check. Sources: wasp-ui/src/PhonePitchControls.tsx, wasp-ui/src/CalibrationTrial.tsx.
+
+The Stage keeps the last announcement visible while composing another. A seat shows playback started after it acknowledges Web Audio playback. The reveal separates browser-confirmed cues from queued cues and labels canned results as scripted. Sources: wasp-ui/src/StageAnnouncement.tsx, wasp-ui/src/StageRevealHeader.tsx.
+
+The launcher compares a hash of the build inputs before reusing the compiled Wasp client. The Node hub compresses transport by serving precompressed hashed scripts and styles to browsers that accept gzip. Sources: scripts/build-wasp-ui, hub/server.mjs.
+
+The coach uses a curated set of React and Wasp files from the deployed build. Rebuilding updates those code excerpts. Project notes still refresh from the checkout while the hub is running.
+
 ## Build, run and verify
 
 Use Node.js 24.22.1 or later, npm, and Python 3. The first build downloads the pinned Wasp compiler and dependencies. From the repository root:
