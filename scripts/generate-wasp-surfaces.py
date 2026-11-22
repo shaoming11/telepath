@@ -31,6 +31,10 @@ REACT_REGIONS = {
             "StageRevealHeader",
             r'<div[^>]* id="reveal-head"[^>]*>[\s\S]*?<p[^>]* id="reveal-count"[^>]*></p>\s*</div>\s*</div>',
         ),
+        (
+            "StageAnnouncement",
+            r'<form[^>]* id="op-announce"[^>]*>[\s\S]*?</form>',
+        ),
     ),
 }
 DESTINATION = ROOT / "wasp-ui/src/generated"

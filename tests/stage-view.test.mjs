@@ -56,6 +56,41 @@ test('the operator sees when a seat left during an otherwise valid announcement'
   assert.match(stage.announcementNote({ status: 'failed', reason: 'voice_unavailable', targets: ['A','B'], heard: [] }), /voice was unavailable/i);
 });
 
+test('the last announcement has stable per-seat status while the next draft changes', () => {
+  const state = stage.normalizeState({ phase: 'live', seats: { A: { online: true }, B: { online: true } },
+    announcement: {
+      id: 'cue-old', text: 'Thirty seconds left.', status: 'partial', targets: ['A', 'B'],
+      heard: ['A'], reason: 'seat_left',
+    },
+  });
+  const first = stage.announcementView(state, true, 'Thirty seconds left.');
+  const second = stage.announcementView(state, true, 'The next announcement');
+  assert.deepEqual(second.receipt, first.receipt);
+  assert.deepEqual(second.receipt.seats, [
+    { seat: 'A', tone: 'started', label: 'Playback started' },
+    { seat: 'B', tone: 'failed', label: 'No playback confirmation' },
+  ]);
+  assert.equal(second.canSend, true);
+  assert.equal(stage.announcementView(state, false, 'New text').canSend, false);
+  assert.equal(stage.announcementView(state, false, 'New text').note, 'Waiting for the hub.');
+});
+
+test('announcement targets distinguish synthesis failures, a pending playback and an offline seat', () => {
+  const state = stage.normalizeState({ phase: 'live', seats: { A: { online: true, sim: true } },
+    announcement: { id: 'cue', text: 'Thirty seconds left.', status: 'building', targets: ['A'], heard: [] },
+  });
+  const view = () => stage.announcementView(state, true, 'Thirty seconds left.');
+  assert.equal(view().action, 'Send to Seat A');
+  assert.equal(view().canSend, false);
+  assert.deepEqual(view().receipt.seats.map(row => row.label), ['Preparing audio', 'Offline at send']);
+  state.announcement.status = 'queued';
+  assert.deepEqual(view().receipt.seats.map(row => row.label), ['Waiting for playback', 'Offline at send']);
+  Object.assign(state.announcement, { status: 'failed', reason: 'speech_timeout' });
+  assert.deepEqual(view().receipt.seats.map(row => row.label), ['Audio unavailable', 'Offline at send']);
+  assert.equal(view().canSend, true);
+  assert.equal(stage.announcementView(state, true, 'Unbundled rehearsal line').canSend, false);
+});
+
 test('coach approval carries only the current cue ID', () => {
   assert.deepEqual(stage.operatorFrame('coach_ask', { beat: 'problem' }),
     { type: 'operator', action: 'coach_ask', beat: 'problem' });

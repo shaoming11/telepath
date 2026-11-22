@@ -424,6 +424,38 @@ export function announcementNote(progress) {
   }
 }
 
+export function announcementView(state, online, raw) {
+  const connected = SEATS.filter(seat => state.seats[seat].online);
+  const rehearsal = connected.length > 0 && connected.every(seat => state.seats[seat].sim);
+  const text = announcementText(raw);
+  const progress = state.announcement;
+  const busy = progress?.status === 'building' || progress?.status === 'queued';
+  const presenting = state.canned || state.phase === 'reveal';
+  const target = connected.length === 2 ? 'both seats' : connected[0] ? 'Seat ' + connected[0] : null;
+  const note = presenting ? 'Available before the reveal.'
+    : !online ? 'Waiting for the hub.'
+    : !target ? 'Connect a seat to send an announcement.'
+    : rehearsal ? 'Choose a preset for the simulated seats.'
+    : connected.length === 2 ? 'Both seats online.' : target + ' online.';
+  const canSend = Boolean(text && target && online && !busy && !presenting
+    && (!rehearsal || OPERATOR_ANNOUNCEMENTS.some(line => line.text === text)));
+  let receipt = null;
+  if (progress?.id && typeof progress.text === 'string') {
+    const heard = asList(progress.heard);
+    const targets = asList(progress.targets);
+    const seats = SEATS.map(seat => {
+      if (!targets.includes(seat)) return { seat, tone: 'off', label: 'Offline at send' };
+      if (heard.includes(seat)) return { seat, tone: 'started', label: 'Playback started' };
+      if (progress.status === 'building') return { seat, tone: 'waiting', label: 'Preparing audio' };
+      if (progress.status === 'queued') return { seat, tone: 'waiting', label: 'Waiting for playback' };
+      if (['voice_unavailable', 'speech_timeout'].includes(progress.reason)) return { seat, tone: 'failed', label: 'Audio unavailable' };
+      return { seat, tone: 'failed', label: 'No playback confirmation' };
+    });
+    receipt = { id: progress.id, text: progress.text, seats, summary: announcementNote(progress) };
+  }
+  return { canSend, rehearsal, busy, note, action: target ? 'Send to ' + target : 'Send announcement', receipt };
+}
+
 export function pitchCoachView(state, connected, beat) {
   const { coach, announcement } = state;
   if (!coach || state.phase !== 'live' || state.preset !== 'Pitch' || state.canned) return null;
@@ -512,6 +544,7 @@ function boot() {
   let lastPhase = null;
   let lastBits = null;
   let streamKeys = [];
+  let announcementRenderKey = '';
   let revealFingerprint = '';
   const seat_fingerprints = new Map();
   const live_panels = new Map();
@@ -1292,19 +1325,19 @@ function boot() {
   }
 
   function renderAnnouncement() {
-    const text = announcementText(ui.opAnnounceText.value);
-    const connected = SEATS.filter(seat => state.seats[seat].online);
-    const rehearsal = connected.length > 0 && connected.every(seat => state.seats[seat].sim);
-    const known = OPERATOR_ANNOUNCEMENTS.some(line => line.text === text);
-    const progress = state.announcement;
-    const busy = progress?.status === 'building' || progress?.status === 'queued';
-    const presentation = state.canned || state.phase === 'reveal';
-    ui.opAnnounceText.readOnly = rehearsal;
-    ui.opAnnounceSend.disabled = !text || !connected.length || busy || presentation || rehearsal && !known;
-    let note = presentation ? 'Available before the reveal.' : connected.length
-      ? (rehearsal ? 'Rehearsal uses the preset lines. ' : '') + (connected.length === 2 ? 'Both seats online.' : 'Only Seat ' + connected[0] + ' is online.')
-      : 'Waiting for a seat to connect.';
-    if (!presentation && progress && (busy || progress.text === text)) note = announcementNote(progress) ?? note;
+    const view = announcementView(state, linkState === 'live', ui.opAnnounceText.value);
+    if (ui.opAnnounce.dataset.announceOwner === 'react') {
+      const key = JSON.stringify(view);
+      if (key !== announcementRenderKey) {
+        announcementRenderKey = key;
+        ui.opAnnounce.dispatchEvent(new CustomEvent('telepathy:announcement', { detail: view }));
+      }
+      return;
+    }
+    ui.opAnnounceText.readOnly = view.rehearsal;
+    ui.opAnnounceSend.disabled = !view.canSend;
+    ui.opAnnounceSend.textContent = view.action;
+    const note = view.receipt?.summary ?? view.note;
     if (ui.opAnnounceStatus.textContent !== note) ui.opAnnounceStatus.textContent = note;
   }
 
@@ -1350,8 +1383,10 @@ function boot() {
       return false;
     }
     const detail = frame.preset ? ' ' + frame.preset : frame.signal ? ' ' + frame.seat + ' ' + SIGNAL_LABELS[frame.signal] : '';
-    const coach_status = frame.action === 'coach_ask' ? 'Asked the pitch coach.' : frame.action === 'coach_send' ? 'Approved the cue.' : null;
-    status(coach_status ?? 'Sent ' + frame.action + detail, 'sent');
+    const action_status = frame.action === 'coach_ask' ? 'Asked the pitch coach.'
+      : frame.action === 'coach_send' ? 'Approved the cue.'
+      : frame.action === 'announce' ? 'Announcement requested.' : null;
+    status(action_status ?? 'Sent ' + frame.action + detail, 'sent');
     return true;
   }
 
@@ -1409,7 +1444,7 @@ function boot() {
     ui.opAnnounceText.addEventListener('input', renderAnnouncement);
     ui.opAnnounce.addEventListener('submit', event => {
       event.preventDefault();
-      if (ui.opAnnounceSend.disabled) return;
+      if (!announcementView(state, linkState === 'live', ui.opAnnounceText.value).canSend) return;
       send('announce', { text: ui.opAnnounceText.value });
     });
     ui.opCoachBeat.addEventListener('change', renderPitchCoach);
