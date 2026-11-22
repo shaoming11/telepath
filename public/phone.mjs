@@ -8,7 +8,7 @@ import { diag, installDiag, registerExtraActions } from './diag.mjs';
 import { AIRPODS_1_PLAYBACK_URL } from './earbuds/airpods-1/input.mjs';
 import {
   APP_TIMING, APP_TIMING_LIMITS, CONSENT_KEY, CONSENT_TEXT, DEFAULT_VOLUMES, PATTERN_LABELS, PRESETS,
-  SEAT_NAMES, SIGNAL_LABELS, SIGNAL_ORDER, STORAGE_KEY, SYSTEM_MEANINGS, VOICE_SCRIPT,
+  SEAT_NAMES, SIGNAL_LABELS, SIGNAL_ORDER, STORAGE_KEY, SYSTEM_MEANINGS, VOICE_CONSENT_TEXT, VOICE_SCRIPT,
 } from './phone-data.mjs';
 
 const QUERY = new URLSearchParams(location.search);
@@ -228,9 +228,14 @@ function is_sim() {
   return settings.input_mode === 'sim';
 }
 
-function has_consent() {
+function uses_phone_room() {
+  return ui.state ? ui.state.roomInput !== 'mac' : ui.hub_info?.roomInput === 'phones';
+}
+
+function has_consent(scope) {
   try {
-    return sessionStorage.getItem(CONSENT_KEY) === '1';
+    const consent = sessionStorage.getItem(CONSENT_KEY);
+    return consent === '1' || scope === 'voice' && consent === 'voice';
   } catch {
     return false;
   }
@@ -238,7 +243,7 @@ function has_consent() {
 
 function set_consent(granted) {
   try {
-    if (granted) sessionStorage.setItem(CONSENT_KEY, '1');
+    if (granted) sessionStorage.setItem(CONSENT_KEY, uses_phone_room() ? '1' : 'voice');
     else sessionStorage.removeItem(CONSENT_KEY);
   } catch {}
 }
@@ -666,7 +671,7 @@ function on_state(next, source) {
   ui.receipt_deadline = receipt_wait > 0 ? performance.now() + receipt_wait : null;
   if (receipt_wait > 0) ui.receipt_timer = setTimeout(schedule_render, receipt_wait + 1);
   drafts.observe(next.seats?.[ui.seat]?.pending ?? null);
-  if (next.roomInput === 'mac' && !ui.voice_task && (capture.open || capture.opening || ui.listen_wanted)) stop_mic();
+  if (next.roomInput === 'mac' && ui.voice_task !== 'clone' && (capture.open || capture.opening || ui.listen_wanted)) stop_mic();
   if (next.phase === 'reveal' && previous?.phase !== 'reveal' || next.canned && !previous?.canned) {
     audio.cancel_previews();
     audio.cancel_announcements();
@@ -677,7 +682,7 @@ function on_state(next, source) {
   }
   const first_state = !source.synced;
   if (first_state || new_session || previous?.sessionId !== next.sessionId) reconcile(next, source);
-  if (first_state && next.roomInput !== 'mac' && !is_sim() && has_consent() && !capture.open) void start_mic();
+  if (first_state && uses_phone_room() && !is_sim() && has_consent('room') && !capture.open) void start_mic();
   for (const frame of source.early_cache.splice(0)) {
     if (!is_stale_frame(frame)) void on_cache(frame, source);
   }
@@ -895,13 +900,13 @@ function on_capture_state(status, detail) {
   schedule_render();
 }
 
-async function start_mic({ for_sample = false } = {}) {
-  if ((!ui.state || ui.state.roomInput === 'mac') && !for_sample) return false;
+async function start_mic({ sample } = {}) {
+  const phone_room = uses_phone_room();
+  if (sample !== 'clone' && !phone_room) return false;
   const external_mic = my_state()?.roomMicSource === 'companion';
-  const shared_room = ui.state?.roomInput === 'mac';
-  if (is_sim() || (!for_sample && (ui.lock_controls || ui.calibration_playback || external_mic)) || !has_consent()
-    || (!for_sample && shared_room) || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
-  ui.listen_wanted = !ui.lock_controls && !external_mic && !shared_room;
+  if (is_sim() || (!sample && (ui.lock_controls || ui.calibration_playback || external_mic))
+    || !has_consent(sample === 'clone' ? 'voice' : 'room') || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
+  ui.listen_wanted = phone_room && has_consent('room') && !ui.lock_controls && !external_mic;
   const opened = await capture.start();
   if (opened) sync_listen();
   return opened;
@@ -1068,12 +1073,12 @@ function set_voice_progress(fraction) {
 }
 
 async function record_sample(kind) {
-  if (ui.voice_task || ui.clone_request) return;
+  if (ui.voice_task || ui.clone_request || kind === 'room' && !uses_phone_room()) return;
   const was_listening = ui.listen_wanted;
   const temporary_mic = kind === 'clone' || !was_listening || ui.lock_controls || my_state()?.roomMicSource === 'companion';
   ui.voice_task = kind;
   arm_media();
-  if (!(await start_mic({ for_sample: true }))) {
+  if (!(await start_mic({ sample: kind }))) {
     ui.voice_task = null;
     if (temporary_mic) arm_media();
     ui.voice_message = 'The microphone is not available. Use the premade voice to continue.';
@@ -1303,11 +1308,12 @@ function render_join() {
 
 function render_voice() {
   const sim = is_sim();
-  const consent = has_consent();
+  const phone_room = uses_phone_room();
+  const consent = has_consent(phone_room ? 'room' : 'voice');
   const busy = Boolean(ui.voice_task);
   const mine = my_state();
   set_text($('voice-step'), ui.voice_from === 'settings' ? 'Settings' : '1 / 4');
-  set_text($('voice-consent-text'), CONSENT_TEXT);
+  set_text($('voice-consent-text'), phone_room ? CONSENT_TEXT : VOICE_CONSENT_TEXT);
   set_text($('voice-script'), VOICE_SCRIPT);
   $('voice-consent-row').hidden = sim;
   $('voice-consent').checked = consent;
@@ -1317,7 +1323,7 @@ function render_voice() {
   record.disabled = !consent || Boolean(ui.clone_request) || mine?.voice === 'building';
   set_text(record, 'Start recording');
   const room = $('voice-room');
-  room.hidden = sim || busy;
+  room.hidden = sim || busy || !phone_room;
   room.disabled = !consent || Boolean(ui.clone_request);
   set_text(room, 'Room sample only, ' + Math.round(settings.app.roomSampleMs / 1000) + ' s');
   $('voice-cancel').hidden = !busy;
@@ -1629,11 +1635,11 @@ function render_settings() {
     radio.checked = radio.value === settings.gesture_model;
   }
   $('settings-drafts').checked = settings.drafts;
-  $('settings-listen-row').hidden = is_sim() || ui.state?.roomInput === 'mac';
+  $('settings-listen-row').hidden = is_sim() || !uses_phone_room();
   $('settings-listen').checked = capture.open && ui.listen_wanted;
   $('settings-listen').disabled = my_state()?.roomMicSource === 'companion';
   $('settings-voice-preview').hidden = !ui.hub_info?.voicePreview;
-  $('settings-room-invite').hidden = is_sim() || ui.state?.roomInput === 'mac' || !ui.hub_info?.roomMic;
+  $('settings-room-invite').hidden = is_sim() || !uses_phone_room() || !ui.hub_info?.roomMic;
   for (const name of ['cue', 'voice']) {
     const field = $('settings-volume-' + name);
     if (document.activeElement !== field) field.value = String(settings.volumes[name]);
@@ -1791,7 +1797,7 @@ function bind_events() {
   });
   $('settings-listen').addEventListener('change', event => {
     if (event.target.checked) {
-      if (!has_consent()) {
+      if (!has_consent('room')) {
         event.target.checked = false;
         ui.voice_from = 'settings';
         go('voice');
