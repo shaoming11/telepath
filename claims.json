@@ -1,4 +1,31 @@
 {
-  "revision": 150,
-  "claims": []
+  "revision": 151,
+  "claims": [
+    {
+      "id": "7b853f77-f0a2-491d-9c8e-90af237745c7",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-native-draft-touch",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "@phone-ui",
+        "scripts/generate-wasp-surfaces.py",
+        "wasp-ui/src/generated/PhoneMarkup.tsx",
+        "wasp-ui/src/liquid.css",
+        "tests/wasp-markup.test.mjs"
+      ],
+      "paths": [
+        "public/calibrate.mjs",
+        "public/index.html",
+        "public/phone-data.mjs",
+        "public/phone.css",
+        "public/phone.mjs",
+        "scripts/generate-wasp-surfaces.py",
+        "tests/wasp-markup.test.mjs",
+        "wasp-ui/src/generated/PhoneMarkup.tsx",
+        "wasp-ui/src/liquid.css"
+      ],
+      "claimedAt": "2026-11-22T10:54:47.677Z"
+    }
+  ]
 }
