@@ -1,4 +1,27 @@
 {
-  "revision": 168,
-  "claims": []
+  "revision": 169,
+  "claims": [
+    {
+      "id": "1d782a0b-1381-498c-9a16-202668e6032d",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-newer-receipt",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "hub/session.mjs",
+        "public/phone.mjs",
+        "tests/phone-session.test.mjs",
+        "tests/session.test.mjs",
+        "docs/protocol.md"
+      ],
+      "paths": [
+        "docs/protocol.md",
+        "hub/session.mjs",
+        "public/phone.mjs",
+        "tests/phone-session.test.mjs",
+        "tests/session.test.mjs"
+      ],
+      "claimedAt": "2026-11-22T12:07:16.137Z"
+    }
+  ]
 }
