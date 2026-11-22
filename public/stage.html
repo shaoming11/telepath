@@ -56,6 +56,7 @@
             </button>
           </div>
           <p class="begin-hint" id="begin-hint">both seats ready</p>
+          <a class="join__link" href="#reference-setup">Add team brief &amp; references ↓</a>
           <dl class="readout-row" id="lobby-readout">
             <div><dt id="readout-a-name">PRESENTER</dt><dd id="readout-a">Waiting</dd></div>
             <div><dt id="readout-b-name">COACH</dt><dd id="readout-b">Waiting</dd></div>
@@ -143,6 +144,20 @@
         </div>
       </div>
 
+      <section class="reference-panel" id="reference-setup" aria-labelledby="reference-title">
+        <h2 class="kicker" id="reference-title">TEAM BRIEF &amp; REFERENCES</h2>
+        <p>Add documents so the coach can find supported answers to live questions. Answers are previewed privately and require a tap to send.</p>
+        <label for="reference-files">Choose a brief and reference documents</label>
+        <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx">
+        <div class="reference-actions">
+          <button id="reference-upload" type="button">Load selected documents</button>
+          <button id="reference-clear" type="button">Clear documents</button>
+        </div>
+        <p class="reference-note">TXT, Markdown, text-based PDF or DOCX. Up to 8 files, 5 MB each / 8 MB total. Uploading replaces the current set. Documents stay in hub memory until reset; relevant passages are sent to the configured OpenAI model when answering.</p>
+        <p id="reference-status" role="status" aria-live="polite"></p>
+        <ul id="reference-list"></ul>
+      </section>
+
       <div class="detail">
         <div class="detail__seats" id="lobby-seats"></div>
 
@@ -222,6 +237,14 @@
       </section>
 
       <div class="transcripts" id="reveal-transcripts"></div>
+    </section>
+    <section class="reference-panel" id="answer-panel" aria-labelledby="answer-title" hidden>
+      <h2 class="kicker" id="answer-title">CONVERSATION ANSWERS</h2>
+      <p id="answer-status" role="status" aria-live="polite"></p>
+      <p id="answer-question"></p>
+      <p id="answer-text"></p>
+      <ul id="answer-sources"></ul>
+      <details><summary>Answer evidence from this session</summary><ul id="answer-history"></ul></details>
     </section>
   </main>
 </div>
