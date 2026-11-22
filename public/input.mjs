@@ -184,6 +184,7 @@ export function createMediaInput({
       }
     },
     flush() { flush(); airpods1.flush(); },
+    flushAirPods1IfDue() { airpods1.flushDue(); },
     reset,
     dispose() { reset(); unregister(); },
   };

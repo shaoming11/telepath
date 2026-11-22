@@ -3,7 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "board": "node scripts/agent-board.mjs",
     "start": "./start",
@@ -12,6 +14,8 @@
     "rehearse:faults": "node --expose-gc scripts/fault-rehearsal.mjs --mission"
   },
   "dependencies": {
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^6.5.438",
     "ws": "8.21.0"
   }
 }

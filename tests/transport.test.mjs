@@ -58,6 +58,57 @@ async function hubFixture(context, options = {}) {
   return { hub, base: started.stageUrl };
 }
 
+test('reference upload is session-scoped, atomic, lobby-only and absent from phone snapshots', async context => {
+  const { hub, base } = await hubFixture(context);
+  const info = await (await fetch(new URL('/info', base))).json();
+  const upload = (files, sessionId = hub.session.sessionId) => fetch(new URL('/references', base), {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-telepathy-hub': info.hubId, 'x-telepathy-session': sessionId },
+    body: JSON.stringify({ files }),
+  });
+  const document = { name: 'brief.md', data: Buffer.from('Our pilot lasts six weeks.').toString('base64') };
+  assert.equal((await upload([document], 'obsolete')).status, 403);
+  assert.equal((await upload([document])).status, 200);
+  assert.equal(hub.session.references.length, 1);
+  assert.equal(hub.session.snapshot('A').references, undefined);
+  assert.equal((await upload([{ name: 'bad.exe', data: document.data }])).status, 400);
+  assert.equal(hub.session.references[0].name, 'brief.md');
+  hub.session.phase = 'live';
+  assert.equal((await upload([])).status, 409);
+  hub.session.phase = 'lobby';
+  assert.equal((await upload([])).status, 200);
+  assert.equal(hub.session.references.length, 0);
+});
+
+test('only the owning stage tab can stream room audio; disconnect and stale-session frames cannot keep it live', async context => {
+  const audioFrames = [];
+  const hub = createHub({ env: {}, audio: {
+    listen: async (seat, enabled) => ({ listening: enabled }),
+    mic: async (seat, audio, level, callbacks) => { audioFrames.push([seat, audio]); callbacks('Shared room speech.'); },
+  } });
+  context.after(() => hub.close());
+  const { stageUrl: base } = await hub.start({ port: 0, host: '127.0.0.1' });
+  const owner = await open(base, { role: 'stage' });
+  const other = await open(base, { role: 'stage' });
+  const { state } = await owner.take(stateFrame);
+  const scope = { hubId: state.hubId, sessionId: state.sessionId };
+  owner.send({ ...scope, type: 'operator', action: 'room_listen', enabled: true });
+  await owner.take(frame => frame.type === 'room_ack' && frame.listening);
+  other.send({ ...scope, type: 'operator', action: 'room_listen', enabled: true });
+  const rejected = await other.take(frame => frame.type === 'operator_ack');
+  assert.equal(rejected.reason, 'microphone_owned');
+  other.send({ ...scope, type: 'room_mic', audio: 'OTHER', level: .1 });
+  owner.send({ ...scope, type: 'room_mic', audio: 'OWNER', level: .1 });
+  await owner.take(frame => frame.state?.room?.transcript?.length === 1);
+  assert.deepEqual(audioFrames, [['room', 'OWNER']]);
+  owner.socket.close();
+  await other.take(frame => frame.state?.room?.transcription === 'off' && frame.state?.room?.transcript?.length === 1);
+  assert.equal(hub.session.room.listening, false);
+  await hub.session.reset();
+  other.send({ ...scope, type: 'operator', action: 'room_listen', enabled: true });
+  await delay(20);
+  assert.equal(hub.session.room.listening, false);
+});
+
 test('the Safari playback anchor supports media byte-range requests', async context => {
   const { base } = await hubFixture(context);
   const audio = new URL('/assets/keepalive.wav', base);

@@ -43,12 +43,27 @@
 
   <main id="stage-main">
 
+    <section class="reference-panel" id="room-microphone-panel" aria-labelledby="room-mic-title">
+      <h2 class="kicker" id="room-mic-title">ROOM MICROPHONE</h2>
+      <p>Use this Mac’s microphone for the conversation. Phones handle whispers and approval; their room microphones stay off.</p>
+      <label for="room-mic-device">Microphone input</label>
+      <select id="room-mic-device"><option value="">System default — choose MacBook Microphone in macOS Sound settings</option></select>
+      <div class="reference-actions">
+        <button id="room-mic-start" type="button">Start Mac microphone</button>
+        <button id="room-mic-stop" type="button" disabled>Stop microphone</button>
+      </div>
+      <p id="room-mic-status" role="status" aria-live="polite">Microphone is off. Start it and allow browser access.</p>
+      <label for="room-mic-level">Input level</label>
+      <meter id="room-mic-level" min="0" max="1" value="0">0</meter>
+      <details><summary>Shared room transcript</summary><ul id="room-transcript"></ul></details>
+    </section>
+
     <!-- Lobby -->
     <section class="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>
       <div class="hero">
         <div class="hero__copy">
           <h1 class="display" id="lobby-title"><span class="display__dim">Two seats.</span> One silent channel.</h1>
-          <p class="lede">Tap an earbud and your partner hears you in your own voice. An agent on the hub listens to both rooms, drafts the answer, and waits for your tap before it sends.</p>
+          <p class="lede">Your partner hears you in your own voice. A coach listens through the Mac’s microphone, checks your references, and waits for your tap before sending a whisper.</p>
           <div class="cta">
             <button class="begin" id="begin-button" type="button">
               <span class="begin__label">Begin session</span>
@@ -56,6 +71,7 @@
             </button>
           </div>
           <p class="begin-hint" id="begin-hint">both seats ready</p>
+          <a class="join__link" href="#reference-setup">Add team brief &amp; references ↓</a>
           <dl class="readout-row" id="lobby-readout">
             <div><dt id="readout-a-name">PRESENTER</dt><dd id="readout-a">Waiting</dd></div>
             <div><dt id="readout-b-name">COACH</dt><dd id="readout-b">Waiting</dd></div>
@@ -132,16 +148,30 @@
         </svg>
 
         <div class="join">
-          <p class="kicker">JOIN FROM EACH PHONE ON THE HOTSPOT</p>
+          <p class="kicker">Join from each phone on the hotspot</p>
           <div class="join__row">
             <span class="join__url" id="join-url">&mdash;</span>
-            <a class="join__link" href="/?sim=1&amp;seat=A">Simulated seat A <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?sim=1&amp;seat=B">Simulated seat B <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?calibrate=1">Calibration bench <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?sim=1&amp;seat=A">Simulate A <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?sim=1&amp;seat=B">Simulate B <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?calibrate=1">Calibrate <span aria-hidden="true">↗</span></a>
           </div>
           <p class="join__note" id="join-guidance" hidden></p>
         </div>
       </div>
+
+      <section class="reference-panel" id="reference-setup" aria-labelledby="reference-title">
+        <h2 class="kicker" id="reference-title">TEAM BRIEF &amp; REFERENCES</h2>
+        <p>Add documents so the coach can find supported answers to live questions. Answers are previewed privately and require a tap to send.</p>
+        <label for="reference-files">Choose a brief and reference documents</label>
+        <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx">
+        <div class="reference-actions">
+          <button id="reference-upload" type="button">Load selected documents</button>
+          <button id="reference-clear" type="button">Clear documents</button>
+        </div>
+        <p class="reference-note">TXT, Markdown, text-based PDF or DOCX. Up to 8 files, 5 MB each / 8 MB total. Uploading replaces the current set. Documents stay in hub memory until reset; relevant passages are sent to the configured OpenAI model when answering.</p>
+        <p id="reference-status" role="status" aria-live="polite"></p>
+        <ul id="reference-list"></ul>
+      </section>
 
       <div class="detail">
         <div class="detail__seats" id="lobby-seats"></div>
@@ -211,7 +241,7 @@
       </div>
 
       <section class="lanes-wrap" aria-labelledby="lanes-title">
-        <h2 class="section-title" id="lanes-title">Timeline <span>Speech, taps and whispers on one clock</span></h2>
+        <h2 class="section-title" id="lanes-title">Timeline <span>Speech, taps and whispers</span></h2>
         <div class="lanes" id="reveal-lanes"></div>
       </section>
 
@@ -222,6 +252,14 @@
       </section>
 
       <div class="transcripts" id="reveal-transcripts"></div>
+    </section>
+    <section class="reference-panel" id="answer-panel" aria-labelledby="answer-title" hidden>
+      <h2 class="kicker" id="answer-title">CONVERSATION ANSWERS</h2>
+      <p id="answer-status" role="status" aria-live="polite"></p>
+      <p id="answer-question"></p>
+      <p id="answer-text"></p>
+      <ul id="answer-sources"></ul>
+      <details><summary>Answer evidence from this session</summary><ul id="answer-history"></ul></details>
     </section>
   </main>
 </div>
@@ -243,7 +281,8 @@
         <button class="op-action" id="op-replay" type="button" data-action="replay">Replay last</button>
         <button class="op-action" id="op-canned" type="button" data-action="canned">Canned take</button>
       </div>
-      <p class="operator__note">Canned take replays the full pitch through this Mac in about 18 seconds.</p>
+      <p class="operator__note">Canned take plays the full pitch through this Mac in about 18 seconds.</p>
+      <a class="join__link" href="/room-mic.html" target="_blank" rel="noopener">Open Mac room mic</a>
     </div>
 
     <section class="operator__group" id="op-coach" aria-labelledby="op-coach-title" hidden>
@@ -290,7 +329,7 @@
         </select>
         <button class="op-action op-action--fit" id="op-set-preset" type="button">Set</button>
       </div>
-      <label class="field-label" for="op-context">Context, sent with the preset when filled</label>
+      <label class="field-label" for="op-context">Context (optional, sent with the preset)</label>
       <textarea id="op-context" class="control control--text" rows="2" spellcheck="false" placeholder="Pitch outline, slide order, judge seating"></textarea>
     </div>
 
@@ -310,7 +349,7 @@
 
     <div class="operator__group">
       <h3 class="operator__label">Reset session</h3>
-      <p class="operator__note">Clears the log, the seats and the bits. The reveal lives in memory only.</p>
+      <p class="operator__note">Clears the log, seats and bits. Reveal data is not saved.</p>
       <button class="op-action op-action--danger" id="op-reset" type="button" aria-describedby="op-reset-note">Reset</button>
       <span class="operator__note" id="op-reset-note"></span>
     </div>

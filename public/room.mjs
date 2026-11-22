@@ -87,7 +87,7 @@ async function start_capture() {
       }
       const level = Math.min(1, Math.sqrt(sum / FRAME_SAMPLES) * 4);
       $('meter').style.width = Math.round(level * 100) + '%';
-      send({ type: 'room_mic_audio', audio: to_base64(pcm), level });
+      send({ type: 'room_split_audio', audio: to_base64(pcm), level });
     }
   };
   source.connect(node);
@@ -108,14 +108,14 @@ async function toggle() {
   if (capture) {
     capture.stop();
     capture = null;
-    send({ type: 'room_mic', action: 'stop' });
+    send({ type: 'room_split', action: 'stop' });
     render();
     return;
   }
   button.disabled = true;
   try {
     capture = await start_capture();
-    send({ type: 'room_mic', action: 'start' });
+    send({ type: 'room_split', action: 'start' });
   } catch (error) {
     set_status('error', 'Microphone: ' + (error?.message || error?.name || 'unavailable'));
   }
@@ -151,7 +151,7 @@ function render() {
       button.textContent = seat ? 'Seat ' + seat : 'Ignore';
       button.dataset.seat = seat ?? '';
       button.setAttribute('aria-pressed', String(speaker.seat === seat));
-      button.addEventListener('click', () => send({ type: 'room_mic', action: 'assign', speaker: speaker.id, seat }));
+      button.addEventListener('click', () => send({ type: 'room_split', action: 'assign', speaker: speaker.id, seat }));
       row.append(button);
     }
     card.append(name, last, row);
@@ -185,12 +185,12 @@ function connect() {
   socket = next;
   next.addEventListener('open', () => {
     reconnect_ms = 600;
-    if (capture) send({ type: 'room_mic', action: 'start' });
+    if (capture) send({ type: 'room_split', action: 'start' });
   });
   next.addEventListener('message', event => {
     let frame;
     try { frame = JSON.parse(String(event.data)); } catch { return; }
-    if (frame?.type === 'room_mic' && frame.room) {
+    if (frame?.type === 'room_split' && frame.room) {
       state = frame.room;
       render();
     }
@@ -204,7 +204,7 @@ function connect() {
 }
 
 $('toggle').addEventListener('click', () => void toggle());
-$('swap').addEventListener('click', () => send({ type: 'room_mic', action: 'swap' }));
-$('clear').addEventListener('click', () => send({ type: 'room_mic', action: 'clear' }));
+$('swap').addEventListener('click', () => send({ type: 'room_split', action: 'swap' }));
+$('clear').addEventListener('click', () => send({ type: 'room_split', action: 'clear' }));
 render();
 connect();
