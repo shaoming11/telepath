@@ -128,7 +128,7 @@ const capture = createCapture({
   get_context: () => audio.context(),
   frame_ms: () => settings.app.micFrameMs,
   on_frame: ({ audio: pcm, level }) => {
-    if (ui.listen_wanted) send({ type: 'mic', audio: pcm, level });
+    if (ui.listen_wanted && ui.state?.roomInput !== 'mac') send({ type: 'mic', audio: pcm, level });
   },
   on_state: on_capture_state,
 });
@@ -595,6 +595,7 @@ function on_state(next, source) {
     ? performance.now() + Math.max(0, receipt.until - (next.serverNow ?? Date.now()))
     : null;
   drafts.observe(next.seats?.[ui.seat]?.pending ?? null);
+  if (next.roomInput === 'mac' && !ui.voice_task && (capture.open || capture.opening || ui.listen_wanted)) stop_mic();
   if (next.phase === 'reveal' && previous?.phase !== 'reveal' || next.canned && !previous?.canned) {
     audio.cancel_previews();
     audio.cancel_announcements();
@@ -605,7 +606,7 @@ function on_state(next, source) {
   }
   const first_state = !source.synced;
   if (first_state || new_session || previous?.sessionId !== next.sessionId) reconcile(next, source);
-  if (first_state && !next.sharedRoomMic && !is_sim() && has_consent() && !capture.open) void start_mic();
+  if (first_state && next.roomInput !== 'mac' && !is_sim() && has_consent() && !capture.open) void start_mic();
   for (const frame of source.early_cache.splice(0)) {
     if (!is_stale_frame(frame)) void on_cache(frame, source);
   }
@@ -677,6 +678,7 @@ function reconcile(next, source) {
 }
 
 function sync_listen(source = connection) {
+  if (ui.state?.roomInput === 'mac') return;
   if (!source || source.listen_sent || !capture.open || !ui.listen_wanted) return;
   if (my_state()?.listening) {
     source.listen_sent = true;
@@ -823,8 +825,9 @@ function on_capture_state(status, detail) {
 }
 
 async function start_mic({ for_sample = false } = {}) {
+  if ((!ui.state || ui.state.roomInput === 'mac') && !for_sample) return false;
   const external_mic = my_state()?.roomMicSource === 'companion';
-  const shared_room = ui.state?.sharedRoomMic || ui.hub_info?.sharedRoomMic;
+  const shared_room = ui.state?.roomInput === 'mac';
   if (is_sim() || (!for_sample && (ui.lock_controls || ui.calibration_playback || external_mic)) || !has_consent()
     || (!for_sample && shared_room) || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
   ui.listen_wanted = !ui.lock_controls && !external_mic && !shared_room;
@@ -1049,7 +1052,7 @@ async function record_sample(kind) {
     ui.voice_message = error?.message === 'Recording cancelled.' ? '' : (error?.message || 'The recording stopped early. Try again.');
     render();
   } finally {
-    if (temporary_mic) {
+    if (temporary_mic || ui.state?.roomInput === 'mac') {
       stop_mic();
       if (ui.seat && kind === 'clone' && !ui.lock_controls) {
         set_lock_controls(true);
@@ -1398,15 +1401,16 @@ function render_live() {
   const transcribing = mine?.transcription == null || mine.transcription === 'live';
   const companion_mic = mine?.roomMicSource === 'companion' && mine?.listening;
   const listening = !is_sim() && (capture.open || companion_mic) && mine?.listening && transcribing;
-  listen.dataset.state = is_sim() ? 'sim' : listening ? 'on' : 'off';
-  set_text($('live-listen-text'), is_sim() ? 'Simulated'
-    : companion_mic ? 'Room mic' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
+  listen.dataset.state = state?.roomInput === 'mac' ? state.room?.transcription === 'live' ? 'on' : 'off' : is_sim() ? 'sim' : listening ? 'on' : 'off';
+  set_text($('live-listen-text'), state?.roomInput === 'mac' ? state.room?.transcription === 'live' ? 'Mac listening' : 'Mac mic ' + (state.room?.transcription ?? 'off')
+    : is_sim() ? 'Simulated' : companion_mic ? 'Room mic' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
   set_text($('live-cache'), ui.failed_manifest ? 'Failed' : mine?.ready ? 'Cached' : state?.presetPending ? 'Caching' : 'Not ready');
   $('lock-controls').hidden = is_sim() || phase === 'reveal' || Boolean(state?.canned);
   $('lock-controls-toggle').setAttribute('aria-pressed', String(ui.lock_controls));
   set_text($('lock-controls-toggle'), ui.lock_controls ? 'Disable lock-screen controls' : 'Enable lock-screen controls');
   set_text($('lock-controls-status'), ui.lock_controls
-    ? companion_mic ? 'Earbuds active. The companion mic is listening.' : 'Phone mic paused. You can use a companion mic.'
+    ? state?.roomInput === 'mac' ? 'Earbuds active. Room audio comes from the Mac microphone.'
+      : companion_mic ? 'Earbuds active. The companion mic is listening.' : 'Phone mic paused. You can use a companion mic.'
     : '');
 
   render_draft(mine?.pending ?? null);
@@ -1499,11 +1503,11 @@ function render_settings() {
     radio.checked = radio.value === settings.gesture_model;
   }
   $('settings-drafts').checked = settings.drafts;
-  $('settings-listen-row').hidden = is_sim() || Boolean(ui.state?.sharedRoomMic || ui.hub_info?.sharedRoomMic);
+  $('settings-listen-row').hidden = is_sim() || ui.state?.roomInput === 'mac';
   $('settings-listen').checked = capture.open && ui.listen_wanted;
   $('settings-listen').disabled = my_state()?.roomMicSource === 'companion';
   $('settings-voice-preview').hidden = !ui.hub_info?.voicePreview;
-  $('settings-room-invite').hidden = is_sim() || !ui.hub_info?.roomMic || Boolean(ui.state?.sharedRoomMic || ui.hub_info.sharedRoomMic);
+  $('settings-room-invite').hidden = is_sim() || ui.state?.roomInput === 'mac' || !ui.hub_info?.roomMic;
   for (const name of ['cue', 'voice']) {
     const field = $('settings-volume-' + name);
     if (document.activeElement !== field) field.value = String(settings.volumes[name]);

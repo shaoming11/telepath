@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { QUESTION_INSTRUCTIONS, QUESTION_SCHEMA, validateAnswer } from './questions.mjs';
 
 const PRESETS = ['Pitch', 'Party', 'Meeting'];
 const SEATS = ['A', 'B'];
@@ -30,11 +31,12 @@ function text(value, limit) {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, limit) : '';
 }
 
-function digest({ preset, context, seats, requestedSeat }) {
+function digest({ preset, context, seats, requestedSeat, room }) {
   return JSON.stringify({
     preset,
     context: text(context, 650),
     requestedSeat: requestedSeat ?? '',
+    sharedRoomSpeech: (room?.transcript ?? []).slice(-8).map(entry => text(entry.text, 200)),
     seats: Object.fromEntries(SEATS.map(seat => {
       const state = seats[seat] ?? {};
       return [seat, {
@@ -64,13 +66,14 @@ function normalizeLine(value) {
   return value.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
-function gateDrafts(result, { preset, requestedSeat, seats }) {
+function gateDrafts(result, { preset, requestedSeat, seats, room }) {
   const sender = requestedSeat ?? (preset === 'Pitch' ? 'B' : null);
   if (!sender) return result;
   const candidate = result.candidates[sender];
   if (!candidate) return { ...result, candidates: {} };
   if (preset !== 'Pitch') return { ...result, candidates: { [sender]: candidate } };
   const recent = SEATS.flatMap(seat => (seats[seat]?.transcript ?? []).slice(-3).map(entry => text(entry.text, 200)));
+  recent.push(...(room?.transcript ?? []).slice(-3).map(entry => text(entry.text, 200)));
   const phrase = normalizeLine(candidate.text);
   const copied = recent.some(line => normalizeLine(line) === phrase);
   if (!copied) return { ...result, candidates: { [sender]: candidate } };
@@ -94,7 +97,7 @@ function simulated({ preset, seats, requestedSeat }) {
   return { situations, candidates };
 }
 
-async function fromOpenAI(env, fetch_impl, input, signal) {
+async function fromOpenAI(env, fetch_impl, input, signal, question = false) {
   const api_base = env.TELEPATHY_OPENAI_BASE_URL ?? 'https://api.openai.com/v1';
   const response = await fetch_impl(api_base.replace(/\/$/, '') + '/responses', {
     method: 'POST',
@@ -103,10 +106,10 @@ async function fromOpenAI(env, fetch_impl, input, signal) {
     body: JSON.stringify({
       model: env.TELEPATHY_OPENAI_MODEL ?? 'gpt-4.1-mini',
       store: false,
-      max_output_tokens: 160,
-      instructions: INSTRUCTIONS,
+      max_output_tokens: question ? 1000 : 160,
+      instructions: question ? QUESTION_INSTRUCTIONS : INSTRUCTIONS + ' Shared room speech is from a room microphone; do not assign it to a particular person.',
       input,
-      text: { format: { type: 'json_schema', name: 'telepathy_room', strict: true, schema: SCHEMA } },
+      text: { format: { type: 'json_schema', name: question ? 'telepathy_answer' : 'telepathy_room', strict: true, schema: question ? QUESTION_SCHEMA : SCHEMA } },
     }),
   });
   if (!response.ok) throw new Error('OpenAI request failed (' + response.status + ')');
@@ -140,10 +143,16 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath } 
 
   return {
     mode,
+    questionAnswering: mode === 'openai' && Boolean(env.OPENAI_API_KEY),
+    async answer({ signal, passages, ...context }) {
+      if (mode !== 'openai' || !env.OPENAI_API_KEY) throw new Error('Document answers require the OpenAI text provider.');
+      const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, true);
+      return validateAnswer(raw, passages, context.turns);
+    },
     reset() { last_request = ''; last_result = undefined; last_request_at = 0; },
     async evaluate(args) {
       if (args.sim) return simulated(args);
-      if (!args.requestedSeat && SEATS.every(seat => !args.seats[seat]?.transcript?.length)) return clean({}, args.preset);
+      if (!args.requestedSeat && !args.room?.transcript?.length && SEATS.every(seat => !args.seats[seat]?.transcript?.length)) return clean({}, args.preset);
       const input = digest(args);
       const at = Date.now();
       if (!args.requestedSeat && input === last_request && last_result && at - last_request_at < 30_000) {

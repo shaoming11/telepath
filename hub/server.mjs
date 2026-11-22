@@ -7,6 +7,7 @@ import { isIP } from 'node:net';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
+import { Worker } from 'node:worker_threads';
 import { bankFileName, createAudio, STATUS_LINES, STOCK_VOICES } from './audio.mjs';
 import { createCodec } from './codec.mjs';
 import { createMaritimeCoach } from './maritime.mjs';
@@ -81,6 +82,7 @@ export function createHub({
   const roomMics = new Map();
   const roomInvites = new Map();
   const stage = new Set();
+  let roomOwner = null;
   const ipv6_peer = hotspotIPv6Peers(lan);
   const hub_id = randomUUID();
   let session;
@@ -121,7 +123,7 @@ export function createHub({
     audio: speech,
     codec: language,
     coach: maritime,
-    settings,
+    settings: { roomInput: env.TELEPATHY_ROOM_INPUT ?? 'mac', ...settings },
   });
   let info = {};
 
@@ -133,6 +135,40 @@ export function createHub({
   }
 
   async function routes(req, res) {
+    if (req.url === '/references' && req.method === 'POST') {
+      const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+      const current = req.headers['x-telepathy-hub'] === hub_id && req.headers['x-telepathy-session'] === session.sessionId;
+      if (!local || !current) return respond(req, res, 403, TYPES['.json'], JSON.stringify({ error: 'Reconnect to the local stage and try again.' }));
+      if (session.phase !== 'lobby' || session.referencesLoading) return respond(req, res, 409, TYPES['.json'], JSON.stringify({ error: 'Upload documents in the lobby before starting.' }));
+      const generation = session.generation;
+      session.referencesLoading = true;
+      session.publish();
+      try {
+        let size = 0;
+        const chunks = [];
+        for await (const chunk of req) {
+          size += chunk.length;
+          if (size > 12 * 1024 * 1024) throw new Error('Upload exceeds 8 MB of files.');
+          chunks.push(chunk);
+        }
+        const files = JSON.parse(Buffer.concat(chunks).toString('utf8')).files;
+        const documents = await new Promise((resolve, reject) => {
+          const worker = new Worker(new URL('./reference-worker.mjs', import.meta.url), { workerData: files, resourceLimits: { maxOldGenerationSizeMb: 192 } });
+          const timer = setTimeout(() => { void worker.terminate(); reject(new Error('Document parsing timed out. Try a smaller file.')); }, 20_000);
+          worker.once('message', result => { clearTimeout(timer); void worker.terminate(); result.error ? reject(new Error(result.error)) : resolve(result.documents); });
+          worker.once('error', error => { clearTimeout(timer); reject(error); });
+          worker.once('exit', code => { clearTimeout(timer); if (code) reject(new Error('Could not parse these documents.')); });
+        });
+        if (generation !== session.generation || session.phase !== 'lobby') throw new Error('Session changed; upload again.');
+        session.references = documents;
+        respond(req, res, 200, TYPES['.json'], JSON.stringify({ documents: documents.map(({ id, name, characters }) => ({ id, name, characters })) }));
+      } catch (error) {
+        if (!res.headersSent) respond(req, res, 400, TYPES['.json'], JSON.stringify({ error: error.message || 'Upload failed.' }));
+      } finally {
+        if (generation === session.generation) { session.referencesLoading = false; session.publish(); }
+      }
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') return respond(req, res, 405, 'text/plain', 'Use GET.');
     try {
       const request_url = new URL(req.url, 'http://localhost');
@@ -204,7 +240,8 @@ export function createHub({
         const local = LOOPBACK_PEERS.has(req.socket.remoteAddress);
         const valid_seat = ['A', 'B'].includes(seat);
         const allowed_role = role === 'stage' && local || role === 'seat' && valid_seat
-          || role === 'room-mic' && valid_seat && (local || !settings?.sharedRoomMic && validRoomInvite(seat, url.searchParams.get('token')));
+          || role === 'room-mic' && valid_seat && session.roomInput !== 'mac'
+            && (local || validRoomInvite(seat, url.searchParams.get('token')));
         if (url.pathname !== '/ws' || !trusted || !allowed_role) {
           socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
           return;
@@ -235,10 +272,29 @@ export function createHub({
             let frame;
             try { frame = JSON.parse(String(raw)); } catch { return; }
             if (!frame || typeof frame.type !== 'string') return;
-            if (role === 'stage' && frame.type !== 'operator') return;
+            if (role === 'stage' && !['operator', 'room_mic'].includes(frame.type)) return;
             const current = (frame.hubId === undefined || frame.hubId === hub_id)
               && (frame.sessionId === undefined || frame.sessionId === session.sessionId);
             const reason = current ? {} : { reason: 'session_changed' };
+            if (role === 'stage' && (frame.type === 'room_mic' || frame.action === 'room_listen')) {
+              if (!current || frame.hubId !== hub_id || frame.sessionId !== session.sessionId) return;
+              if (frame.type === 'room_mic') {
+                if (roomOwner === ws) void session.receiveRoomMic(frame);
+                return;
+              }
+              if (roomOwner && roomOwner !== ws && session.room.listeningRequested) {
+                send(ws, scope({ type: 'operator_ack', action: 'room_listen', accepted: false, reason: 'microphone_owned' }));
+                return;
+              }
+              if (frame.enabled === true) roomOwner = ws;
+              else if (roomOwner !== ws) return;
+              const roomSession = session.sessionId;
+              void session.setRoomListening(frame.enabled === true).then(() => {
+                if (session.sessionId === roomSession) send(ws, scope({ type: 'room_ack', listening: session.room.listening }));
+              }).catch(() => {});
+              if (frame.enabled !== true) roomOwner = null;
+              return;
+            }
             if (role === 'stage' && typeof frame.action === 'string') {
               send(ws, scope({ type: 'operator_ack', action: frame.action, accepted: current, ...reason }));
             }
@@ -247,7 +303,7 @@ export function createHub({
             }
             if (!current) return;
             if (role === 'seat' && frame.type === 'room_mic_invite') {
-              if (settings?.sharedRoomMic) {
+              if (session.roomInput === 'mac') {
                 send(ws, scope({ type: 'room_mic_invite', error: 'Start the room mic on the Mac Stage.' }));
                 return;
               }
@@ -270,7 +326,10 @@ export function createHub({
             Promise.resolve(operation).catch(() => {});
           });
           ws.once('close', () => {
-            if (role === 'stage') stage.delete(ws);
+            if (role === 'stage') {
+              stage.delete(ws);
+              if (roomOwner === ws) { roomOwner = null; void session.setRoomListening(false); }
+            }
             else if (role === 'room-mic' && roomMics.get(seat) === ws) {
               roomMics.delete(seat);
               void session.setListening(seat, false, 'companion');
@@ -318,7 +377,7 @@ export function createHub({
         codec: language.mode ?? 'injected',
         voicePreview: true,
         roomMic: true,
-        sharedRoomMic: Boolean(settings?.sharedRoomMic),
+        roomInput: session.roomInput,
       };
       return info;
     },
@@ -342,10 +401,7 @@ async function main() {
     env, lan, tls,
     ledgerPath: resolve(RUNTIME, 'clone-cleanup.json'),
     localPath: env.TELEPATHY_ROOM_MODEL || null,
-    settings: {
-      ...(env.TELEPATHY_PITCH_CONTEXT && { pitchContext: env.TELEPATHY_PITCH_CONTEXT }),
-      sharedRoomMic: env.TELEPATHY_SHARED_ROOM_MIC !== '0',
-    },
+    settings: env.TELEPATHY_PITCH_CONTEXT ? { pitchContext: env.TELEPATHY_PITCH_CONTEXT } : {},
   });
   try {
     const info = await hub.start({
