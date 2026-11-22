@@ -27,8 +27,10 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
       const meter = room.slice(room.indexOf('function RoomInputMeter'), boundary);
       const rendered = room.slice(boundary).replace('<RoomInputMeter wanted={state.wanted} />', meter);
       const reveal = await text('wasp-ui/src/StageRevealHeader.tsx');
-      const replaced = jsx.replace('<StageRoomConsole />', rendered).replace('<StageRevealHeader />', reveal);
-      const dynamic = new Set(['data-state:off', 'data-room-owner:react', 'data-reveal-owner:react']);
+      const announce = (await text('wasp-ui/src/StageAnnouncement.tsx')).split('<p className="sr-only"', 1)[0];
+      const replaced = jsx.replace('<StageRoomConsole />', rendered).replace('<StageRevealHeader />', reveal)
+        .replace('<StageAnnouncement />', announce);
+      const dynamic = new Set(['data-state:off', 'data-room-owner:react', 'data-reveal-owner:react', 'data-announce-owner:react']);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
       assert.match(room, /data-state=\{state\.tone\}/);
@@ -97,4 +99,13 @@ test('the Wasp reveal displays the session controller’s score and keeps motion
   assert.match(component, /id="reveal-words">\{reveal.words\}/);
   assert.match(styles, /\[data-phase=reveal\] \.reveal__head \.score \{ animation:/);
   assert.doesNotMatch(styles, /\[data-phase=reveal\] \.timeline__row/);
+});
+
+test('the Wasp operator receipt connects to authoritative announcement status and leaves the composer mounted', async () => {
+  const controller = await text('public/stage.mjs');
+  const component = await text('wasp-ui/src/StageAnnouncement.tsx');
+  assert.match(controller, /dispatchEvent\(new CustomEvent\('telepathy:announcement'/);
+  assert.match(component, /addEventListener\('telepathy:announcement'/);
+  assert.match(component, /key=\{receipt.id \+ ':' \+ row.label\}/);
+  assert.match(component, /disabled=\{!view.canSend && !view.busy\}/);
 });

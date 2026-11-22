@@ -1,6 +1,7 @@
 // Generated from public/stage.html. Run python3 scripts/generate-wasp-surfaces.py after edits.
 import { StageRoomConsole } from '../StageRoomConsole';
 import { StageRevealHeader } from '../StageRevealHeader';
+import { StageAnnouncement } from '../StageAnnouncement';
 
 export function StageMarkup() {
   return (
@@ -276,17 +277,7 @@ export function StageMarkup() {
             </div>
           </section>
 
-          <form className="operator__group" id="op-announce">
-            <h3 className="operator__label">Announce to both seats</h3>
-            <label className="field-label" htmlFor="op-announce-preset">Preset line</label>
-            <select id="op-announce-preset" className="control">
-              <option value="">Choose a preset line</option>
-            </select>
-            <label className="field-label" htmlFor="op-announce-text">Message</label>
-            <textarea id="op-announce-text" className="control control--text" rows={2} maxLength={140}></textarea>
-            <button id="op-announce-send" className="op-action op-action--solid" type="submit">Send announcement</button>
-            <p className="operator__note" id="op-announce-status" role="status"></p>
-          </form>
+          <StageAnnouncement />
 
           <div className="operator__group">
             <h3 className="operator__label">Preset</h3>
