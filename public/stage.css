@@ -956,7 +956,8 @@ select.control {
   .live__head { align-items: flex-start; flex-direction: column; }
   .stats { width: 100%; gap: 16px; }
   .stat + .stat { padding-left: 16px; }
-  .actionbar { flex-direction: column; align-items: stretch; }
+  .actionbar .begin { flex: none; width: auto; }
+  .actionbar__note { flex: 1; font-size: 12px; line-height: 1.35; }
   .timeline__row { grid-template-columns: 52px minmax(0, 1fr) auto; }
   .timeline__signal { display: none; }
   .lanes__axis, .lane { grid-template-columns: 72px minmax(0, 1fr); }

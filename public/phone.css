@@ -629,9 +629,7 @@ input::placeholder { color: var(--fg-3); }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   border-top: 1px solid var(--line);
-  background: rgba(6, 7, 8, 0.94);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: var(--base);
 }
 .live-nav button {
   min-height: 56px;
@@ -729,8 +727,9 @@ input::placeholder { color: var(--fg-3); }
   border-bottom: 1px solid var(--line);
   font-size: 15px;
 }
-.range output { font: 400 13px var(--mono); color: var(--fg-2); }
-.range input { grid-column: 1 / -1; width: 100%; height: var(--target); margin: 0; background: none; -webkit-appearance: none; appearance: none; }
+.range span { grid-column: 1; grid-row: 1; }
+.range output { grid-column: 2; grid-row: 1; font: 400 13px var(--mono); color: var(--fg-2); }
+.range input { grid-column: 1 / -1; grid-row: 2; width: 100%; height: var(--target); margin: 0; background: none; -webkit-appearance: none; appearance: none; }
 .range input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--line-2); }
 .range input::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -9px; border-radius: 50%; background: #FFFFFF; border: 0; }
 .range input::-moz-range-track { height: 4px; border-radius: 2px; background: var(--line-2); }
