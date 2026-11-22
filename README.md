@@ -20,7 +20,7 @@ Load the references and prepare seats A and B as usual, then begin the session. 
 
 **Stop microphone**, Reveal, Reset, losing the stage connection or closing its tab stops room listening and cancels pending answers. Start the microphone again for a new session or after reconnecting. Only one stage tab owns capture at a time. Browser capture needs the local `localhost`/`127.0.0.1` stage URL or trusted HTTPS. On macOS, also allow the browser under System Settings → Privacy & Security → Microphone. An ElevenLabs key is still required for transcription.
 
-To explicitly return to the old phone-microphone mode, start the hub with `TELEPATHY_ROOM_INPUT=phones`. Starting the Mac microphone switches the running session to Mac input again.
+To explicitly return to the old phone-microphone mode, start the hub with `TELEPATHY_ROOM_INPUT=phones`. In this mode, the phone settings also offer a companion-microphone link so a separate browser can capture that seat's room while the phone handles earbud playback. Starting the stage's Mac microphone switches the running session to one shared Mac input again.
 
 ## Answer questions from your documents
 
@@ -34,6 +34,14 @@ Use real seats to exercise generated answer audio. Simulated seats retain their 
 
 The same coach also checks completed answers for important omissions. For example, if you describe a pilot but omit its documented duration, it can propose "You forgot to mention the six-week pilot." It waits for a pause or a help request, checks the point against your references and the actual spoken answer, and uses the same private preview and approval flow. The stage shows the answer excerpt and supporting source. Covering the point, moving on, or any new speech cancels a pending reminder before re-evaluation; reminders are suppressed after approval, rejection or expiry for that question.
 
+## Maritime pitch coach
+
+During a live Pitch session, open **Operator**, choose the current pitch beat, and select **Ask coach**. Review the suggested cue and its reason, then select **Send to both seats**. The console reports which seats confirmed playback. The coach receives the pitch beat, elapsed time, counts of online and ready seats, and the count of acknowledged messages. ElevenLabs supplies the announcement audio.
+
+`./start` reads `MARITIME_API_KEY` and `TELEPATHY_MARITIME_AGENT_ID` from the environment or from the Git-ignored `.env.maritime.local`. Set `TELEPATHY_MARITIME_ENV_FILE` to load a different owner-only file. On a new Maritime account, `node --env-file=.env.maritime.local scripts/maritime-deploy.mjs` packages and privately deploys the coach. Add the printed agent ID to the local environment file. Pass `--update` to redeploy to that ID. Set `TELEPATHY_MARITIME=off` for a local-only rehearsal.
+
+The coach has its own 12-second timeout. Set `TELEPATHY_MARITIME_ASSIST=openai` to let the Mac request a candidate cue through its existing OpenAI configuration before asking Maritime for the final choice. Only the cue ID and the same pitch telemetry go to Maritime. The panel distinguishes Maritime inference, an accepted OpenAI-assisted cue, and a rule-based fallback. Manual announcements are available while coaching runs. To verify a live model recommendation and both simulated playback acknowledgements in one request, run `TELEPATHY_VERIFY_MARITIME=1 node --env-file=.env.openai.local --env-file=.env.maritime.local --test --test-name-pattern='pitch coach sends' tests/transport.test.mjs`.
+
 ## Rehearse now
 
 1. Open the printed stage URL. Open the two rehearsal-seat links and complete the simulated setup in both tabs. Start the session from the stage.
@@ -41,7 +49,7 @@ The same coach also checks completed answers for important omissions. For exampl
 3. Send from Seat B, acknowledge with R1 on Seat A after hearing it, and give Seat B the simulated transcript “The judge on the left looks lost.” Wait for a draft, confirm with R1, then Reveal from stage.
 4. In Operator, choose a preset announcement and send it to check playback on both seats. For an offline fallback, choose **Canned take** to play the bundled pitch, receipt and confirmed draft through the stage. Keep slides on the projector during a real pitch and bring up the stage for the reveal.
 
-The browser rehearsal uses bundled ElevenLabs audio and scripted excerpts without paid API calls. With real seats, the operator can also type a short announcement in the neutral ElevenLabs voice. It is sent once to both connected phones. `npm test` checks timestamp patterns, signal logic, and service integrations. `npm run rehearse` runs five WebSocket rehearsals with seeded loss, jitter, and delayed retry plus the offline operator take. `npm run rehearse -- --fast --runs=1` is the quick smoke test. `npm run rehearse:faults -- --tls --fast --cycles=5` also checks pre-playback approval, reconnect, preset changes and the operator's full/partial playback confirmations. The automated seat clients verify asset delivery and receipt timing using application frames. The physical browser and Bluetooth playback checks are in the rehearsal guide.
+The browser rehearsal uses bundled ElevenLabs audio and scripted excerpts. It can run without API calls using the local coach. With real seats, the operator can also type a short announcement in the neutral ElevenLabs voice. It is sent once to both connected phones. `npm test` checks timestamp patterns, signal logic, and service integrations. `npm run rehearse` runs five WebSocket rehearsals with seeded loss, jitter, and delayed retry plus the offline operator take. `npm run rehearse -- --fast --runs=1` is the quick smoke test. `npm run rehearse:faults -- --tls --fast --cycles=5` also checks pre-playback approval, reconnect, preset changes and the operator's full/partial playback confirmations. The automated seat clients verify asset delivery and receipt timing using application frames. The physical browser and Bluetooth playback checks are in the rehearsal guide.
 
 ## Physical demo
 
@@ -57,3 +65,5 @@ The checked-in speech and chime files are ElevenLabs-generated demo assets. Fixe
 ## Agent coordination
 
 Use the [agent board](https://github.com/fireheartjerry/telepathy/discussions) for updates and handoffs. Check the shared file and UI claims with `npm run board -- list`. The [agent handoff guide](AGENTS.md) explains how to claim or release work from any checkout.
+
+See [Work in parallel](docs/parallel-development.md) for the AirPods 1 and AirPods Pro branches, module ownership, and the shared interface.

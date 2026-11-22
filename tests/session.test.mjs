@@ -283,7 +283,7 @@ test('reset while Mac transcription starts prevents a late activation', async t 
   assert.equal(state().room.transcript.length, 0);
 });
 
-async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {}, sim = { A: true, B: true } } = {}) {
+async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, settings = {}, sim = { A: true, B: true } } = {}) {
   let now = 1000;
   const seatFrames = { A: [], B: [] };
   const stageFrames = [];
@@ -299,6 +299,7 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {
       ...audio,
     },
     codec,
+    coach,
     settings: { roomSenseMs: 0, ...settings },
     now: () => now,
   });
@@ -325,6 +326,45 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {
   return { session, state, seatFrames, audioFrames, ack, act, advance: ms => { now += ms; } };
 }
 
+test('the companion room mic stays active in phone-input mode while the phone sends signals and ignores phone PCM', async t => {
+  const chunks = [];
+  const { session, state, act, audioFrames } = await createLiveSession({
+    sim: { A: false, B: false },
+    audio: { listen: async () => true, mic: async (_, audio) => chunks.push(audio) },
+  });
+  t.after(() => session.close());
+  await act('A', { type: 'listen', enabled: true });
+  await session.setListening('A', true, 'companion');
+  await act('A', { type: 'listen', enabled: false });
+  await act('A', { type: 'mic', audio: 'phone' });
+  await session.receiveMic('A', { audio: 'companion', level: 0.1 }, 'companion');
+  assert.equal(state().seats.A.roomMicSource, 'companion');
+  assert.deepEqual(chunks, ['companion']);
+  await act('A', { type: 'signal', signal: 'R1', id: 'while-mac-listens' });
+  assert.equal(audioFrames('B', 'soft').length, 1);
+  assert.equal(state().seats.A.listening, true);
+});
+
+test('a verified voice preview goes only to its owner as speaking audio', async t => {
+  const roles = [];
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false },
+    audio: {
+      makeVoice: async () => ({ id: 'my-clone', status: 'ready' }),
+      speech: async (_, text, options) => {
+        roles.push([text, options.role]);
+        return '/assets/voice-preview.mp3';
+      },
+    },
+  });
+  t.after(() => session.close());
+  await act('A', { type: 'voice', wav: 'A'.repeat(144), requestId: 'sample' });
+  await act('A', { type: 'voice_preview' });
+  assert.equal(roles.at(-1)?.[1], 'voice-preview');
+  assert.ok(seatFrames.A.some(frame => frame.kind === 'voice_preview'));
+  assert.ok(!seatFrames.B.some(frame => frame.kind === 'voice_preview'));
+});
+
 test('fixed whisper uses the receiver cache and one receipt, even after retry', async t => {
   const { session, state, audioFrames, act, advance } = await createLiveSession();
   t.after(() => session.close());
@@ -347,6 +387,84 @@ test('fixed whisper uses the receiver cache and one receipt, even after retry', 
   assert.equal(audioFrames('B', 'receipt').length, 1);
   assert.equal(state().log.filter(entry => entry.kind === 'message').length, 1);
   assert.equal(state().log.filter(entry => entry.kind === 'receipt').length, 1);
+});
+
+test('coach suggests privately and sends the approved ElevenLabs line only once', async t => {
+  const { session, state, seatFrames, audioFrames, act, advance } = await createLiveSession({
+    coach: { recommend: async input => {
+      assert.deepEqual(input, { beat: 'problem', elapsedSeconds: 73, onlineSeats: 2, readySeats: 2, acknowledgedMessages: 0 });
+      return { cueId: 'demo-cue', reason: 'Start the working demo.', source: 'maritime' };
+    } },
+  });
+  t.after(() => session.close());
+  await act('A', { type: 'sim_transcript', text: 'This stays in Telepathy.' });
+  advance(73_000);
+  await session.handleStage({ action: 'coach_ask', beat: 'problem' });
+  const draft = state().coach;
+  assert.equal(draft.available, true);
+  assert.equal(draft.status, 'ready');
+  assert.equal(draft.source, 'maritime');
+  assert.equal(draft.text, 'Show the working demo now.');
+  for (const seat of ['A', 'B']) {
+    assert.ok(seatFrames[seat].every(frame => frame.state?.coach == null));
+    assert.equal(audioFrames(seat, 'system').length, 0);
+  }
+
+  await session.handleStage({ action: 'coach_send', coachId: 'old' });
+  assert.equal(state().coach.status, 'ready');
+  await session.handleStage({ action: 'coach_send', coachId: draft.id, text: 'A forged message.' });
+  await session.handleStage({ action: 'coach_send', coachId: draft.id });
+  assert.equal(state().coach.status, 'sent');
+  for (const seat of ['A', 'B']) {
+    const [audio] = audioFrames(seat, 'system');
+    assert.equal(audioFrames(seat, 'system').length, 1);
+    assert.equal(audio.text, draft.text);
+    assert.equal(audio.messageId, state().coach.announcementId);
+    await act(seat, { type: 'heard', messageId: audio.messageId });
+  }
+  assert.equal(state().announcement.status, 'played');
+  assert.deepEqual(state().announcement.heard, ['A', 'B']);
+  assert.equal(state().bits, 0);
+});
+
+test('a cloud timeout falls back locally without delaying a fixed tap or sending to one seat', async t => {
+  let request;
+  const { session, state, act, audioFrames } = await createLiveSession({
+    coach: { recommend: (input, { signal }) => { request = signal; return new Promise(() => {}); } },
+    settings: { coachTimeoutMs: 20 },
+  });
+  t.after(() => session.close());
+  const waiting = session.handleStage({ action: 'coach_ask', beat: 'closing' });
+  assert.equal(state().coach.status, 'asking');
+  await act('B', { type: 'signal', signal: 'R1', id: 'while-coaching' });
+  assert.equal(audioFrames('A', 'soft').at(-1).key, 'B:Pitch:R1');
+  await waiting;
+  assert.equal(request.aborted, true);
+  assert.equal(state().coach.source, 'local');
+  assert.equal(state().coach.text, 'Time to bring up the reveal.');
+
+  session.disconnect('B');
+  await session.handleStage({ action: 'coach_send', coachId: state().coach.id });
+  assert.equal(state().coach.status, 'ready');
+  assert.equal(state().announcement, null);
+});
+
+test('reveal, canned and reset discard in-flight coaching', async t => {
+  for (const action of ['reveal', 'canned', 'reset']) {
+    let complete;
+    const { session, state } = await createLiveSession({
+      coach: { recommend: () => new Promise(resolve => { complete = resolve; }) },
+    });
+    t.after(() => session.close());
+    const waiting = session.handleStage({ action: 'coach_ask', beat: 'problem' });
+    await Promise.resolve();
+    await session.handleStage({ action });
+    complete({ cueId: 'demo-cue', reason: 'Late result.', source: 'maritime' });
+    await waiting;
+    assert.equal(state().coach.status, 'idle');
+    assert.equal(state().announcement, null);
+    await session.close();
+  }
 });
 
 test('preset swaps atomically on both cache acknowledgments', async t => {
@@ -488,6 +606,8 @@ test('transcripts and the calibrated profile reach only intended viewers and res
   assert.deepEqual(state().calibration, profile);
   assert.deepEqual(seatFrames.B.findLast(frame => frame.type === 'calibration')?.profile, profile);
   await session.reset();
+  assert.equal(session.snapshot('A').setupReset, session.sessionId);
+  assert.equal(session.snapshot('B').setupReset, session.sessionId);
   realtime('Old connection callback');
   assert.equal(state().seats.A.transcript.length, 0);
   assert.equal(state().phase, 'lobby');

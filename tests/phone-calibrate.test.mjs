@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { build_plan, createCalibration } from '../public/calibrate.mjs';
-import { DEFAULT_EMULATOR, DEFAULT_TIMING, patternFor } from '../public/input.mjs';
+import { createMediaInput, DEFAULT_EMULATOR, DEFAULT_TIMING, patternFor } from '../public/input.mjs';
 import { APP_TIMING } from '../public/phone-data.mjs';
 import { createWorld } from './phone-fakes.mjs';
 
@@ -47,20 +47,22 @@ afterEach(() => {
 
 const element = id => elements.get(id);
 
-function make_services({ respond, classify = true }) {
+function make_services({ respond, classify = true, gesture_model, miss_first = false }) {
   const applied = [];
   const exits = [];
   const settings = {
     mode: 2,
+    gesture_model,
     timing: { ...DEFAULT_TIMING },
     emulator: { ...DEFAULT_EMULATOR },
     app: {
-      ...APP_TIMING, calibrationLeadMs: 5, calibrationWindowMs: 1200, calibrationRemovalWindowMs: 1200,
+      ...APP_TIMING, calibrationLeadMs: 5, calibrationWindowMs: gesture_model ? 5200 : 1200, calibrationRemovalWindowMs: 1200,
       calibrationSettleMs: 500, calibrationRemovalSettleMs: 50, calibrationRestMs: 5,
     },
   };
   let trial = 0;
-  const plan = build_plan('mode', 2);
+  let attempts = 0;
+  const plan = build_plan('mode', 2, gesture_model);
   const holder = {};
   const services = {
     input: { configure() {}, reset() {}, flush() {} },
@@ -68,10 +70,13 @@ function make_services({ respond, classify = true }) {
     audio: {
       play_cue(name) {
         if (name !== 'system') return performance.now();
+        if (++attempts === 1 && miss_first) return performance.now();
         const step = plan[trial];
         trial += 1;
         if (respond) {
-          const pattern = patternFor(step.signal, step.mode, settings.emulator);
+          const pattern = step.gestureModel
+            ? [0, 780, 1560].slice(0, step.signal === 'R2' ? 2 : 3).map(offsetMs => ({ action: 'nexttrack', offsetMs }))
+            : patternFor(step.signal, step.mode, settings.emulator);
           for (const event of pattern) {
             setTimeout(() => holder.calibration.note_raw({ action: event.action, at: performance.now() }), 5 + event.offsetMs);
           }
@@ -91,7 +96,7 @@ function make_services({ respond, classify = true }) {
     on_exit(value) { exits.push(value); },
   };
   holder.calibration = createCalibration(services);
-  return { services, applied, exits, calibration: holder.calibration };
+  return { services, applied, exits, calibration: holder.calibration, attempts: () => attempts };
 }
 
 async function run_to_result() {
@@ -102,6 +107,83 @@ async function run_to_result() {
   }
   assert.equal(element('cal-result').hidden, false, 'the run finished');
 }
+
+test('the Pro earbud check reports three squeezes and ignores injected gestures', () => {
+  const { calibration, services, exits } = make_services({ respond: false });
+  const callbacks = new Map();
+  services.input = createMediaInput({ onMediaEvent: calibration.note_media_event });
+  services.input.register({ setActionHandler: (action, handler) => callbacks.set(action, handler) });
+  calibration.open({ from: 'setup' });
+  element('cal-earbud-model').value = 'pro';
+  element('cal-quick-start').listeners.click[0]();
+  assert.equal(calibration.active(), true);
+  services.input.dispatch('nexttrack');
+  callbacks.get('previoustrack')();
+  assert.equal(element('cal-quick-previoustrack').textContent, 'Triple squeeze · received');
+  assert.match(element('cal-quick-nexttrack').textContent, /double squeeze either/);
+  callbacks.get('nexttrack')();
+  assert.equal(element('cal-quick-nexttrack').textContent, 'Double squeeze · received');
+  assert.equal(element('cal-quick-continue').hidden, false);
+  callbacks.get('pause')();
+  callbacks.get('play')();
+  assert.equal(element('cal-quick-pause').textContent, 'Single squeeze · received');
+  assert.equal(element('cal-quick-status').textContent, 'All three squeezes reached Telepathy.');
+  element('cal-quick-continue').listeners.click[0]();
+  assert.equal(calibration.active(), false);
+  assert.deepEqual(exits, [{ skipped: true }]);
+});
+
+test('AirPods 1 calibration collects three doubles and three triples', () => {
+  const steps = build_plan('both', 2, 'next-only');
+  assert.deepEqual(steps.map(step => step.signal), ['R2', 'R2', 'R2', 'L1', 'L1', 'L1']);
+  assert.ok(steps.every(step => step.gestureModel === 'next-only'));
+});
+
+test('the AirPods 1 precheck keeps timing trials off until Safari receives Next Track', () => {
+  const { calibration } = make_services({ respond: false, gesture_model: 'next-only' });
+  calibration.open({ from: 'setup' });
+  element('cal-quick-start').listeners.click[0]();
+  calibration.note_media_event('previoustrack');
+  assert.match(element('cal-quick-status').textContent, /Previous Track/);
+  assert.equal(element('cal-quick-continue').hidden, true);
+  assert.equal(element('cal-run').hidden, true);
+  calibration.note_media_event('nexttrack');
+  assert.equal(element('cal-quick-continue').hidden, false);
+  element('cal-quick-continue').listeners.click[0]();
+  assert.equal(element('cal-run').hidden, false);
+  assert.equal(element('cal-pattern').textContent, 'Next Track twice');
+  calibration.stop();
+});
+
+test('AirPods 1 calibration saves timing measured over its six trials', async () => {
+  const { applied } = make_services({ respond: true, gesture_model: 'next-only' });
+  await run_to_result();
+  assert.equal(element('cal-verdict').textContent, 'Calibrated');
+  assert.equal(element('cal-applied').textContent, 'Saved on this phone.');
+  assert.equal(applied[0].timing.countMedianMs, 780);
+  assert.equal(applied[0].timing.countWindowMs, 1053);
+});
+
+test('AirPods 1 retries a missed trial in place and saves only after six accepted trials', async () => {
+  const { applied, attempts } = make_services({ respond: true, gesture_model: 'next-only', miss_first: true });
+  await run_to_result();
+  assert.equal(attempts(), 7);
+  assert.equal(applied[0].metrics.recognized, 6);
+  assert.equal(applied[0].metrics.trials, 6);
+  assert.equal(applied[0].timing.countMedianMs, 780);
+});
+
+test('calibration names the media command and reports the received track event during the trial', async () => {
+  const { calibration } = make_services({ respond: false });
+  element('cal-start').listeners.click[0]();
+  world.advance(5);
+  await world.flush();
+  assert.equal(element('cal-phase').textContent, 'Now');
+  assert.equal(element('cal-pattern').textContent, 'Next Track once');
+  calibration.note_raw({ action: 'previoustrack', at: performance.now() });
+  assert.equal(element('cal-detail').textContent, 'Received Previous Track.');
+  calibration.stop();
+});
 
 test('a run where no earbud event arrives is reported as such and cannot be applied', async () => {
   const { applied, exits } = make_services({ respond: false });

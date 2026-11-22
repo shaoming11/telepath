@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Telepathy AirPods Pro check</title>
+  <link rel="stylesheet" href="/phone.css">
+</head>
+<body>
+  <main class="app">
+    <section class="screen">
+      <h1 class="display">AirPods Pro check</h1>
+      <p>Pause Spotify. Start the test sound, then squeeze either stem once, twice, and three times.</p>
+      <audio id="check-audio" loop playsinline preload="auto" src="../airpods-1/playback.mp3"></audio>
+      <button class="primary" id="check-start" type="button">Start test sound</button>
+      <button id="check-replay" type="button" hidden>Replay cue</button>
+      <button id="check-stop" type="button" hidden>End check</button>
+      <p class="meta" id="check-status" role="status"></p>
+      <ol aria-label="Squeezes received">
+        <li id="check-R1">Single squeeze: 0</li>
+        <li id="check-R2">Double squeeze: 0</li>
+        <li id="check-L1">Triple squeeze: 0</li>
+      </ol>
+      <p class="fineprint">You’ll hear one cue, then the player stays silent while Safari listens for squeezes. The microphone stays off.</p>
+      <a href="/">Return to Telepathy</a>
+    </section>
+  </main>
+  <script type="module" src="./check.mjs"></script>
+</body>
+</html>

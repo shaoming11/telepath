@@ -5,8 +5,8 @@
 ## Before the pitch
 
 1. Join A and B from the same hotspot. Leave both browser windows open and the phones awake.
-2. After consent, record each person’s 30-second reading. Check that both seats show the expected voice and that the stage reports **Transcribing** for each physical seat. If setup is running late, choose **Use the premade voice** on that phone. A configured presenter clone takes priority over the bundled rehearsal voice.
-3. Set AirPods right to Next Track and left to Previous Track. Test both sides and run calibration. If a headset sends no callbacks, keep the phone’s Live touch buttons within reach.
+2. After consent, let each person speak naturally until the recorder has enough usable speech. Check that both seats show the expected voice and that the stage reports **Transcribing** for each physical seat. If setup is running late, choose **Use the premade voice** on that phone. A configured presenter clone takes priority over the bundled rehearsal voice.
+3. Select the AirPods model, play the test sound, then calibrate AirPods 1 timing or check Pro squeezes. If a headset sends no callbacks, keep the phone’s Live touch buttons within reach.
 4. Choose **Sound check** in Operator and send it. Confirm the panel reports playback on both seats. Ask both people to give a visible nod before starting.
 5. Start the session on the MacBook. Return the projector to the deck.
 
@@ -15,12 +15,14 @@
 | Beat | Presenter A | Coach B | MacBook operator |
 | --- | --- | --- | --- |
 | Hook | “What if your teammate could steer your pitch without interrupting it?” | Watch the timer. | Keep the deck up. |
-| Fixed whisper | Speed up slightly, then slow down when the whisper arrives. Reply with R1 after hearing it. | R1 sends **Slow down**. Listen for the receipt. | Check that the Live board logs a playback start and a receipt. |
-| Time cue | Move from setup into the live exchange. | R2 sends **One minute left**. | Near the wrap, use **Thirty seconds left** if both people need the same cue. |
-| Smart draft | Continue speaking until the partner’s confirmed line arrives. | Report an actual observation and use L-R to request a draft. During rehearsal, say “The judge on the left looks lost.” Wait for the preview, then R1 to send. | If the draft times out, keep going with the fixed cues. The canned take shows the full preview-and-confirm sequence. |
-| Wrap | End the pitch on the Out whisper. | Remove an earbud or use the Out button to send **Wrap it up now**. | After playback, choose **Reveal** and put the stage on the projector. |
+| Fixed whisper | Speed up slightly, then slow down when the whisper arrives. Reply with Single after hearing it. | Single sends **Slow down**. Listen for the receipt. | Check that the Live board logs a playback start and a receipt. |
+| Time cue | Move from setup into the live exchange. | Double sends **One minute left**. | Near the wrap, use **Thirty seconds left** if both people need the same cue. |
+| Smart draft | Continue speaking until the partner’s confirmed line arrives. | Report an actual observation and use Ask assistant to request a draft. During rehearsal, say “The judge on the left looks lost.” Wait for the preview, then use Single to send. | If the draft times out, keep going with the fixed cues. The canned take shows the full preview-and-confirm sequence. |
+| Wrap | End the pitch on the Out whisper. | Use the Out button to send **Wrap it up now**. | After playback, choose **Reveal** and put the stage on the projector. |
 
 Point to the four whispers and the **7 bits** in the rehearsed example. Each of its three fixed selects used two bits. The draft approval used one. Receipts and operator announcements add zero. The timeline shows the actual messages sent in this run, so the count can differ.
+
+For the Maritime beat, leave **Operator** open and select **Problem** at about one minute into the take. Select **Ask coach**, show the suggested cue and its source, then send it to both seats. Point out both playback confirmations before the reveal. If the coach shows a fallback or is still waiting, send the prepared cue from **Announce to both seats** and keep the pitch moving.
 
 ## Recovery
 

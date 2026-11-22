@@ -3,6 +3,7 @@ import { createNetworkLink, DEFAULT_NETWORK } from './network.mjs';
 import { createCapture } from './capture.mjs';
 import { createCalibration } from './calibrate.mjs';
 import { createAudioEngine, createDraftTracker } from './phone-audio.mjs';
+import { AIRPODS_1_PLAYBACK_URL } from './earbuds/airpods-1/input.mjs';
 import {
   APP_TIMING, APP_TIMING_LIMITS, CONSENT_KEY, CONSENT_TEXT, DEFAULT_VOLUMES, PATTERN_LABELS, PRESETS,
   SEAT_NAMES, SIGNAL_LABELS, SIGNAL_ORDER, STORAGE_KEY, SYSTEM_MEANINGS, VOICE_SCRIPT,
@@ -11,6 +12,7 @@ import {
 const QUERY = new URLSearchParams(location.search);
 const DIRECT_CALIBRATION = QUERY.get('calibrate') === '1';
 const RAW_KEYS = Object.freeze({ r: 'nexttrack', l: 'previoustrack', o: 'pause', i: 'play' });
+const CLICKER_KEYS = Object.freeze({ PageDown: 'R1', PageUp: 'R2', '1': 'R1', '2': 'R2', '3': 'L1' });
 const SETUP_ORDER = Object.freeze(['voice', 'earbuds', 'calibrate', 'preset']);
 const SUB_SCREENS = new Set(['codebook', 'log', 'settings']);
 const USABLE_VOICES = new Set(['ready', 'fallback']);
@@ -18,17 +20,24 @@ const LOG_KINDS = new Set(['message', 'receipt', 'back', 'draft', 'confirm', 'di
 const ISSUE_ORDER = Object.freeze(['connection', 'secure', 'mic', 'media', 'context', 'cache', 'cues', 'playback', 'voice']);
 const PHASE_LABELS = Object.freeze({ lobby: 'Waiting for stage', live: 'Live', reveal: 'Reveal' });
 const NOTE_MS = 4200;
+const CLONE_RESPONSE_MS = 65_000;
+const PERSONAL_TIMING_KEY = 'telepathy.airpods1-timing.v2';
 const PROBE_FAILURES_TO_RECONNECT = 2;
 const SOCKET_OPEN = 1;
 const SOCKET_MOVED = 4001;
 const SCOPED_FRAMES = new Set([
-  'signal', 'heard', 'cache_ready', 'voice', 'mic', 'setup', 'listen', 'configure', 'preset', 'calibration', 'sim_transcript',
+  'signal', 'heard', 'cache_ready', 'voice', 'voice_preview', 'room_mic_invite', 'mic', 'setup', 'listen', 'configure', 'preset', 'calibration', 'sim_transcript',
 ]);
 
 const $ = id => document.getElementById(id);
 const fresh_setup = () => ({ voice: false, voice_kind: null, earbuds: false, calibrated: false, ready: false });
 
 let persisted_input = 'real';
+try {
+  sessionStorage.removeItem('telepathy.phone.v1');
+  sessionStorage.removeItem('telepathy.phone.consent.v1');
+  localStorage.removeItem('telepathy.airpods1-timing.v1');
+} catch {}
 const settings = load_settings();
 const ui = {
   seat: null,
@@ -47,9 +56,17 @@ const ui = {
   reconnect_timer: null,
   listen_wanted: false,
   mic_on_next_take: false,
+  mic_after_calibration: false,
+  calibration_playback: false,
+  lock_controls: false,
+  mic_after_lock_controls: false,
   voice_task: null,
+  voice_sample: null,
+  voice_transcript_start: 0,
   voice_message: '',
   pending_voice: null,
+  clone_request: null,
+  clone_timer: null,
   calibration_from: 'settings',
   voice_from: 'setup',
   selected_preset: null,
@@ -73,11 +90,13 @@ const keepalive = $('keepalive');
 
 const input = createMediaInput({
   mode: settings.mode,
+  gestureModel: settings.input_mode === 'real' ? settings.gesture_model : null,
   timing: settings.timing,
   onSignal: on_signal,
   onRaw: on_raw,
   onError: on_pattern_error,
   onPlay: on_media_play,
+  onMediaEvent: action => calibration.note_media_event(action),
 });
 const emulator = createEmulator({ input, settings: settings.emulator });
 const touch_emulator = createEmulator({ input, settings: touch_profile() });
@@ -112,9 +131,10 @@ const calibration = createCalibration({
   emulator,
   audio,
   get_settings: () => settings,
+  set_gesture_model: set_earbud_model,
   get_seat: () => ui.seat,
   is_sim,
-  arm: arm_media,
+  arm: arm_calibration_media,
   resume_media: resume_anchor,
   on_apply: apply_profile,
   on_run_state: running => {
@@ -142,17 +162,27 @@ function load_settings() {
   const saved_input = saved.input_mode === 'sim' ? 'sim' : 'real';
   const input_mode = forced ?? saved_input;
   persisted_input = saved_input;
+  let personal_timing = {};
+  try {
+    const { countWindowMs, countMedianMs } = read_json(localStorage, PERSONAL_TIMING_KEY);
+    if (Number.isFinite(countWindowMs) && countWindowMs >= 350 && countWindowMs <= 2500 &&
+      Number.isFinite(countMedianMs) && countMedianMs > 0 && countMedianMs < countWindowMs) {
+      personal_timing = { countWindowMs, countMedianMs };
+    }
+  } catch {}
   return {
     seat: SEAT_NAMES.includes(saved.seat) ? saved.seat : null,
     input_mode,
-    mode: saved.mode === 1 ? 1 : 2,
+    mode: input_mode === 'sim' && saved.mode === 1 ? 1 : 2,
+    gesture_model: saved.gesture_model === 'pro' ? 'pro' : 'next-only',
     drafts: saved.drafts !== false,
     volumes: { ...DEFAULT_VOLUMES, ...saved.volumes },
-    timing: { ...DEFAULT_TIMING, ...saved.timing },
+    timing: { ...DEFAULT_TIMING, ...saved.timing, ...personal_timing },
     emulator: { ...DEFAULT_EMULATOR, ...saved.emulator },
     network: { ...DEFAULT_NETWORK, enabled: input_mode === 'sim', ...saved.network },
     app: { ...APP_TIMING, ...saved.app },
     profile: saved.profile ?? null,
+    setup_reset: saved.setup_reset ?? null,
     setup: input_mode === saved_input ? { ...fresh_setup(), ...saved.setup } : fresh_setup(),
   };
 }
@@ -255,7 +285,7 @@ function on_raw(event) {
   calibration.note_raw(event);
   gesture_scopes.set(event.action + ':' + event.at, gesture_scope());
   if (gesture_scopes.size > 32) gesture_scopes.delete(gesture_scopes.keys().next().value);
-  if (event.action !== 'pause') return;
+  if (event.action !== 'pause' || event.squeeze) return;
   if (ui.issues.get('media')?.anchor) set_issue('media', '');
   ui.anchor_pause_expected = !keepalive.paused;
   keepalive.pause();
@@ -348,9 +378,18 @@ function set_playback_state(state) {
 }
 
 function resume_anchor() {
+  const airpods_playback = !is_sim() && !ui.voice_task && (ui.calibration_playback || ui.lock_controls);
+  const source = airpods_playback ? AIRPODS_1_PLAYBACK_URL : '/assets/keepalive.wav';
+  if (keepalive.getAttribute('src') !== source) {
+    ui.anchor_pause_expected = !keepalive.paused;
+    keepalive.src = source;
+  }
+  if (airpods_playback) {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  }
   const playing = keepalive.play();
-  set_playback_state('playing');
   playing?.then?.(() => {
+    set_playback_state('playing');
     if (ui.issues.get('media')?.anchor) set_issue('media', '');
   }).catch(() => {
     if (is_sim()) return;
@@ -373,7 +412,8 @@ function arm_media() {
   void audio.preload_cues();
   if (!ui.earbud_out) resume_anchor();
   ui.armed = true;
-  const works = registered.includes('nexttrack') && registered.includes('previoustrack');
+  const works = registered.includes('nexttrack')
+    && (settings.gesture_model !== 'pro' || registered.includes('previoustrack'));
   if (is_sim() || works) {
     if (!ui.issues.get('media')?.anchor) set_issue('media', '');
   } else {
@@ -383,7 +423,7 @@ function arm_media() {
 }
 
 async function acquire_wake_lock() {
-  if (!navigator.wakeLock || document.visibilityState !== 'visible' || ui.wake_lock) return;
+  if (!navigator.wakeLock || ui.lock_controls || document.visibilityState !== 'visible' || ui.wake_lock) return;
   try {
     ui.wake_lock = await navigator.wakeLock.request('screen');
     ui.wake_lock.addEventListener('release', () => { ui.wake_lock = null; });
@@ -505,6 +545,13 @@ function handle_frame(frame, source) {
       return;
     }
     case 'voice_status': return is_stale_frame(frame) ? undefined : on_voice_status(frame);
+    case 'voice_preview_error': return is_stale_frame(frame) ? undefined : set_issue('voice', 'The speaking preview could not load. Try again.');
+    case 'room_mic_invite':
+      if (is_stale_frame(frame)) return;
+      $('settings-room-link').value = frame.url ?? '';
+      $('settings-room-link').hidden = !frame.url;
+      set_text($('settings-room-status'), frame.error ?? 'Copy this link to the spare phone on the same hotspot.');
+      return;
     case 'calibration': return is_stale_frame(frame) ? undefined : receive_profile(frame.profile);
     default: return undefined;
   }
@@ -513,13 +560,21 @@ function handle_frame(frame, source) {
 function on_state(next, source) {
   const previous = ui.state;
   ui.state = next;
+  if (next.setupReset && settings.setup_reset !== next.hubId + ':' + next.setupReset) reset_phone_setup(next);
+  if (!is_sim() && !ui.voice_task && !ui.lock_controls && my_state()?.roomMicSource === 'companion') {
+    set_lock_controls(true);
+  }
   const new_session = previous && (previous.sessionId !== next.sessionId || previous.hubId !== next.hubId);
   if (new_session) {
     audio.clear_session();
     drafts.reset();
     input.reset();
     clear_signal_tracking();
-    ui.pending_voice = null;
+    if (ui.clone_request) ui.voice_message = 'The hub restarted. Record a new sample to try again.';
+    clear_clone_request();
+    $('settings-room-link').value = '';
+    $('settings-room-link').hidden = true;
+    set_text($('settings-room-status'), '');
   }
   const receipt = my_state()?.receipt;
   ui.receipt_deadline = receipt
@@ -530,8 +585,9 @@ function on_state(next, source) {
   if (next.phase === 'reveal' && previous?.phase !== 'reveal' || next.canned && !previous?.canned) {
     audio.cancel_previews();
     audio.cancel_announcements();
-    ui.pending_voice = null;
-    ui.mic_on_next_take ||= ui.listen_wanted;
+    clear_clone_request();
+    ui.mic_on_next_take ||= ui.listen_wanted || ui.mic_after_lock_controls;
+    if (ui.lock_controls) set_lock_controls(false, { restore_mic: false });
     if (capture.open || capture.opening || ui.listen_wanted) stop_mic();
   }
   if (!source.synced || new_session || previous?.sessionId !== next.sessionId) reconcile(next, source);
@@ -545,6 +601,32 @@ function on_state(next, source) {
   }
   sync_listen(source);
   schedule_render();
+}
+
+function reset_phone_setup(state) {
+  settings.setup_reset = state.hubId + ':' + state.setupReset;
+  settings.setup = fresh_setup();
+  settings.profile = null;
+  settings.timing = { ...DEFAULT_TIMING, countWindowMs: undefined, countMedianMs: undefined };
+  settings.emulator = { ...DEFAULT_EMULATOR };
+  try { localStorage.removeItem(PERSONAL_TIMING_KEY); } catch {}
+  set_consent(false);
+  save_settings();
+  calibration.reset();
+  clear_clone_request();
+  ui.last_profile_json = '';
+  ui.mic_on_next_take = false;
+  ui.mic_after_calibration = false;
+  ui.calibration_playback = false;
+  ui.voice_message = 'Session reset. Set up your voice and earbuds again.';
+  if (ui.lock_controls) set_lock_controls(false, { restore_mic: false });
+  if (capture.open || capture.opening || ui.listen_wanted) stop_mic();
+  input.configure({ timing: settings.timing });
+  emulator.configure(settings.emulator);
+  if (ui.seat && ui.screen !== 'join') {
+    ui.voice_from = 'setup';
+    go('voice');
+  }
 }
 
 function reconcile(next, source) {
@@ -613,7 +695,16 @@ function retry_manifest() {
   void on_cache(failed.frame, connection ?? failed.source);
 }
 
-function on_voice_status({ status, detail }) {
+function clear_clone_request() {
+  clearTimeout(ui.clone_timer);
+  ui.clone_timer = null;
+  ui.pending_voice = null;
+  ui.clone_request = null;
+}
+
+function on_voice_status({ status, detail, requestId }) {
+  if (ui.clone_request && requestId && requestId !== ui.clone_request) return;
+  const was_request = Boolean(ui.clone_request && requestId === ui.clone_request);
   const messages = {
     building: 'Building your voice clone in the background.',
     ready: detail || 'Your voice clone is ready.',
@@ -621,14 +712,14 @@ function on_voice_status({ status, detail }) {
     error: detail || 'The voice clone failed.',
   };
   ui.voice_message = messages[status] ?? '';
+  if (was_request && status !== 'building') {
+    clear_clone_request();
+    if (status === 'ready') finish_voice('clone');
+  }
   if (status === 'error') {
-    set_issue('voice', 'The voice clone failed.', 'Use premade', () => {
-      ui.pending_voice = null;
-      send({ type: 'setup', step: 'voice', complete: true, fallback: true });
-      settings.setup.voice = true;
-      settings.setup.voice_kind = 'premade';
-      save_settings();
+    set_issue('voice', ui.voice_message, 'Use premade', () => {
       set_issue('voice', '');
+      finish_voice('premade');
     });
   } else {
     set_issue('voice', '');
@@ -651,6 +742,22 @@ function adopt_profile(profile) {
 }
 
 function apply_profile(profile) {
+  if (profile.gestureModel === 'next-only') {
+    const { countWindowMs, countMedianMs } = profile.timing;
+    if (profile.source !== 'real' || !Number.isFinite(countWindowMs) || !Number.isFinite(countMedianMs)) {
+      return { applied: false, reason: 'Try again using the earbuds to save your timing.' };
+    }
+    const timing = { countWindowMs, countMedianMs };
+    try {
+      localStorage.setItem(PERSONAL_TIMING_KEY, JSON.stringify(timing));
+    } catch {
+      return { applied: false, reason: 'Safari could not save the timing on this phone.' };
+    }
+    Object.assign(settings.timing, timing);
+    input.configure({ timing });
+    save_settings();
+    return { applied: true };
+  }
   if (settings.profile?.source === 'real' && profile.source !== 'real') {
     return { applied: false, reason: 'Kept the real earbud profile. This run was labeled ' + profile.source + '.' };
   }
@@ -701,10 +808,12 @@ function on_capture_state(status, detail) {
   schedule_render();
 }
 
-async function start_mic({ recording = false } = {}) {
-  if ((!ui.state || ui.state.roomInput === 'mac') && !recording) return false;
-  if (is_sim() || !has_consent() || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
-  ui.listen_wanted = true;
+async function start_mic({ for_sample = false } = {}) {
+  if ((!ui.state || ui.state.roomInput === 'mac') && !for_sample) return false;
+  const external_mic = my_state()?.roomMicSource === 'companion';
+  if (is_sim() || (!for_sample && (ui.lock_controls || ui.calibration_playback || external_mic)) || !has_consent()
+    || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
+  ui.listen_wanted = !ui.lock_controls && !external_mic;
   const opened = await capture.start();
   if (opened) sync_listen();
   return opened;
@@ -716,6 +825,36 @@ function stop_mic() {
   if (connection) connection.listen_sent = false;
   send({ type: 'listen', enabled: false });
   schedule_render();
+}
+
+function arm_calibration_media() {
+  ui.calibration_playback = !is_sim();
+  if (ui.calibration_playback
+    && (capture.open || capture.opening || ui.listen_wanted)) {
+    ui.mic_after_calibration = true;
+    ui.anchor_pause_expected = !keepalive.paused;
+    keepalive.pause();
+    stop_mic();
+  }
+  arm_media();
+}
+
+function set_lock_controls(enabled, { restore_mic = true } = {}) {
+  if (enabled === ui.lock_controls) return;
+  ui.lock_controls = enabled;
+  if (enabled) {
+    ui.mic_after_lock_controls = ui.listen_wanted || capture.open || capture.opening;
+    if (ui.mic_after_lock_controls) stop_mic();
+    ui.wake_lock?.release?.().catch(() => {});
+    ui.earbud_out = false;
+    arm_media();
+  } else {
+    const resume_mic = ui.mic_after_lock_controls && restore_mic;
+    ui.mic_after_lock_controls = false;
+    if (resume_mic) void start_mic();
+    else if (ui.seat) resume_anchor();
+  }
+  render();
 }
 
 /* Navigation. */
@@ -730,6 +869,9 @@ function next_setup_screen() {
 }
 
 function go(screen, options = {}) {
+  const resume_mic = ui.screen === 'calibrate' && screen !== 'calibrate' && ui.mic_after_calibration;
+  if (resume_mic) ui.mic_after_calibration = false;
+  if (screen !== 'calibrate') ui.calibration_playback = false;
   ui.screen = screen;
   for (const section of document.querySelectorAll('.screen')) {
     const active = section.dataset.screen === screen;
@@ -745,6 +887,7 @@ function go(screen, options = {}) {
     ui.calibration_from = options.from ?? ui.calibration_from;
     calibration.open({ from: ui.calibration_from });
   }
+  if (resume_mic && ui.seat && screen !== 'join') void start_mic();
   render();
 }
 
@@ -773,6 +916,9 @@ function go_back() {
 }
 
 function leave_seat() {
+  ui.lock_controls = false;
+  ui.mic_after_lock_controls = false;
+  clear_clone_request();
   const previous = connection;
   connection = null;
   clearTimeout(ui.reconnect_timer);
@@ -807,6 +953,8 @@ function join(seat) {
 function set_input_mode(mode) {
   if (settings.input_mode === mode) return;
   settings.input_mode = mode;
+  settings.mode = 2;
+  input.configure({ mode: 2, gestureModel: is_sim() ? null : settings.gesture_model });
   settings.network.enabled = mode === 'sim';
   persisted_input = mode;
   settings.setup = fresh_setup();
@@ -822,7 +970,7 @@ function finish_voice(kind) {
   settings.setup.voice = true;
   settings.setup.voice_kind = kind;
   save_settings();
-  if (kind === 'premade') ui.pending_voice = null;
+  if (kind === 'premade') clear_clone_request();
   if (kind !== 'clone') send({ type: 'setup', step: 'voice', complete: true, ...(kind === 'premade' && { fallback: true }) });
   if (from === 'settings') go('settings');
   else go(next_setup_screen(), { from: 'setup' });
@@ -833,37 +981,68 @@ function set_voice_progress(fraction) {
 }
 
 async function record_sample(kind) {
-  arm_media();
+  if (ui.voice_task || ui.clone_request) return;
+  const was_listening = ui.listen_wanted;
+  const temporary_mic = kind === 'clone' || !was_listening || ui.lock_controls || my_state()?.roomMicSource === 'companion';
   ui.voice_task = kind;
-  if (!(await start_mic({ recording: true }))) {
+  arm_media();
+  if (!(await start_mic({ for_sample: true }))) {
     ui.voice_task = null;
+    if (temporary_mic) arm_media();
     ui.voice_message = 'The microphone is not available. Use the premade voice to continue.';
     render();
     return;
   }
-  ui.voice_task = kind;
+  ui.voice_sample = null;
+  ui.voice_transcript_start = my_state()?.transcript?.length ?? 0;
   const duration_ms = kind === 'clone' ? settings.app.voiceSampleMs : settings.app.roomSampleMs;
-  ui.voice_message = kind === 'clone' ? 'Recording. Read at a normal pace.' : 'Sampling the room. No voice clone is made.';
+  ui.voice_message = kind === 'clone' ? 'Listening. Speak naturally and pause when you need to.' : 'Sampling the room. No voice clone is made.';
   render();
   try {
-    const result = await capture.record({ duration_ms, on_progress: set_voice_progress });
+    const result = await capture.record({
+      duration_ms,
+      speech_ms: kind === 'clone' ? duration_ms : undefined,
+      on_progress(fraction, sample) {
+        set_voice_progress(fraction);
+        if (sample) {
+          ui.voice_sample = sample;
+          schedule_render();
+        }
+      },
+    });
     ui.voice_task = null;
+    ui.voice_sample = null;
     set_voice_progress(0);
     if (kind === 'clone') {
       const frame = { wav: result.wav, requestId: 'voice-' + ui.seat + '-' + Date.now().toString(36) };
-      if (!send({ type: 'voice', ...frame })) ui.pending_voice = frame;
-      finish_voice('clone');
+      ui.clone_request = frame.requestId;
+      ui.clone_timer = setTimeout(() => {
+        clear_clone_request();
+        ui.voice_message = 'No clone result came back. Try recording again or use the premade voice.';
+        render();
+      }, CLONE_RESPONSE_MS);
+      const sent = send({ type: 'voice', ...frame });
+      if (!sent) ui.pending_voice = frame;
+      ui.voice_message = sent ? 'Uploading your recording…' : 'Connection lost. The recording will upload when you reconnect.';
+      render();
     } else {
       ui.voice_message = 'Room sample streamed.';
       finish_voice('room');
     }
   } catch (error) {
     ui.voice_task = null;
+    ui.voice_sample = null;
     set_voice_progress(0);
-    ui.voice_message = error?.message === 'Recording cancelled.' ? '' : 'The recording stopped early. Try again.';
+    ui.voice_message = error?.message === 'Recording cancelled.' ? '' : (error?.message || 'The recording stopped early. Try again.');
     render();
   } finally {
-    if (ui.state?.roomInput === 'mac') stop_mic();
+    if (temporary_mic || ui.state?.roomInput === 'mac') {
+      stop_mic();
+      if (ui.seat && kind === 'clone' && !ui.lock_controls) {
+        set_lock_controls(true);
+        ui.mic_after_lock_controls = was_listening;
+      } else if (ui.seat) arm_media();
+    }
   }
 }
 
@@ -1047,25 +1226,35 @@ function render_voice() {
   $('voice-consent').disabled = busy;
   const record = $('voice-record');
   record.hidden = sim || busy;
-  record.disabled = !consent || mine?.voice === 'building';
-  set_text(record, 'Read for ' + Math.round(settings.app.voiceSampleMs / 1000) + ' seconds');
+  record.disabled = !consent || Boolean(ui.clone_request) || mine?.voice === 'building';
+  set_text(record, 'Start recording');
   const room = $('voice-room');
   room.hidden = sim || busy;
-  room.disabled = !consent;
+  room.disabled = !consent || Boolean(ui.clone_request);
   set_text(room, 'Room sample only, ' + Math.round(settings.app.roomSampleMs / 1000) + ' s');
   $('voice-cancel').hidden = !busy;
+  $('voice-finish').hidden = ui.voice_task !== 'clone' || !ui.voice_sample?.ready;
+  $('voice-meter').hidden = !busy;
+  const sample = ui.voice_sample;
+  set_text($('voice-meter-label'), ui.voice_task === 'clone'
+    ? ((sample?.seconds ?? 0).toFixed(0) + ' s of usable speech') : 'Room sample');
+  const preview = ui.voice_task === 'clone'
+    ? mine?.transcript?.slice(ui.voice_transcript_start).map(entry => entry.text).join(' ').slice(-240) ?? '' : '';
+  $('voice-transcript').hidden = !preview;
+  set_text($('voice-transcript-text'), preview);
   $('voice-skip').hidden = busy;
   set_text($('voice-skip'), ui.voice_from === 'settings' && USABLE_VOICES.has(mine?.voice) ? 'Keep the current voice' : 'Use the premade voice');
-  $('voice-skip').disabled = mine?.voice === 'building';
+  $('voice-skip').disabled = false;
   const fallback = sim ? 'Simulated seat. The microphone stays closed.'
     : !consent ? 'Tick the consent line to open the microphone.'
     : capture.open ? 'Microphone on. Read when ready.' : '';
-  set_text($('voice-status'), ui.voice_message || fallback);
+  set_text($('voice-status'), sample?.clipped ? 'Your mic is clipping. Move it a little farther away.' :
+    ui.voice_message || fallback);
 }
 
 function render_earbuds() {
   for (const radio of document.querySelectorAll('input[name="earbud_mode"]')) {
-    radio.checked = Number(radio.value) === settings.mode;
+    radio.checked = radio.value === settings.gesture_model;
   }
 }
 
@@ -1167,8 +1356,8 @@ function render_draft(shown) {
   const is_preset = pending.kind === 'preset';
   set_text($('live-draft-label'), is_preset ? 'Switch preset?' : 'Send this?');
   set_text($('live-draft-text'), pending.text ?? '');
-  set_text($('draft-send'), is_preset ? 'R1 Switch' : 'R1 Send');
-  set_text($('draft-discard'), settings.mode === 1 ? 'R2 Discard' : 'L1 Discard');
+  set_text($('draft-send'), is_preset ? 'Switch' : 'Send');
+  set_text($('draft-discard'), 'Discard');
   if (ui.draft_id === pending.id) return;
   ui.draft_id = pending.id;
   const clock = $('live-draft-clock');
@@ -1194,11 +1383,19 @@ function render_live() {
   const listen = $('live-listen');
   // Old hubs omit `transcription`. Otherwise "Listening" means the room is actually being transcribed.
   const transcribing = mine?.transcription == null || mine.transcription === 'live';
-  const listening = !is_sim() && capture.open && mine?.listening && transcribing;
+  const companion_mic = mine?.roomMicSource === 'companion' && mine?.listening;
+  const listening = !is_sim() && (capture.open || companion_mic) && mine?.listening && transcribing;
   listen.dataset.state = state?.roomInput === 'mac' ? state.room?.transcription === 'live' ? 'on' : 'off' : is_sim() ? 'sim' : listening ? 'on' : 'off';
   set_text($('live-listen-text'), state?.roomInput === 'mac' ? state.room?.transcription === 'live' ? 'Mac listening' : 'Mac mic ' + (state.room?.transcription ?? 'off')
-    : is_sim() ? 'Simulated' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
+    : is_sim() ? 'Simulated' : companion_mic ? 'Room mic' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
   set_text($('live-cache'), ui.failed_manifest ? 'Failed' : mine?.ready ? 'Cached' : state?.presetPending ? 'Caching' : 'Not ready');
+  $('lock-controls').hidden = is_sim() || phase === 'reveal' || Boolean(state?.canned);
+  $('lock-controls-toggle').setAttribute('aria-pressed', String(ui.lock_controls));
+  set_text($('lock-controls-toggle'), ui.lock_controls ? 'Disable lock-screen controls' : 'Enable lock-screen controls');
+  set_text($('lock-controls-status'), ui.lock_controls
+    ? state?.roomInput === 'mac' ? 'Earbuds active. Room audio comes from the Mac microphone.'
+      : companion_mic ? 'Earbuds active. The companion mic is listening.' : 'Phone mic paused. You can use a companion mic.'
+    : '');
 
   render_draft(mine?.pending ?? null);
   render_message('in', mine?.lastIn, 'last_in_id');
@@ -1211,7 +1408,7 @@ function render_live() {
 function render_codebook() {
   const codebook = ui.state?.codebook ?? {};
   const preset = ui.state?.preset ?? 'Pitch';
-  set_text($('codebook-context'), preset + ' · ' + (settings.mode === 1 ? 'One earbud' : 'Two earbuds'));
+  set_text($('codebook-context'), preset + ' · ' + (settings.gesture_model === 'pro' ? 'AirPods Pro' : 'AirPods 1'));
   $('codebook-list').replaceChildren(...SIGNAL_ORDER[settings.mode].map(signal => {
     const row = document.createElement('li');
     const name = document.createElement('b');
@@ -1219,7 +1416,10 @@ function render_codebook() {
     const meaning = document.createElement('strong');
     meaning.textContent = codebook[signal] ?? SYSTEM_MEANINGS[signal] ?? '';
     const pattern = document.createElement('small');
-    pattern.textContent = PATTERN_LABELS[settings.mode][signal];
+    const count = ['R1', 'R2', 'L1'].indexOf(signal) + 1;
+    pattern.textContent = is_sim() ? PATTERN_LABELS[settings.mode][signal]
+      : !count ? 'On-screen control'
+        : settings.gesture_model === 'pro' ? SIGNAL_LABELS[signal] + ' squeeze' : 'Next Track × ' + count;
     row.append(name, meaning, pattern);
     return row;
   }));
@@ -1261,11 +1461,14 @@ function render_log() {
 function render_settings() {
   set_text($('settings-context'), ui.seat ? 'Seat ' + ui.seat + ' · ' + (is_sim() ? 'Simulated' : 'Earbuds') : '');
   for (const radio of document.querySelectorAll('input[name="settings_mode"]')) {
-    radio.checked = Number(radio.value) === settings.mode;
+    radio.checked = radio.value === settings.gesture_model;
   }
   $('settings-drafts').checked = settings.drafts;
   $('settings-listen-row').hidden = is_sim() || ui.state?.roomInput === 'mac';
   $('settings-listen').checked = capture.open && ui.listen_wanted;
+  $('settings-listen').disabled = my_state()?.roomMicSource === 'companion';
+  $('settings-voice-preview').hidden = !ui.hub_info?.voicePreview;
+  $('settings-room-invite').hidden = is_sim() || ui.state?.roomInput === 'mac' || !ui.hub_info?.roomMic;
   for (const name of ['cue', 'voice']) {
     const field = $('settings-volume-' + name);
     if (document.activeElement !== field) field.value = String(settings.volumes[name]);
@@ -1291,13 +1494,12 @@ function render_settings() {
 
 /* Events. */
 
-function set_mode(mode) {
-  if (settings.mode === mode) return;
-  settings.mode = mode;
-  input.configure({ mode });
+function set_earbud_model(model) {
+  if (!['next-only', 'pro'].includes(model) || settings.gesture_model === model) return;
+  settings.gesture_model = model;
+  input.configure({ gestureModel: is_sim() ? null : model });
   ui.signals_key = '';
   save_settings();
-  send({ type: 'configure', mode, drafts: settings.drafts });
   render();
 }
 
@@ -1305,8 +1507,11 @@ function bind_events() {
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);
   keepalive.addEventListener('playing', () => {
+    set_playback_state('playing');
     if (ui.issues.get('media')?.anchor) set_issue('media', '');
   });
+  keepalive.addEventListener('timeupdate', () => input.flushAirPods1IfDue());
+  $('lock-controls-toggle').addEventListener('click', () => set_lock_controls(!ui.lock_controls));
 
   for (const button of document.querySelectorAll('.seat')) {
     button.addEventListener('click', () => join(button.dataset.seat));
@@ -1340,6 +1545,7 @@ function bind_events() {
   $('voice-record').addEventListener('click', () => void record_sample('clone'));
   $('voice-room').addEventListener('click', () => void record_sample('room'));
   $('voice-cancel').addEventListener('click', () => capture.cancel_record());
+  $('voice-finish').addEventListener('click', () => capture.finish_record());
   $('voice-skip').addEventListener('click', () => {
     ui.voice_message = '';
     if (ui.voice_from === 'settings' && USABLE_VOICES.has(my_state()?.voice)) {
@@ -1351,16 +1557,13 @@ function bind_events() {
   });
 
   for (const radio of document.querySelectorAll('input[name="earbud_mode"]')) {
-    radio.addEventListener('change', () => set_mode(Number(radio.value)));
+    radio.addEventListener('change', () => set_earbud_model(radio.value));
   }
-  for (const side of ['left', 'right']) {
-    $('test-' + side).addEventListener('click', async () => {
-      arm_media();
-      set_text($('earbuds-status'), 'Playing ' + side + '.');
-      const problem = await audio.test_side(side);
-      set_text($('earbuds-status'), problem || 'Played ' + side + '.');
-    });
-  }
+  $('test-audio').addEventListener('click', async () => {
+    arm_media();
+    await audio.preload_cues();
+    set_text($('earbuds-status'), audio.play_cue('system') == null ? 'Audio is unavailable. Tap Test audio again.' : 'Played the test sound.');
+  });
   $('earbuds-next').addEventListener('click', () => {
     settings.setup.earbuds = true;
     save_settings();
@@ -1407,7 +1610,7 @@ function bind_events() {
   }
 
   for (const radio of document.querySelectorAll('input[name="settings_mode"]')) {
-    radio.addEventListener('change', () => set_mode(Number(radio.value)));
+    radio.addEventListener('change', () => set_earbud_model(radio.value));
   }
   $('settings-drafts').addEventListener('change', event => {
     settings.drafts = event.target.checked;
@@ -1422,6 +1625,7 @@ function bind_events() {
         go('voice');
         return;
       }
+      set_lock_controls(false, { restore_mic: false });
       arm_media();
       void start_mic();
     } else {
@@ -1441,10 +1645,29 @@ function bind_events() {
     ui.voice_message = '';
     go('voice');
   });
+  $('settings-voice-preview').addEventListener('click', () => {
+    if (my_state()?.voice !== 'ready') {
+      set_issue('voice', 'This seat does not have a verified clone yet.');
+      return;
+    }
+    set_issue('voice', '');
+    void audio.unlock();
+    if (!send({ type: 'voice_preview' })) set_issue('voice', 'Connect to the hub to hear the preview.');
+  });
+  $('settings-room-invite').addEventListener('click', () => {
+    if (!send({ type: 'room_mic_invite' })) set_text($('settings-room-status'), 'Connect to the hub first.');
+  });
+  $('settings-room-link').addEventListener('focus', event => event.target.select());
   $('settings-calibrate').addEventListener('click', () => go('calibrate', { from: 'settings' }));
 
   document.addEventListener('keydown', event => {
     if (event.metaKey || event.ctrlKey || event.altKey || event.repeat || !ui.seat) return;
+    if (!is_sim() && ui.screen === 'live' && !calibration.active() && Object.hasOwn(CLICKER_KEYS, event.key)) {
+      if (event.target?.closest?.('input, textarea, select, button, [contenteditable]')) return;
+      event.preventDefault();
+      on_signal(CLICKER_KEYS[event.key]);
+      return;
+    }
     if (event.target instanceof HTMLInputElement && ['text', 'number'].includes(event.target.type)) return;
     const action = RAW_KEYS[event.key.toLowerCase()];
     if (!action) return;
@@ -1465,6 +1688,7 @@ function bind_events() {
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
+    input.flushAirPods1IfDue();
     void acquire_wake_lock();
     void audio.resume();
     if (ui.listen_wanted && !capture.open && !is_sim()) void start_mic();

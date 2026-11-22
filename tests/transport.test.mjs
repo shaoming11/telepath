@@ -4,6 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
 import { createHub } from '../hub/server.mjs';
+import { findLanAddress, hotspotIPv6Peers } from '../hub/tls.mjs';
 
 async function open(base, params) {
   const url = new URL('/ws?' + new URLSearchParams(params), base);
@@ -15,8 +16,9 @@ async function open(base, params) {
   return {
     socket, frames,
     send(frame) { socket.send(JSON.stringify(frame)); },
-    async take(predicate, after = 0) {
-      for (let attempt = 0; attempt < 75; attempt += 1) {
+    async take(predicate, after = 0, timeout = 750) {
+      const deadline = Date.now() + timeout;
+      while (Date.now() < deadline) {
         const frame = frames.slice(after).find(predicate);
         if (frame) return frame;
         await delay(10);
@@ -30,8 +32,27 @@ function stateFrame(frame) {
   return frame.type === 'state';
 }
 
-async function hubFixture(context) {
-  const hub = createHub({ env: {}, settings: { roomSenseMs: 0 }, lan: 'localhost' });
+test('the Mac prefers hotspot IPv6 over a CLAT address and keeps local IPv4 on ordinary Wi-Fi', () => {
+  const wifi = [
+    { family: 'IPv6', address: 'fe80::7', cidr: 'fe80::7/64' },
+    { family: 'IPv6', address: '2001:db8:1:2::7', cidr: '2001:db8:1:2::7/64' },
+    { family: 'IPv4', address: '192.0.0.2', cidr: '192.0.0.2/32' },
+  ];
+  assert.equal(findLanAddress({ en0: wifi }), '2001:db8:1:2::7');
+  assert.equal(findLanAddress({ en0: wifi.slice(0, 2) }), 'localhost');
+  assert.equal(findLanAddress({ en0: [...wifi, { family: 'IPv4', address: '172.20.10.2' }] }), '172.20.10.2');
+});
+
+test('the hotspot peer filter accepts its IPv6 subnet and rejects adjacent networks and mapped IPv4', () => {
+  const accepts = hotspotIPv6Peers('2001:db8:1:2::7');
+  assert.ok(accepts('2001:0db8:0001:0002:3::4'));
+  assert.equal(accepts('2001:db8:1:3::8'), false);
+  assert.equal(accepts('::ffff:192.168.1.23'), false);
+  assert.equal(hotspotIPv6Peers('192.168.1.2'), null);
+});
+
+async function hubFixture(context, options = {}) {
+  const hub = createHub({ env: {}, settings: { roomSenseMs: 0 }, lan: 'localhost', ...options });
   context.after(() => hub.close());
   const started = await hub.start({ port: 0, host: '127.0.0.1' });
   return { hub, base: started.stageUrl };
@@ -86,6 +107,22 @@ test('only the owning stage tab can stream room audio; disconnect and stale-sess
   other.send({ ...scope, type: 'operator', action: 'room_listen', enabled: true });
   await delay(20);
   assert.equal(hub.session.room.listening, false);
+});
+
+test('the Safari playback anchor supports media byte-range requests', async context => {
+  const { base } = await hubFixture(context);
+  const audio = new URL('/assets/keepalive.wav', base);
+  const first = await fetch(audio, { headers: { Range: 'bytes=0-1' } });
+  assert.equal(first.status, 206);
+  assert.equal(first.headers.get('accept-ranges'), 'bytes');
+  assert.match(first.headers.get('content-range'), /^bytes 0-1\/\d+$/);
+  assert.equal(await first.text(), 'RI');
+  const tail = await fetch(audio, { headers: { Range: 'bytes=-4' } });
+  assert.equal(tail.status, 206);
+  assert.equal((await tail.arrayBuffer()).byteLength, 4);
+  const invalid = await fetch(audio, { headers: { Range: 'bytes=999999-' } });
+  assert.equal(invalid.status, 416);
+  assert.match(invalid.headers.get('content-range'), /^bytes \*\/\d+$/);
 });
 
 test('state includes a stable hub identity and frame scope across operator reset', async context => {
@@ -165,6 +202,69 @@ test('the stage broadcasts one bundled system clip to both seats and sees both p
   assert.equal(complete.bits, 0);
   assert.equal(complete.log.filter(entry => entry.kind === 'announcement').length, 1);
   assert.ok(a.frames.every(frame => frame.state?.announcement == null));
+});
+
+test('the pitch coach sends a reviewed cue through the real two-seat transport', async context => {
+  const live = process.env.TELEPATHY_VERIFY_MARITIME === '1';
+  const env = live ? {
+    MARITIME_API_KEY: process.env.MARITIME_API_KEY,
+    TELEPATHY_MARITIME_AGENT_ID: process.env.TELEPATHY_MARITIME_AGENT_ID,
+    TELEPATHY_MARITIME_ASSIST: process.env.TELEPATHY_MARITIME_ASSIST,
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    TELEPATHY_OPENAI_MODEL: process.env.TELEPATHY_OPENAI_MODEL,
+  } : {};
+  const coach = live ? undefined : { recommend: async () => ({
+    cueId: 'reveal-cue', reason: 'The pitch has reached closing.', source: 'maritime',
+  }) };
+  const { base } = await hubFixture(context, { coach, env });
+  const stage = await open(base, { role: 'stage' });
+  const a = await open(base, { role: 'seat', seat: 'A', sim: '1' });
+  const b = await open(base, { role: 'seat', seat: 'B', sim: '1' });
+  for (const seat of [a, b]) {
+    for (const step of ['voice', 'earbuds', 'calibrate', 'ready']) seat.send({ type: 'setup', step, complete: true });
+  }
+  await Promise.all([a, b].map(async seat => {
+    const cache = await seat.take(frame => frame.type === 'cache');
+    seat.send({ type: 'cache_ready', activeId: cache.activeId });
+  }));
+  await stage.take(frame => stateFrame(frame) && frame.state.canBegin);
+  stage.send({ type: 'operator', action: 'begin' });
+  const liveState = (await stage.take(frame => stateFrame(frame) && frame.state.phase === 'live')).state;
+  assert.equal(liveState.coach.available, true);
+  const scope = { hubId: liveState.hubId, sessionId: liveState.sessionId };
+
+  b.send({ type: 'signal', id: 'coach-proof-whisper', signal: 'R1', ...scope });
+  const whisper = await a.take(frame => frame.type === 'audio' && frame.cue === 'soft' && frame.messageId);
+  a.send({ type: 'heard', messageId: whisper.messageId, ...scope });
+  await a.take(frame => frame.state?.seats.A.receipt?.messageId === whisper.messageId);
+  a.send({ type: 'signal', id: 'coach-proof-receipt', signal: 'R1', receiptId: whisper.messageId, ...scope });
+  const exchange = (await stage.take(frame => frame.state?.log.some(entry =>
+    entry.kind === 'receipt' && entry.messageId === whisper.messageId))).state;
+
+  const start = performance.now();
+  stage.send({ type: 'operator', action: 'coach_ask', beat: 'closing', ...scope });
+  const draft = (await stage.take(frame => frame.state?.coach?.status === 'ready', 0, 14_000)).state.coach;
+  const latency = Math.round(performance.now() - start);
+  const expected_source = env.TELEPATHY_MARITIME_ASSIST === 'openai' ? 'maritime-assisted' : 'maritime';
+  assert.equal(draft.source, expected_source, 'the verification requires a Maritime-reviewed model cue');
+  assert.equal(draft.text, 'Time to bring up the reveal.');
+  for (const seat of [a, b]) {
+    assert.ok(seat.frames.every(frame => frame.state?.coach == null && frame.kind !== 'announcement'));
+  }
+
+  stage.send({ type: 'operator', action: 'coach_send', coachId: draft.id, ...scope });
+  const audio = await Promise.all([a, b].map(seat => seat.take(frame => frame.kind === 'announcement')));
+  assert.equal(audio[0].messageId, audio[1].messageId);
+  assert.equal(audio[0].url, audio[1].url);
+  const clip = await fetch(new URL(audio[0].url, base));
+  assert.equal(clip.headers.get('content-type'), 'audio/mpeg');
+  assert.ok((await clip.arrayBuffer()).byteLength > 500);
+  [a, b].forEach((seat, index) => seat.send({ type: 'heard', messageId: audio[index].messageId, ...scope }));
+  const result = (await stage.take(frame => frame.state?.announcement?.status === 'played')).state;
+  assert.equal(result.coach.announcementId, audio[0].messageId);
+  assert.deepEqual(result.announcement.heard, ['A', 'B']);
+  assert.equal(result.bits, exchange.bits);
+  if (live) context.diagnostic(draft.source + ' response at the Operator in ' + latency + ' ms. Both simulated seats acknowledged the ElevenLabs clip.');
 });
 
 test('loopback rehearsal advertises the address it actually listens on', async context => {
