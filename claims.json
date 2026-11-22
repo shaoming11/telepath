@@ -1,26 +1,6 @@
 {
-  "revision": 124,
+  "revision": 125,
   "claims": [
-    {
-      "id": "bb30f610-0ccb-4b22-a178-1f4b2565d69d",
-      "owner": "fireheartjerry",
-      "agent": "codex-wasp-source-grounding",
-      "branch": "jerry/wasp-liquid-glass",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub/project-references.mjs",
-        "hub/references.mjs",
-        "tests/references.test.mjs",
-        "docs/wasp-ui.md"
-      ],
-      "paths": [
-        "docs/wasp-ui.md",
-        "hub/project-references.mjs",
-        "hub/references.mjs",
-        "tests/references.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T08:19:09.770Z"
-    },
     {
       "id": "b42473b5-9c33-47e7-946b-3a813a6e9164",
       "owner": "fireheartjerry",
