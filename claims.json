@@ -1,20 +1,6 @@
 {
-  "revision": 136,
+  "revision": 137,
   "claims": [
-    {
-      "id": "71f5c712-8cff-45a8-a76e-3fd1645a7703",
-      "owner": "influxtion",
-      "agent": "codex-precision-launch",
-      "branch": "codex/wasp-precision-ui",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "scripts/frontend-launch.mjs"
-      ],
-      "paths": [
-        "scripts/frontend-launch.mjs"
-      ],
-      "claimedAt": "2026-11-22T09:26:40.647Z"
-    },
     {
       "id": "86a66ef4-ef75-4578-87ef-caba6f89bbb0",
       "owner": "influxtion",
