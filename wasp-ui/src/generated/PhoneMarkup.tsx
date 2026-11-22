@@ -233,6 +233,7 @@ export function PhoneMarkup() {
               </article>
             </div>
 
+            <button id="live-acknowledge" className="quiet" type="button" hidden>Acknowledge whisper</button>
             <p className="live-note" id="live-note" role="status"></p>
 
             <div className="signals" id="signals" role="group" aria-label="Send a signal"></div>

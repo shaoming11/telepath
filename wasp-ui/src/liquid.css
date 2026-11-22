@@ -222,6 +222,14 @@ body.wasp-liquid {
 .wasp-liquid .signal.fired {
   animation: liquid-touch 440ms var(--glide) both;
 }
+.wasp-liquid #live-acknowledge {
+  min-block-size: 44px;
+  align-self: flex-start;
+  border: 1px solid var(--glass-edge);
+  background: var(--glass-solid);
+  color: var(--fg);
+  text-decoration: none;
+}
 
 .wasp-liquid[data-surface="stage"] {
   --outer: #05070b;
