@@ -5,6 +5,7 @@
  */
 
 import { createAudioEngine } from './phone-audio.mjs';
+import { mountChannelMonitor } from './channel-monitor.mjs';
 import { APP_TIMING, SIGNAL_LABELS } from './phone-data.mjs';
 import { announcementText, OPERATOR_ANNOUNCEMENTS } from './announcements.mjs';
 
@@ -434,6 +435,10 @@ export function pitchCoachView(state, connected, beat) {
 /* ── DOM ────────────────────────────────────────────── */
 
 function boot() {
+  const channelMonitors = {
+    lobby: mountChannelMonitor(document.getElementById('lobby-monitor'), SEATS),
+    live: mountChannelMonitor(document.getElementById('stage-monitor'), SEATS),
+  };
   const byId = id => document.getElementById(id);
   const body = document.body;
 
@@ -1201,6 +1206,11 @@ function boot() {
 
   function handleFrame(frame) {
     if (!isObject(frame)) return;
+    if (frame.type === 'monitor') {
+      if ((state.hubId == null || frame.hubId === state.hubId)
+        && (state.sessionId == null || frame.sessionId === state.sessionId)) channelMonitors[state.phase]?.update(frame.monitor);
+      return;
+    }
     if (frame.type === 'audio' && state.canned && frame.url
       && (frame.hubId == null || frame.hubId === state.hubId)
       && (frame.sessionId == null || frame.sessionId === state.sessionId)) {
@@ -1212,6 +1222,7 @@ function boot() {
       if (state.canned && (!next.canned || next.hubId !== state.hubId || next.sessionId !== state.sessionId
         || next.startedAt !== state.startedAt)) canned_audio.clear_session();
       if (next.hubId !== state.hubId || next.sessionId !== state.sessionId) {
+        for (const monitor of Object.values(channelMonitors)) monitor?.update(null);
         streamKeys = [];
         ui.stream.replaceChildren();
         seat_fingerprints.clear();

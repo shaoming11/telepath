@@ -108,6 +108,8 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
   let context = null;
   let cue_gain = null;
   let voice_gain = null;
+  let output_analyser = null;
+  let output_samples = null;
   let levels = { ...volumes };
   let app_timing = timing;
   let playhead = 0;
@@ -122,8 +124,14 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     context = new Context({ latencyHint: 'interactive' });
     cue_gain = context.createGain();
     voice_gain = context.createGain();
-    cue_gain.connect(context.destination);
-    voice_gain.connect(context.destination);
+    if (typeof context.createAnalyser === 'function') {
+      output_analyser = context.createAnalyser();
+      output_analyser.fftSize = 256;
+      output_samples = new Float32Array(output_analyser.fftSize);
+      output_analyser.connect(context.destination);
+    }
+    cue_gain.connect(output_analyser ?? context.destination);
+    voice_gain.connect(output_analyser ?? context.destination);
     for (const [name, level] of Object.entries(CUE_LEVELS)) {
       const channel = context.createGain();
       channel.gain.value = level;
@@ -324,7 +332,10 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     const voice_audible = Boolean(speech) && levels.voice > 0;
     const first_speech_at = cue_at + (cue_audible && voice_audible ? cue.duration + app_timing.cueGapMs / 1000 : 0);
     if (guard.deadline != null && (first_speech_at - context.currentTime) * 1000 > guard.deadline - performance.now()) return;
-    const meta = { message_id: frame.messageId ?? null, preview: guard.preview, announcement: guard.announcement != null, serial };
+    const meta = {
+      message_id: frame.messageId ?? null, preview: guard.preview, announcement: guard.announcement != null, serial,
+      title: frame.text || (frame.cue ? frame.cue + ' cue' : ''),
+    };
     let cursor = cue_at;
 
     let cue_source = null;
@@ -407,8 +418,29 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     const cue = cues.get(name);
     if (!cue || !context || context.state !== 'running' || levels.cue <= 0) return null;
     const at = context.currentTime + START_MARGIN_S;
-    start_source(cue, cue_channels.get(name) ?? cue_gain, at);
+    start_source(cue, cue_channels.get(name) ?? cue_gain, at, 1, { title: name + ' cue' });
     return performance.now() + START_MARGIN_S * 1000;
+  }
+
+  function getOutputActivity() {
+    if (!context) return { phase: 'idle', title: '', bars: [] };
+    const current = context.currentTime;
+    const playing = [...sources.values()].find(source => source.at <= current && current < source.end);
+    const queued = [...sources.values()].find(source => source.at > current);
+    const phase = playing || queued
+      ? context.state !== 'running' ? 'paused' : playing ? 'playing' : 'queued'
+      : 'idle';
+    const bars = [];
+    if (phase === 'playing' && output_samples && output_analyser?.getFloatTimeDomainData) {
+      output_analyser.getFloatTimeDomainData(output_samples);
+      const bin = Math.floor(output_samples.length / 12);
+      for (let start = 0; start < bin * 12; start += bin) {
+        let peak = 0;
+        for (let i = start; i < start + bin; i += 1) peak = Math.max(peak, Math.abs(output_samples[i]));
+        bars.push(peak);
+      }
+    }
+    return { phase, title: (playing ?? queued)?.title ?? '', bars };
   }
 
   async function test_side(side) {
@@ -457,6 +489,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     flush_heard,
     play,
     play_cue,
+    getOutputActivity,
     test_side,
     configure({ volumes: next_volumes, timing: next_timing }) {
       if (next_timing) app_timing = next_timing;

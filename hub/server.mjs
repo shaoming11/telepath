@@ -204,7 +204,7 @@ export function createHub({
         const local = LOOPBACK_PEERS.has(req.socket.remoteAddress);
         const valid_seat = ['A', 'B'].includes(seat);
         const allowed_role = role === 'stage' && local || role === 'seat' && valid_seat
-          || role === 'room-mic' && valid_seat && (local || validRoomInvite(seat, url.searchParams.get('token')));
+          || role === 'room-mic' && valid_seat && (local || !settings?.sharedRoomMic && validRoomInvite(seat, url.searchParams.get('token')));
         if (url.pathname !== '/ws' || !trusted || !allowed_role) {
           socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
           return;
@@ -216,6 +216,7 @@ export function createHub({
           if (role === 'stage') {
             stage.add(ws);
             send(ws, scope({ type: 'state', state: session.snapshot() }));
+            send(ws, scope(session.monitorFrame()));
           } else if (role === 'room-mic') {
             roomMics.get(seat)?.close(4001, 'Room mic moved to another tab');
             roomMics.set(seat, ws);
@@ -246,6 +247,10 @@ export function createHub({
             }
             if (!current) return;
             if (role === 'seat' && frame.type === 'room_mic_invite') {
+              if (settings?.sharedRoomMic) {
+                send(ws, scope({ type: 'room_mic_invite', error: 'Start the room mic on the Mac Stage.' }));
+                return;
+              }
               if (!info.secure || !info.lanAvailable) {
                 send(ws, scope({ type: 'room_mic_invite', error: 'Connect the hub to the hotspot to share a room mic link.' }));
                 return;
@@ -313,6 +318,7 @@ export function createHub({
         codec: language.mode ?? 'injected',
         voicePreview: true,
         roomMic: true,
+        sharedRoomMic: Boolean(settings?.sharedRoomMic),
       };
       return info;
     },
@@ -336,7 +342,10 @@ async function main() {
     env, lan, tls,
     ledgerPath: resolve(RUNTIME, 'clone-cleanup.json'),
     localPath: env.TELEPATHY_ROOM_MODEL || null,
-    settings: env.TELEPATHY_PITCH_CONTEXT ? { pitchContext: env.TELEPATHY_PITCH_CONTEXT } : {},
+    settings: {
+      ...(env.TELEPATHY_PITCH_CONTEXT && { pitchContext: env.TELEPATHY_PITCH_CONTEXT }),
+      sharedRoomMic: env.TELEPATHY_SHARED_ROOM_MIC !== '0',
+    },
   });
   try {
     const info = await hub.start({
