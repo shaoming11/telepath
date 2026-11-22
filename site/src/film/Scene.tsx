@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { Bloom, EffectComposer, ToneMapping, Vignette } from "@react-three/postprocessing";
@@ -9,11 +9,15 @@ import {
 } from "three";
 import { AirPod } from "./AirPod";
 import {
-  A_POS, B_POS, PULSES, REVEAL_START, REVEAL_Y, SEAT_A, SEAT_B, TAPS, cameraAt, clamp01, easeInOut, easeOut, ramp, span,
+  A_POS, B_POS, PULSES, REVEAL_PULSES, REVEAL_SPREAD, REVEAL_START, REVEAL_Y, SEAT_A, SEAT_B, TAPS, cameraAt, clamp01, easeInOut, easeOut, ramp,
+  revealDot, span,
 } from "./choreo";
 import { pulseMaterial } from "./pulse";
 
 const HDR = 3.2;
+
+const WHISPERS = PULSES.filter(pulse => pulse.id === "first" || pulse.id === "approved")
+  .flatMap(pulse => [0, 1, 2].map(ring => ({ at: pulse.land, ring })));
 
 function seeded(seed: number) {
   return () => {
@@ -24,18 +28,20 @@ function seeded(seed: number) {
   };
 }
 
-const REVEAL_PULSES = PULSES.filter(pulse => pulse.inReveal);
 
 type Props = {
   clock: { current: number };
   labels: { current: (HTMLDivElement | null)[] };
+  revealLabels: { current: (HTMLDivElement | null)[] };
   onTime: (t: number) => void;
   onFrame?: (delta: number) => void;
+  onReady?: () => void;
 };
 
-export function Scene({ clock, labels, onTime, onFrame }: Props) {
+export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }: Props) {
   const camera = useThree(state => state.camera) as PerspectiveCamera;
   const size = useThree(state => state.size);
+  const scene = useThree(state => state.scene);
   const budA = useRef<Group>(null);
   const budB = useRef<Group>(null);
   const lightA = useRef<PointLight>(null);
@@ -46,6 +52,7 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
   const rings = useRef<(Mesh | null)[]>([]);
   const dots = useRef<(Mesh | null)[]>([]);
   const hold = useRef<Mesh>(null);
+  const whispers = useRef<(Mesh | null)[]>([]);
   const look = useMemo(() => new Vector3(), []);
   const point = useMemo(() => new Vector3(), []);
 
@@ -58,6 +65,8 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
       : pulse.label?.at === "A" ? new Vector3(-1.75, 0.75, 0.4)
       : new Vector3(2.05, 0.35, 0.6),
   })), []);
+
+  useEffect(() => { onReady?.(); }, [onReady]);
 
   const dustGeometry = useMemo(() => {
     const random = seeded(7);
@@ -77,8 +86,10 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
     const t = clock.current;
     cameraAt(t, size.width / size.height, camera.position, look);
     camera.lookAt(look);
+    scene.environmentIntensity = 0.04 + 1.66 * easeInOut(ramp(t, 1.6, 4.4));
 
     const reveal = easeInOut(ramp(t, REVEAL_START + 1.8, REVEAL_START + 3.8));
+    const spread = easeInOut(ramp(t, REVEAL_START + 0.6, REVEAL_START + 3.4));
     let flareA = 0;
     let flareB = 0;
 
@@ -95,6 +106,7 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
       const tube = tubes.current[i];
       if (tube) {
         const flat = pulse.inReveal ? 1 - reveal * 0.985 : 1;
+        tube.scale.x = pulse.inReveal ? 1 + (spread * REVEAL_SPREAD) / Math.abs(pulse.curve.v0.x) : 1;
         tube.scale.y = flat;
         tube.position.y = REVEAL_Y * (1 - flat);
         tube.visible = alive > 0 || back > 0;
@@ -125,6 +137,15 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
       }
     });
 
+    WHISPERS.forEach((whisper, i) => {
+      const ring = whispers.current[i];
+      if (!ring) return;
+      const life = ramp(t, whisper.at + whisper.ring * 0.28, whisper.at + whisper.ring * 0.28 + 1.5);
+      ring.visible = life > 0 && life < 1;
+      ring.scale.setScalar(0.5 + easeOut(life) * (0.9 + whisper.ring * 0.5));
+      (ring.material as MeshBasicMaterial).opacity = Math.sin(life * Math.PI) * 0.8;
+    });
+
     const draft = pulses.find(pulse => pulse.id === "draft")!;
     if (hold.current) {
       const waiting = span(t, draft.land, draft.land + 0.5, draft.fade - 0.5, draft.fade - 0.1);
@@ -148,17 +169,23 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
       const since = t - tap.t;
       return tap.seat === seat && since >= 0 ? sum + Math.exp(-since * 5) * Math.sin(since * 22) * 0.07 : sum;
     }, 0);
-    const lift = easeInOut(ramp(t, REVEAL_START, REVEAL_START + 3)) * 0.0;
+    const apart = spread * REVEAL_SPREAD;
     if (budA.current) {
-      budA.current.position.set(A_POS.x, A_POS.y + Math.sin(t * 0.52) * 0.06 + lift, A_POS.z);
+      budA.current.position.set(A_POS.x - apart, A_POS.y + Math.sin(t * 0.52) * 0.06, A_POS.z);
       budA.current.rotation.set(0.05 + nudge("A"), 0.55 + Math.sin(t * 0.31) * 0.22, 0.16 + nudge("A"));
     }
     if (budB.current) {
-      budB.current.position.set(B_POS.x, B_POS.y + Math.sin(t * 0.52 + 1.7) * 0.06 + lift, B_POS.z);
+      budB.current.position.set(B_POS.x + apart, B_POS.y + Math.sin(t * 0.52 + 1.7) * 0.06, B_POS.z);
       budB.current.rotation.set(0.05 + nudge("B"), -0.55 + Math.sin(t * 0.31 + 2.1) * 0.22, -0.16 - nudge("B"));
     }
-    if (lightA.current) lightA.current.intensity = 34 + flareA * 320;
-    if (lightB.current) lightB.current.intensity = 34 + flareB * 320;
+    if (lightA.current) {
+      lightA.current.position.x = -4.6 - apart;
+      lightA.current.intensity = 34 + flareA * 320;
+    }
+    if (lightB.current) {
+      lightB.current.position.x = 4.6 + apart;
+      lightB.current.intensity = 34 + flareB * 320;
+    }
     if (dust.current) {
       dust.current.rotation.y = t * 0.012;
       dust.current.position.y = t * 0.01;
@@ -171,6 +198,14 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
       dot.visible = pop > 0;
       dot.scale.setScalar(0.55 + pop * 0.45);
       (dot.material as MeshBasicMaterial).opacity = pop;
+      const label = revealLabels.current[i];
+      if (!label) return;
+      label.style.visibility = pop > 0.001 ? "visible" : "hidden";
+      if (pop > 0.001) {
+        revealDot(i, point).project(camera);
+        label.style.transform = "translate3d(" + ((point.x * 0.5 + 0.5) * size.width).toFixed(1) + "px," + ((0.5 - point.y * 0.5) * size.height).toFixed(1) + "px,0)";
+        label.style.opacity = String(pop);
+      }
     });
 
     onTime(t);
@@ -179,11 +214,11 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
   return (
     <>
       <color attach="background" args={["#000"]} />
-      <Environment resolution={256} frames={1} environmentIntensity={1.35}>
+      <Environment resolution={256} frames={1}>
         <Lightformer form="rect" intensity={4.2} position={[0, 6, 2]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 4, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[-9, 1, 3]} rotation={[0, Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[9, 1, 3]} rotation={[0, -Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
-        <Lightformer form="rect" intensity={0.12} position={[0, 0, 12]} scale={[12, 6, 1]} />
+        <Lightformer form="rect" intensity={0.5} position={[0, 2, 12]} scale={[14, 5, 1]} />
       </Environment>
       <pointLight ref={lightA} color={SEAT_A} position={[-4.6, 1.4, -1.6]} intensity={5} distance={9} />
       <pointLight ref={lightB} color={SEAT_B} position={[4.6, 1.4, -1.6]} intensity={5} distance={9} />
@@ -208,21 +243,28 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
         <mesh
           key={i}
           ref={node => { rings.current[i] = node; }}
-          position={tap.seat === "B" ? [B_POS.x + 0.2, B_POS.y - 1.0, 0.45] : [A_POS.x - 0.2, A_POS.y - 1.0, 0.45]}
+          position={tap.seat === "B" ? [B_POS.x, B_POS.y, 0.6] : [A_POS.x, A_POS.y, 0.6]}
         >
           <ringGeometry args={[0.2, 0.226, 64]} />
           <meshBasicMaterial color={new Color(tap.seat === "B" ? SEAT_B : SEAT_A).multiplyScalar(HDR)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
         </mesh>
       ))}
 
-      <mesh ref={hold} position={[B_POS.x + 0.2, B_POS.y - 1.0, 0.45]} rotation={[0, -0.35, 0]}>
-        <ringGeometry args={[0.42, 0.432, 96, 1, 0, Math.PI * 1.5]} />
+      {WHISPERS.map((whisper, i) => (
+        <mesh key={i} ref={node => { whispers.current[i] = node; }} position={[A_POS.x + 0.62, A_POS.y, 0.5]} rotation={[0, 0.2, 0]}>
+          <ringGeometry args={[0.3, 0.312, 48, 1, -0.6, 1.2]} />
+          <meshBasicMaterial color={new Color(SEAT_B).multiplyScalar(HDR)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
+        </mesh>
+      ))}
+
+      <mesh ref={hold} position={[B_POS.x, B_POS.y, 0.6]} rotation={[0, -0.35, 0]}>
+        <ringGeometry args={[0.66, 0.674, 96, 1, 0, Math.PI * 1.5]} />
         <meshBasicMaterial color={new Color("#ffffff").multiplyScalar(HDR * 0.7)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
       </mesh>
 
       {REVEAL_PULSES.map((pulse, i) => (
-        <mesh key={pulse.id} ref={node => { dots.current[i] = node; }} position={[-1.7 + (3.4 * i) / (REVEAL_PULSES.length - 1), REVEAL_Y, 0.3]}>
-          <sphereGeometry args={[0.075, 32, 32]} />
+        <mesh key={pulse.id} ref={node => { dots.current[i] = node; }} position={revealDot(i, new Vector3())}>
+          <sphereGeometry args={[0.095, 32, 32]} />
           <meshBasicMaterial color={new Color(pulse.color).multiplyScalar(HDR)} toneMapped={false} transparent />
         </mesh>
       ))}

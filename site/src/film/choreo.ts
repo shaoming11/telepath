@@ -13,8 +13,8 @@ export const NEUTRAL = "#f5f5f7";
 
 export const A_POS = new Vector3(-3.2, 0.5, 0);
 export const B_POS = new Vector3(3.2, 0.5, 0);
-const A_EAR = new Vector3(-2.62, 0.55, 0.25);
-const B_EAR = new Vector3(2.62, 0.55, 0.25);
+const A_EAR = new Vector3(-2.78, 0.5, 0.2);
+const B_EAR = new Vector3(2.78, 0.5, 0.2);
 
 const arc = (from: Vector3, to: Vector3, apex: number, z = 0) =>
   new QuadraticBezierCurve3(from, new Vector3((from.x + to.x) / 2, from.y + apex * 2, z), to);
@@ -28,6 +28,7 @@ export type Pulse = {
   fade: number;
   label?: { text: string; taps: string; at: "apex" | "A" | "B"; caption?: string };
   inReveal: boolean;
+  reveal?: string;
 };
 
 export const TAP_1 = 10.4;
@@ -42,22 +43,22 @@ const FAN = [
 
 export const PULSES: Pulse[] = [
   {
-    id: "first", curve: arc(B_EAR, A_EAR, 0.7), color: SEAT_B, launch: 10.7, land: 13.6, fade: 17.6, inReveal: true,
+    id: "first", curve: arc(B_EAR, A_EAR, 0.7), color: SEAT_B, launch: 10.7, land: 13.6, fade: 17.6, inReveal: true, reveal: "Slow down",
     label: { text: "Slow down", taps: "", at: "A", caption: "In your partner’s voice" },
   },
-  { id: "receipt", curve: arc(A_EAR, B_EAR, -0.45, 0.4), color: SEAT_A, launch: 16.3, land: 17.9, fade: 18.4, inReveal: true },
+  { id: "receipt", curve: arc(A_EAR, B_EAR, -0.45, 0.4), color: SEAT_A, launch: 16.3, land: 17.9, fade: 18.4, inReveal: true, reveal: "Heard" },
   ...FAN.map((entry, i): Pulse => ({
     id: "fan" + i, curve: arc(B_EAR, A_EAR, 0.6 + i * 0.85, -0.2 * i), color: SEAT_B,
-    launch: 19.6 + i * 1.15, land: 21.8 + i * 1.15, fade: 27.4, inReveal: i < 2,
+    launch: 19.6 + i * 1.15, land: 21.8 + i * 1.15, fade: 27.4, inReveal: i % 2 === 1, reveal: entry.text,
     label: { ...entry, at: "apex" },
   })),
   {
-    id: "draft", curve: new QuadraticBezierCurve3(new Vector3(0.4, -4.2, 1.5), new Vector3(3.4, -2.6, 2.2), new Vector3(3.1, 0.2, 0.7)),
+    id: "draft", curve: new QuadraticBezierCurve3(new Vector3(0.4, -4.2, 1.5), new Vector3(3.4, -2.6, 2.2), new Vector3(3.1, 0.3, 0.55)),
     color: NEUTRAL, launch: 29.2, land: 31.4, fade: 34.4, inReveal: false,
     label: { text: "The judge on the left looks lost", taps: "", at: "B", caption: "A draft. Only you hear it." },
   },
   {
-    id: "approved", curve: arc(B_EAR, A_EAR, 1.1), color: SEAT_B, launch: 34.25, land: 36.5, fade: 38.3, inReveal: true,
+    id: "approved", curve: arc(B_EAR, A_EAR, 1.1), color: SEAT_B, launch: 34.25, land: 36.5, fade: 38.3, inReveal: true, reveal: "The judge on the left looks lost",
     label: { text: "The judge on the left looks lost", taps: "", at: "A", caption: "Sent after your tap" },
   },
 ];
@@ -65,7 +66,7 @@ export const PULSES: Pulse[] = [
 type Key = { t: number; pos: [number, number, number]; look: [number, number, number] };
 
 const KEYS: Key[] = [
-  { t: 0, pos: [5.9, 0.65, 3.4], look: [3.2, -0.3, 0] },
+  { t: 0, pos: [5.7, 0.7, 3.6], look: [3.3, 0.05, 0] },
   { t: 3, pos: [4.9, 0.4, 5.6], look: [2.7, -0.4, 0] },
   { t: 5.8, pos: [0.3, 0.1, 13], look: [0, -0.9, 0] },
   { t: 8.2, pos: [0, 0.05, 13.6], look: [0, -0.95, 0] },
@@ -78,8 +79,8 @@ const KEYS: Key[] = [
   { t: 30, pos: [3.6, -1.15, 8], look: [1.3, -1, 0] },
   { t: 33.8, pos: [3.4, -0.55, 7.4], look: [1.5, -0.8, 0] },
   { t: 36.4, pos: [-0.6, 0.45, 12.8], look: [-0.4, -0.6, 0] },
-  { t: 39.6, pos: [0, 0.65, 14.6], look: [0, -0.65, 0] },
-  { t: 46, pos: [0, 0.15, 16.2], look: [0, -0.75, 0] },
+  { t: 40.4, pos: [0, 0.65, 16.2], look: [0, -0.55, 0] },
+  { t: 46, pos: [0, 0.2, 17.4], look: [0, -0.6, 0] },
 ];
 
 const posCurve = new CatmullRomCurve3(KEYS.map(k => new Vector3(...k.pos)), false, "centripetal");
@@ -99,7 +100,7 @@ export function cameraAt(t: number, aspect: number, pos: Vector3, look: Vector3)
   const u = keyU(t);
   posCurve.getPoint(u, pos);
   lookCurve.getPoint(u, look);
-  const widen = Math.max(1, 1.5 / aspect);
+  const widen = Math.max(1, 1.3 / aspect);
   if (widen > 1) pos.sub(look).multiplyScalar(widen).add(look);
 }
 
@@ -111,3 +112,7 @@ export const TAPS = [
   ...[0, 1, 2, 3].map(i => ({ t: 19.35 + i * 1.15, seat: "B" as const })),
   { t: TAP_2, seat: "B" as const },
 ];
+
+export const REVEAL_PULSES = PULSES.filter(pulse => pulse.inReveal);
+export const REVEAL_SPREAD = 1.7;
+export const revealDot = (i: number, out: Vector3) => out.set(-3.1 + (6.2 * i) / (REVEAL_PULSES.length - 1), REVEAL_Y, 0.3);

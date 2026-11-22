@@ -3,10 +3,12 @@ import "../tokens.css";
 import "./story.css";
 import { Film } from "../film/Film";
 import { BEATS, FILM_SECONDS } from "../film/timeline";
+import { hubSnapshot, operate } from "../hub/useHub";
 import { LiveStage } from "../stage/LiveStage";
 
 const PX_PER_SECOND = 120;
 const FILM_PX = FILM_SECONDS * PX_PER_SECOND;
+// Space after the last beat opens the hub's Reveal if a session is live, then lands on the stage.
 const HOLDS = BEATS.map(beat => beat.hold);
 
 function hasWebGL() {
@@ -23,7 +25,9 @@ export function StoryPage() {
   const track = useRef<HTMLDivElement>(null);
   const progress = useRef<HTMLDivElement>(null);
   const hint = useRef<HTMLParagraphElement>(null);
+  const sticky = useRef<HTMLDivElement>(null);
   const [webgl] = useState(hasWebGL);
+  const [visible, setVisible] = useState(true);
   const reduced = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
   const timeAtScroll = () => Math.min(FILM_SECONDS, Math.max(0, (window.scrollY - (track.current?.offsetTop ?? 0)) / PX_PER_SECOND));
@@ -46,11 +50,20 @@ export function StoryPage() {
   }, [reduced]);
 
   useEffect(() => {
-    const step = (direction: 1 | -1) => {
+    if (!sticky.current) return;
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(sticky.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const step = (direction: 1 | -1, reveal = false) => {
       const now = play.current?.to ?? timeAtScroll();
       if (direction === 1) {
         const next = HOLDS.find(hold => hold > now + 0.05);
         if (next === undefined) {
+          const hub = hubSnapshot();
+          if (reveal && hub.status === "online" && hub.state.phase === "live") operate("reveal");
           document.getElementById("live")?.scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
           return;
         }
@@ -68,7 +81,7 @@ export function StoryPage() {
       if (window.scrollY > (track.current?.offsetTop ?? 0) + FILM_PX + 4) return;
       if ([" ", "ArrowDown", "ArrowRight", "PageDown"].includes(event.key)) {
         event.preventDefault();
-        step(1);
+        step(1, event.key === " ");
       } else if (["ArrowUp", "ArrowLeft", "PageUp"].includes(event.key)) {
         event.preventDefault();
         step(-1);
@@ -87,15 +100,14 @@ export function StoryPage() {
 
   return (
     <main className="story">
-      <header className="story-bar">
-        <span className="story-mark">Telepathy</span>
-        <a className="story-skip" href="#live">Live stage</a>
-      </header>
-
       {webgl ? (
         <div className="story-track" ref={track} style={{ height: `calc(${FILM_PX}px + 100vh)` }}>
-          <div className="story-sticky">
-            <Film clock={clock} onFrame={onFrame} />
+          <div className="story-sticky" ref={sticky}>
+            <Film clock={clock} onFrame={onFrame} paused={!visible} />
+            <header className="story-bar">
+              <span className="story-mark">Telepathy</span>
+              <a className="story-skip" href="#live">Live stage</a>
+            </header>
             <p className="story-hint" ref={hint}>Scroll, or press space</p>
             <div className="story-progress" aria-hidden><div ref={progress} /></div>
           </div>
