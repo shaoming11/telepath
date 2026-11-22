@@ -210,7 +210,13 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath, W
       if (mode !== 'openai' || !env.OPENAI_API_KEY) return null;
       const instructions = SCENARIO_INSTRUCTIONS[scenario];
       const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, 'pitch_help', instructions);
-      return scenario === 'social' ? validateSocialCue(raw, passages) : validateAnswer(raw, passages, context.turns);
+      if (scenario === 'social') return validateSocialCue(raw, passages);
+      if (raw.status === 'answer' && typeof raw.answer === 'string'
+        && (raw.answer.length > 180 || raw.answer.trim().split(/\s+/).length > 20)) {
+        const first = raw.answer.trim().match(/^.+?[.!?](?=\s|$)/)?.[0];
+        if (first && first.length <= 180 && first.split(/\s+/).length <= 20) raw.answer = first;
+      }
+      return validateAnswer(raw, passages, context.turns);
     },
     ...(mode === 'openai' && env.OPENAI_API_KEY && {
       async verifyPitchCue(context, { signal } = {}) {
