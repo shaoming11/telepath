@@ -302,7 +302,7 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, setti
     },
     codec,
     coach,
-    settings: { roomSenseMs: 0, ...settings },
+    settings: { roomSenseMs: 0, automaticQuietMs: 0, automaticCooldownMs: 0, automaticPlaybackGuard: false, ...settings },
     now: () => now,
   });
 
@@ -1581,7 +1581,7 @@ test('armed question mode prepares during speech and only plays after the matchi
   assert.equal(calls, 1);
 });
 
-test('a changed question replaces speculative content and an unavailable model still produces a cue without a deck', async t => {
+test('a changed question drops speculative content and provider failures stay silent unless help is explicitly requested', async t => {
   let room, calls = 0;
   const { session, act, seatFrames } = await createLiveSession({
     sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5 },
@@ -1595,8 +1595,9 @@ test('a changed question replaces speculative content and an unavailable model s
   room.partial('Who is the target buyer');
   await eventually(() => calls === 1);
   room.committed('How does your microphone work?');
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help')?.text, 'Mac listens. Phones keep earbud controls.');
+  await eventually(() => calls >= 2);
+  await eventually(() => !session.seats.A.pitchHelp);
+  assert.equal(seatFrames.A.some(frame => frame.kind === 'pitch_help'), false);
   session.pitchReferences = [];
   await act('B', { type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'empty' });
   assert.equal(seatFrames.B.find(frame => frame.kind === 'pitch_help')?.text, 'Mac listens. Phones keep earbud controls.');
@@ -1950,4 +1951,60 @@ test('a material verified correction is spoken only to the original seat', async
   assert.equal(revision.text, quote);
   assert.match(decodeURIComponent(revision.url), /Correction\./);
   assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
+});
+
+test('automatic cues require a natural pause, no approval or receipt, cooldown and new information', async t => {
+  const { session, advance } = await createLiveSession({ settings: { automaticQuietMs: 2500, automaticCooldownMs: 30000, automaticPlaybackGuard: true } });
+  t.after(() => session.close());
+  session.room.transcript.push({ text: 'Our answer is finished.', at: session.now() });
+  assert.equal(session.canWhisperAutomatically('B', 'A useful fact.'), false);
+  advance(2600);
+  assert.equal(session.canWhisperAutomatically('B', 'A useful fact.'), true);
+  session.room.partial = { text: 'One more thing', at: session.now() };
+  assert.equal(session.canWhisperAutomatically('B'), false);
+  session.room.partial = null;
+  session.cue('A', 'sent', { url: '/assets/test.mp3', text: 'An explicit requested answer is playing.' });
+  assert.equal(session.canWhisperAutomatically('B'), false);
+  advance(5000);
+  session.seats.A.receipt = { until: session.now() + 500 };
+  assert.equal(session.canWhisperAutomatically('B'), false);
+  session.seats.A.receipt = null;
+  session.seats.A.pending = { id: 'approval' };
+  assert.equal(session.canWhisperAutomatically('B'), false);
+  session.seats.A.pending = null;
+  session.rememberAutomaticCue('A useful fact.');
+  assert.equal(session.canWhisperAutomatically('B', 'Another fact.'), false);
+  advance(30001);
+  assert.equal(session.canWhisperAutomatically('B', 'A useful fact!'), false);
+  assert.equal(session.canWhisperAutomatically('B', 'Another fact.'), true);
+});
+test('low-value automatic whispers and renewed speech during audio generation never play', async t => {
+  let finish;
+  const { session, audioFrames } = await createLiveSession({ codec: { assessWhisper: async () => false }, audio: {
+    speech: () => new Promise(resolve => { finish = resolve; }),
+  } });
+  t.after(() => session.close());
+  const input = { kind: 'draft', text: 'A minor extra detail.', started_at: session.now(), signal: new AbortController().signal, automatic: true };
+  await session.previewDraft('B', input);
+  assert.equal(finish, undefined);
+  session.codec.assessWhisper = async () => true;
+  const attempt = session.previewDraft('B', input);
+  await eventually(() => finish);
+  session.room.partial = { text: 'I am still answering', at: session.now() };
+  finish({ url: '/assets/test.mp3' });
+  await attempt;
+  assert.equal(audioFrames('B', 'draft').length, 0);
+});
+
+test('retained research alone supports future missing-point evaluation without uploaded documents', async t => {
+  const { session, state, advance } = await answerFixture(t, { codec: { answer: async request => missedPoint(request) } });
+  const references = await parseReferences([{ name: 'External research.md', data: Buffer.from('The pilot lasts six weeks.').toString('base64') }]);
+  session.references = [];
+  session.researchReferences = references;
+  session.addTranscript('A', 'How does the pilot work?');
+  session.addTranscript('A', 'We run it with one sales team.');
+  advance(2600);
+  await session.answerQuestion();
+  assert.equal(state().seats.B.pending?.suggestionKind, 'advice');
+  assert.equal(state().seats.B.pending?.sources[0].name, 'External research.md');
 });
