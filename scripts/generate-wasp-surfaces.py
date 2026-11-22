@@ -12,13 +12,21 @@ ROOT = Path(__file__).resolve().parents[1]
 SURFACES = {"PhoneMarkup": "public/index.html", "StageMarkup": "public/stage.html"}
 REACT_REGIONS = {
     "PhoneMarkup": (
-        "PhonePitchControls",
-        r'<button[^>]* id="question-mode"[^>]*>[\s\S]*?</button>\s*'
-        r'<section[^>]* id="live-pitch-notes"[^>]*>[\s\S]*?</section>',
+        (
+            "PhonePitchControls",
+            r'<button[^>]* id="question-mode"[^>]*>[\s\S]*?</button>\s*'
+            r'<section[^>]* id="live-pitch-notes"[^>]*>[\s\S]*?</section>',
+        ),
+        (
+            "CalibrationTrial",
+            r'<div[^>]* id="cal-trial"[^>]*>[\s\S]*?<i id="cal-bar"></i></div>\s*</div>',
+        ),
     ),
     "StageMarkup": (
-        "StageRoomConsole",
-        r'<section[^>]* id="room-microphone-panel"[^>]*>[\s\S]*?</section>',
+        (
+            "StageRoomConsole",
+            r'<section[^>]* id="room-microphone-panel"[^>]*>[\s\S]*?</section>',
+        ),
     ),
 }
 DESTINATION = ROOT / "wasp-ui/src/generated"
@@ -169,12 +177,13 @@ def generated(component, source):
     parser.feed((ROOT / source).read_text())
     markup = parser.markup()
     imports = ""
-    if component in REACT_REGIONS:
-        name, pattern = REACT_REGIONS[component]
+    for name, pattern in REACT_REGIONS.get(component, ()):
         markup, replacements = re.subn(pattern, f"<{name} />", markup)
         if replacements != 1:
             raise ValueError(f"Expected exactly one generated {name} region.")
-        imports = f"import {{ {name} }} from '../{name}';\n\n"
+        imports += f"import {{ {name} }} from '../{name}';\n"
+    if imports:
+        imports += "\n"
     lines = "\n".join("      " + line if line else "" for line in markup.splitlines())
     return (
         f"// Generated from {source}. Run python3 scripts/generate-wasp-surfaces.py after edits.\n"

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { build_plan, createCalibration } from '../public/calibrate.mjs';
+import { COUNT_CALIBRATION_WINDOW_MS } from '../public/earbuds/airpods-1/input.mjs';
 import { createMediaInput, DEFAULT_EMULATOR, DEFAULT_TIMING, patternFor } from '../public/input.mjs';
 import { APP_TIMING } from '../public/phone-data.mjs';
 import { createWorld } from './phone-fakes.mjs';
@@ -121,6 +122,8 @@ test('the Pro earbud check reports three squeezes and ignores injected gestures'
   callbacks.get('previoustrack')();
   assert.equal(element('cal-quick-previoustrack').textContent, 'Triple squeeze · received');
   assert.match(element('cal-quick-nexttrack').textContent, /double squeeze either/);
+  assert.match(element('cal-quick-status').textContent, /1 of 3/);
+  assert.equal(element('cal-quick-continue').textContent, 'Continue with defaults');
   callbacks.get('nexttrack')();
   assert.equal(element('cal-quick-nexttrack').textContent, 'Double squeeze · received');
   assert.equal(element('cal-quick-continue').hidden, false);
@@ -128,6 +131,7 @@ test('the Pro earbud check reports three squeezes and ignores injected gestures'
   callbacks.get('play')();
   assert.equal(element('cal-quick-pause').textContent, 'Single squeeze · received');
   assert.equal(element('cal-quick-status').textContent, 'All three squeezes reached Telepathy.');
+  assert.equal(element('cal-quick-continue').textContent, 'Continue');
   element('cal-quick-continue').listeners.click[0]();
   assert.equal(calibration.active(), false);
   assert.deepEqual(exits, [{ skipped: true }]);
@@ -171,8 +175,15 @@ test('the timing screen shows the real repeat total and fills a bar for a receiv
   await world.flush();
   assert.equal(element('cal-count').textContent, 'Trial 1 / 4');
   assert.match(element('cal-repetition').textContent, /1 of 2/);
+  const first_beat = element('cal-beats').children[0];
   assert.deepEqual(element('cal-beats').children.map(beat => beat.dataset.filled), ['false', 'false']);
   calibration.note_raw({ action: 'nexttrack', at: performance.now() });
+  assert.deepEqual(element('cal-beats').children.map(beat => beat.dataset.filled), ['true', 'false']);
+  assert.equal(element('cal-beats').children[0], first_beat);
+  world.advance(COUNT_CALIBRATION_WINDOW_MS);
+  await world.flush();
+  assert.equal(element('cal-phase').dataset.phase, 'miss');
+  assert.match(element('cal-detail').textContent, /Received Next Track.*Retrying/);
   assert.deepEqual(element('cal-beats').children.map(beat => beat.dataset.filled), ['true', 'false']);
   calibration.stop();
 });

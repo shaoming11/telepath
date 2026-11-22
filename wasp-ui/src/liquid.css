@@ -75,6 +75,57 @@ body.wasp-liquid {
   border-color: color-mix(in srgb, var(--seat) 48%, var(--line-2));
   box-shadow: inset 0 1px 0 rgba(var(--seat-rgb), .12);
 }
+.wasp-liquid #cal-quick-controls li { min-block-size: 44px; }
+.wasp-liquid #cal-quick-controls li::before {
+  border-radius: 50%;
+  transition: background-color 110ms ease, box-shadow 110ms ease;
+}
+.wasp-liquid #cal-quick-controls li[data-received=true]::before {
+  box-shadow: 0 0 0 4px rgba(var(--seat-rgb), .14);
+}
+.wasp-liquid .wasp-trial {
+  padding: 18px clamp(14px, 4.4vw, 22px);
+  border-radius: 23px;
+  background: var(--panel);
+  transition: border-color 180ms var(--glide), box-shadow 180ms var(--glide);
+}
+.wasp-liquid .wasp-trial[data-phase=now] {
+  border-color: rgba(var(--seat-rgb), .55);
+  box-shadow: inset 0 0 0 1px rgba(var(--seat-rgb), .12);
+}
+.wasp-liquid .wasp-trial[data-phase=hit] { border-color: rgba(var(--seat-rgb), .7); }
+.wasp-liquid .wasp-trial__instruction { margin-block-start: 8px; font-size: .875rem; color: var(--fg-2); }
+.wasp-liquid .wasp-trial .cal-trial__prompt { padding-block: 21px 17px; }
+.wasp-liquid .wasp-trial .cal-pattern { font-size: clamp(1.85rem, 9vw, 2.75rem); }
+.wasp-liquid .wasp-trial .cal-phase {
+  border-radius: 99px;
+  padding-inline: 10px;
+  min-inline-size: 6.25rem;
+  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+}
+.wasp-liquid .wasp-trial .cal-phase:is([data-phase=checking], [data-phase=hit]) {
+  color: var(--seat);
+  border-color: rgba(var(--seat-rgb), .5);
+}
+.wasp-liquid .wasp-trial .cal-trial__beats {
+  gap: 8px;
+  margin-block-start: 19px;
+  max-inline-size: 13.5rem;
+}
+.wasp-liquid .wasp-trial .cal-trial__beats i {
+  inline-size: auto;
+  block-size: 12px;
+  flex: 1 1 0;
+  border-radius: 99px;
+  transition: background-color 110ms var(--glide), box-shadow 110ms var(--glide), border-color 110ms var(--glide);
+}
+.wasp-liquid .wasp-trial .cal-trial__beats i[data-filled=true] {
+  box-shadow: inset 0 1px 0 #ffffff48, 0 0 10px rgba(var(--seat-rgb), .2);
+}
+.wasp-liquid .wasp-trial__feedback { min-block-size: 3.8rem; padding-block: 10px 5px; }
+.wasp-liquid .wasp-trial__receipt { font-size: .875rem; color: var(--fg); }
+.wasp-liquid .wasp-trial .cal-trial__feedback { min-block-size: 0; padding-block: 4px 0; }
+.wasp-liquid #cal-summary[data-result=saved] { animation: liquid-enter 230ms var(--glide) both; }
 
 .wasp-liquid .live-nav {
   margin-inline: 6px;
@@ -142,15 +193,6 @@ body.wasp-liquid {
 
 .wasp-liquid .signal.fired {
   animation: liquid-touch 440ms var(--glide) both;
-}
-
-.wasp-liquid #cal-trial[data-phase=now] {
-  transition: border-color 180ms ease, box-shadow 210ms ease;
-  box-shadow: 0 0 0 3px rgba(var(--seat-rgb), .09);
-}
-
-.wasp-liquid #cal-summary[data-result=saved] {
-  animation: liquid-enter 230ms var(--glide) both;
 }
 
 .wasp-liquid[data-surface="stage"] {

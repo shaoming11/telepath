@@ -15,8 +15,9 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
     const hooks = source => Array.from(source.matchAll(/\s(id|role|aria-[a-z-]+|data-[a-z-]+)="([^"]*)"/g), match => [match[1], match[2]]);
     if (filename === 'index') {
       const pitch = await text('wasp-ui/src/PhonePitchControls.tsx');
-      const replaced = jsx.replace('<PhonePitchControls />', pitch);
-      const dynamic = new Set(['aria-pressed:false', 'data-pitch-owner:react']);
+      const calibration = await text('wasp-ui/src/CalibrationTrial.tsx');
+      const replaced = jsx.replace('<PhonePitchControls />', pitch).replace('<CalibrationTrial />', calibration);
+      const dynamic = new Set(['aria-pressed:false', 'data-pitch-owner:react', 'data-calibration-owner:react']);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
       assert.match(pitch, /aria-pressed=\{state\.armed\}/);
@@ -46,6 +47,16 @@ test('the Wasp question rail delegates actions to the hub controller and animate
   }
   assert.match(component, /disabled=\{!state\.live \|\| !state\.connected\}/);
   assert.match(component, /prefers-reduced-motion: reduce/);
+});
+
+test('the Wasp calibration panel separates raw browser events from the validated trial status', async () => {
+  const controller = await text('public/calibrate.mjs');
+  const component = await text('wasp-ui/src/CalibrationTrial.tsx');
+  assert.match(controller, /dispatchEvent\(new CustomEvent\('telepathy:calibration-trial'/);
+  assert.match(component, /addEventListener\('telepathy:calibration-trial'/);
+  assert.match(component, /key=\{index\} data-filled=\{index < observed\}/);
+  assert.match(component, /trial\?\.tone === 'hit' \? 'Accepted'/);
+  assert.match(component, /Checking timing/);
 });
 
 test('phone input remains uncontrolled for Media Session and setup controllers', async () => {
