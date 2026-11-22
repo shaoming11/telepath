@@ -20,7 +20,7 @@ The Wasp phone highlights a private cue on the `telepathy:pitch-speech-start` ev
 
 The Live phone shows **Send**, **Discard**, and **Acknowledge whisper** above the monitor when they are available. The cue controls scroll separately from the navigation row.
 
-The Operator dock keeps the Stage controls available and retains the last announcement while you compose another. Each seat reports when Web Audio starts. Reveal puts confirmed bit and word counts first and labels canned results as scripted.
+The Operator dock keeps the Stage controls available and retains the last announcement while you compose another. The paired Live cards show dispatch on the sender’s side, playback start on the recipient’s side, then acknowledgement for the matching cue. Each seat reports when Web Audio starts. Reveal puts confirmed bit and word counts first and labels canned results as scripted.
 
 The launcher compares a hash of the build inputs before reusing the compiled Wasp client. The Node hub compresses transport by serving precompressed hashed scripts and styles to browsers that accept gzip. Sources: scripts/build-wasp-ui, hub/server.mjs.
 
