@@ -22,7 +22,7 @@ This doc fixes the product architecture: concepts, flows, signals, sounds, scree
 
 ## System map
 
-Phones only capture and play; the MacBook hub does the thinking.
+Phones capture and play; the MacBook hub coordinates the existing system. The planned Maritime extension below moves contextual coaching and answer retrieval to a hosted team agent while keeping delivery and approval on the hub.
 
 ```
 Seat A                                Hub · MacBook                         Seat B
@@ -44,7 +44,51 @@ cached fixed messages                 Codebook                                  
                                       chimes
 ```
 
-Each phone is a thin seat: it recognises tap patterns, streams its mic, and plays chimes and whispers, with fixed messages cached locally. The hub on the MacBook holds the session, the codebooks, each room's situation and the AI codec, and it is the only part that talks to ElevenLabs and the LLM. The stage screen is a view of the hub.
+Each phone is a thin seat: it recognises tap patterns, streams its mic, and plays chimes and whispers, with fixed messages cached locally. The hub on the MacBook holds the session, the codebooks, each room's situation and the AI codec. In the existing system it calls ElevenLabs and the LLM directly; with Maritime enabled, it calls the hosted agent for contextual suggestions. The stage screen is a view of the hub.
+
+## Planned extension: Maritime conversation coach
+
+**Specification only; implement later.** Add one Maritime-hosted agent per team. It follows the live conversation through ElevenLabs transcripts, detects unanswered questions, retrieves supporting information, and proposes a concise answer or solution when the participants need help. Keep all existing fixed whispers, private previews, approval gestures, expiry and receipts.
+
+### Listening and answering
+
+1. With listening enabled and participants informed, the phones stream audio through the existing transcription path. The hub sends recent transcript excerpts to the agent; Maritime does not transcribe the audio itself.
+2. The agent tracks questions and whether the conversation has answered them. It can begin retrieval when a question appears, but offers help only after an explicit admission of uncertainty, a coach request through L-R, or a configurable unanswered interval with no answer underway. Silence alone does not prove that nobody knows.
+3. Search the team's approved brief and reference documents first. Return a supported answer or actionable next step with source references. External search is a later, explicitly enabled extension; if the available material does not support an answer, stay quiet rather than invent one. Treat speech and retrieved documents as content, not instructions to the agent.
+4. In Pitch, preview the suggestion privately to coach B in the neutral assistant voice: "Send: ...?" Keep the spoken answer to one short sentence; show supporting detail and sources on the stage. An explicit request from either seat uses that seat as the approving sender.
+5. After preview playback, R1 approves delivery to the partner in the sender's cloned voice. Existing discard controls and the six-second approval window still apply. The agent never speaks directly to the partner or the room without approval.
+6. Cancel an unsent suggestion if the question is answered, the conversation moves on, or the session resets. Preserve the existing draft cooldown and suppress repeated suggestions for the same question.
+
+Example: someone asks who the buyer is, and the presenter says they are unsure. The agent retrieves the buyer from the approved brief and privately proposes "The buyer is the sales team lead" to B. B approves; A hears the answer in B's voice and can respond aloud.
+
+### Implementation boundary
+
+```text
+Phones -> hub -> ElevenLabs transcription -> recent transcript
+                                              |
+                                              v
+                                    Maritime team agent
+                                    question tracking + brief lookup
+                                              |
+                                              v
+Hub validates candidate -> assistant preview -> sender approves
+                                              |
+                                              v
+                              ElevenLabs sender-voice whisper -> partner
+```
+
+- **Maritime service:** deploy a small Node container with `GET /health` and `POST /chat`, bound to the injected `PORT`. The service runs the coaching model and a brief-retrieval tool. Maritime provides the persistent agent machine; it is not the transcription or speech provider.
+- **Hub adapter:** add a Maritime provider behind the existing `codec.evaluate(...)` interface. Send session ID, transcript sequence, recent speech, requested sender, and recent suggestions. Keep credentials on the hub or hosted service, never on phones.
+- **Response:** return `suggest` or `no_action`. A suggestion includes session ID, transcript sequence, question ID, sender, short text, source references, and a brief reason. The hub validates and maps it into the existing candidate/preview flow; approval stays local.
+- **State:** persist the approved brief, reference documents and explicitly saved preferences under `/data`. Keep raw audio, transcript excerpts, open questions and pending suggestions transient; clear session state on reset. Do not persist conversation content through application logs.
+- **Timing and failure:** prepare the agent before the session, debounce transcript updates, and allow one evaluation in flight. Retrieval runs in the background and never blocks fixed cues. Discard stale or late results; retain the existing preview/audio timeout and approval expiry. Measure the full question-to-preview delay on physical devices before setting the retrieval deadline.
+- **Reveal:** show the triggering question, retrieved source, proposed answer, and whether the human approved it. This makes the agent's contribution visible without reading evidence aloud.
+
+### Minimum scope and acceptance
+
+Build one team agent, one approved brief, question tracking, grounded retrieval, the hub adapter, and the evidence reveal. Defer multiple collaborating agents, web research, accounts and automatic long-term conversation memory.
+
+Verify with a live question that was not scripted into the demo: the agent finds a supported answer and delivers it only after preview and approval. Also verify no answer when evidence is missing, cancellation when a human answers first, discard/expiry without delivery, reset rejecting old results, and fixed whispers continuing when Maritime is unavailable.
 
 ## Core concepts
 
@@ -245,7 +289,7 @@ Hardcode everything that doesn't need to be live for the demo to be real.
 
 ## Out of scope, and what to verify first
 
-Out of scope: accounts, saving anything after the session, more than two seats, head gestures, working with the phone locked (keep screens awake), and production security or privacy controls beyond a visible listening indicator.
+Out of scope: accounts, saving conversation content after the session, more than two seats, head gestures, working with the phone locked (keep screens awake), and production security or privacy controls beyond a visible listening indicator. The planned Maritime extension may persist approved reference material and explicitly saved preferences, as described above.
 
 Verify before building on them:
 
