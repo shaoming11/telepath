@@ -1051,6 +1051,7 @@ function render_masthead() {
   const mine = my_state();
   const seat_text = ui.seat ? 'Seat ' + ui.seat + (mine?.name ? ' · ' + mine.name : '') : '';
   set_text($('masthead-seat'), seat_text);
+  if (document.body.dataset.seat !== (ui.seat ?? '')) document.body.dataset.seat = ui.seat ?? '';
   const state = ui.seat ? ui.connection_state : ui.hub_reachable ? 'on' : ui.hub_reachable === false ? 'off' : 'wait';
   $('connection').dataset.state = state;
   set_text($('connection-text'), state === 'on' ? 'Hub' : state === 'wait' ? 'Connecting' : 'Offline');
