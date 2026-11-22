@@ -189,6 +189,13 @@
       <section class="channel-monitor" id="lobby-monitor" aria-label="Live audio and context"></section>
       <section class="reference-panel" id="reference-setup" aria-labelledby="reference-title">
         <h2 class="kicker" id="reference-title">TEAM BRIEF &amp; REFERENCES</h2>
+        <label for="coach-scenario">Coaching scenario</label>
+        <select id="coach-scenario">
+          <option value="pitch">Pitch Q&amp;A</option>
+          <option value="interview">Interview</option>
+          <option value="social">Date or small talk</option>
+        </select>
+        <p class="reference-note" id="coach-scenario-note"></p>
         <p>Add documents so the coach can find supported answers to live questions. Answers are previewed privately and require a tap to send.</p>
         <label for="reference-files">Choose a brief and reference documents</label>
         <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx">

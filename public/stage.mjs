@@ -22,8 +22,13 @@ const COACH_SOURCES = Object.freeze({
   maritime: 'Maritime agent', 'maritime-assisted': 'Maritime · OpenAI-assisted', 'maritime-rules': 'Maritime rules fallback', local: 'Local fallback',
 });
 export const OPERATOR_ACTIONS = Object.freeze([
-  'begin', 'preset', 'inject', 'replay', 'canned', 'reset', 'reveal', 'announce', 'coach_ask', 'coach_send',
+  'begin', 'preset', 'inject', 'replay', 'canned', 'reset', 'reveal', 'announce', 'coach_ask', 'coach_send', 'coach_scenario',
 ]);
+export const COACH_SCENARIOS = Object.freeze({
+  pitch: 'Pitch Q&A: answers from the Telepathy brief and your uploads',
+  interview: 'Interview: answers from your uploaded persona documents only',
+  social: 'Date or small talk: topics and questions to ask, no documents needed',
+});
 
 const SIGNAL_ROLES = Object.freeze({
   R1: 'fixed 1 · confirms a draft',
@@ -41,7 +46,7 @@ const KIND_LABELS = Object.freeze({
   discard: 'discarded', expire: 'expired', situation: 'situation', preview_playback: 'preview playback',
   confirm: 'confirmed', preset_suggestion: 'suggestion', replay: 'replay',
   back: 'earbud back', cache_error: 'cache error', announcement: 'announcement',
-  answer_evidence: 'answer evidence', pitch_help: 'private pitch cue',
+  answer_evidence: 'answer evidence', pitch_help: 'private pitch cue', coach_scenario: 'coaching scenario',
 });
 
 /* ── shapes: the hub is the source of truth, so every field is read defensively ── */
@@ -226,6 +231,7 @@ export function normalizeState(raw) {
     references: asList(source.references),
     referencesLoading: source.referencesLoading === true,
     questionAnswering: source.questionAnswering === true,
+    coachScenario: Object.hasOwn(COACH_SCENARIOS, source.coachScenario) ? source.coachScenario : 'pitch',
     questionState: isObject(source.questionState) ? source.questionState : { status: 'idle' },
     roomInput: source.roomInput ?? 'phones',
     room: isObject(source.room) ? source.room : { listening: false, transcription: 'off', transcript: [] },
@@ -285,6 +291,10 @@ export function operatorFrame(action, options = {}) {
     frame.preset = preset;
     const context = firstText(options.context);
     if (context) frame.context = context;
+  }
+  if (action === 'coach_scenario') {
+    if (!Object.hasOwn(COACH_SCENARIOS, options.scenario)) return null;
+    frame.scenario = options.scenario;
   }
   if (action === 'inject') {
     const seat = seatKey(options.seat);
@@ -693,6 +703,11 @@ function boot() {
       !state.questionAnswering ? 'Document answering requires OPENAI_API_KEY and the OpenAI text provider. Fixed whispers and ordinary coaching remain available.'
         : !referenceMessage ? state.references.length ? 'References ready. Question answering starts with the session.' : 'Built-in Telepathy brief is ready. Upload files to add details.' : ''].filter(Boolean).join(' ');
     fill(byId('reference-list'), state.references.map(item => node('li', null, `${item.name} · ${item.characters.toLocaleString()} characters`)));
+    const scenario = byId('coach-scenario');
+    if (scenario.value !== state.coachScenario) scenario.value = state.coachScenario;
+    scenario.disabled = linkState !== 'live' || state.canned || state.phase === 'reveal';
+    byId('coach-scenario-note').textContent = COACH_SCENARIOS[state.coachScenario]
+      + (state.coachScenario === 'interview' && !state.references.length ? '. Upload the persona documents first, or the coach stays quiet.' : '.');
     byId('answer-panel').hidden = state.phase === 'lobby' || !state.references.length && !state.answerHistory.length;
     const answer = state.questionState;
     const labels = { idle: 'Listening for questions', researching: 'Checking the conversation and references…', waiting: 'Giving the conversation time to answer',
@@ -708,7 +723,7 @@ function boot() {
       const planner = entry.kind === 'pitch_help' && Object.hasOwn(planners, entry.source) ? planners[entry.source] : '';
       const playback = entry.kind === 'pitch_help' && Number.isFinite(entry.requestToPlaybackMs) && entry.requestToPlaybackMs >= 0
         ? `${(entry.requestToPlaybackMs / 1000).toFixed(1)} s to playback start` : '';
-      const metadata = [planner, playback].filter(Boolean).join(' · ');
+      const metadata = [planner, entry.ungrounded ? 'not from your files' : '', playback].filter(Boolean).join(' · ');
       const evidence = asList(entry.sources).map(source => `${source.name}: “${source.quote}”`).join('; ');
       return node('li', null, [metadata ? `${entry.text} (${metadata})` : entry.text, evidence].filter(Boolean).join(' — '));
     }));
@@ -1396,6 +1411,7 @@ function boot() {
 
     ui.begin.addEventListener('click', () => send('begin'));
     byId('reference-upload').addEventListener('click', () => void uploadReferences());
+    byId('coach-scenario').addEventListener('change', event => send('coach_scenario', { scenario: event.target.value }));
     byId('reference-clear').addEventListener('click', () => void uploadReferences(true));
     byId('room-transcript-clear').addEventListener('click', () => sendRoomFrame({ type: 'operator', action: 'room_transcript_clear' }));
     byId('room-mic-start').addEventListener('click', () => void startRoomCapture());
