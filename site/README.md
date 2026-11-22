@@ -6,7 +6,7 @@ A Wasp app with the page we project during the pitch: a scroll-driven 3D film th
 | --- | --- |
 | `/` | The story. Five film beats, then the live stage as the last section. |
 | `/stage` | The live stage on its own (Lobby, Live board, Reveal, Operator). |
-| `/film` | The bare film for frame capture. `/film?t=12.5` shows one frame; `window.__film.seek(t)` resolves once that frame has painted. |
+| `/film` | The bare film. `/film?play=1` plays it on a loop. `/film?t=12.5` shows one frame, and `window.__film.seek(t)` resolves once that frame has painted (used for frame capture). |
 
 ## Run
 
