@@ -38,7 +38,6 @@ const DEFAULT_SETTINGS = Object.freeze({
   pitchRaceMs: 6000,
   pitchVerifyMs: 15_000,
   pitchSpeechMs: 4600,
-  longCueSpeechMs: 16_000,
   pitchPlaybackMs: 8000,
   pitchPlanWaitMs: 120,
   pitchPlanDebounceMs: 220,
@@ -52,6 +51,9 @@ const USABLE_VOICES = new Set(['ready', 'fallback']);
 const SYNCHRONIZED_STEPS = { earbuds: 'earbuds', calibrate: 'calibrated', ready: 'wantsReady' };
 const CACHE_SIGNALS = Object.keys(BOOKS.Pitch);
 const MAX_PITCH_CUE_WORDS = 20;
+const SPOKEN_CUE_TARGET_WORDS = 22;
+const CUE_SENTENCES = new Intl.Segmenter('en', { granularity: 'sentence' });
+const COACHING_VERB = /^(?:add|ask|clarify|compare|connect|describe|explain|give|highlight|lead|mention|name|note|offer|open|point|rephrase|repeat|restate|say|show|start|summarize|tell|thank|transition|use|walk)\b/i;
 const TRANSCRIPTION_STATUSES = new Set(['waiting', 'connecting', 'live', 'recovering', 'unavailable']);
 
 function createSeat(name) {
@@ -1122,12 +1124,11 @@ export class Session {
     }) };
   }
 
-  async speakPitchCue(seat, text, signal, timeoutMs = this.settings.pitchSpeechMs) {
+  async speakPitchCue(seat, text, signal) {
     try {
       return toUrl(await withDeadline(deadline => this.audio.speech(seat, text, {
         voice: null, sim: false, role: 'assistant', signal: deadline, whisper: true,
-        timeoutMs, whisperTimeoutMs: timeoutMs > this.settings.pitchSpeechMs ? Math.floor(timeoutMs * 2 / 3) : undefined,
-      }), timeoutMs, signal));
+      }), this.settings.pitchSpeechMs, signal));
     } catch { return null; }
   }
 
@@ -1162,8 +1163,10 @@ export class Session {
           signal.throwIfAborted();
           let cue;
           let source = 'openai';
-          if (result?.status === 'answer') {
-            try { cue = validateAnswer(result, resolved.passages, resolved.roomTranscript, { allowLongAnswer: true }); }
+          if (result?.status === 'answer' || (result?.status === 'advice' && result.sources?.length)) {
+            const evidenceAnswer = { ...result, status: 'answer',
+              question: result.question || resolved.questionHint || 'What should I say next?' };
+            try { cue = validateAnswer(evidenceAnswer, resolved.passages, resolved.roomTranscript, { allowLongAnswer: true }); }
             catch {}
           } else if (result?.status === 'advice' && Array.isArray(result.sources) && result.sources.length === 0
             && typeof result.answer === 'string' && result.answer.trim()) {
@@ -1171,7 +1174,7 @@ export class Session {
           }
           if (cue && resolved.wearerAnswerSoFar) {
             const said = new Set(questionKey(resolved.wearerAnswerSoFar).split(' '));
-            const sentences = cue.answer.match(/[^.!?]+[.!?]*/g) ?? [];
+            const sentences = [...CUE_SENTENCES.segment(cue.answer)].map(item => item.segment);
             while (sentences.length) {
               const words = new Set(questionKey(sentences[0]).split(' '));
               if (words.size < 6 || [...words].filter(word => said.has(word)).length / words.size < .8) break;
@@ -1189,18 +1192,33 @@ export class Session {
           }
           if (!cue) {
             const answer = resolved.questionHint
-              ? 'Let me show you how it behaves in the live demo. I can follow up on anything it doesn’t cover.'
-              : 'Let me show you what Telepath does. My teammate can send me a private cue without interrupting the conversation.';
+              ? 'Restate the question briefly. Show how it works in the demo and offer to follow up on the rest.'
+              : 'Open with the problem. Show a teammate sending you one private cue.';
             cue = { answer, sources: [], ungrounded: true };
             source = 'local-fallback';
           }
+          const [first, second] = [...CUE_SENTENCES.segment(cue.answer)].map(item => item.segment.trim());
+          let lead = second && questionKey(first + ' ' + second).split(' ').length <= SPOKEN_CUE_TARGET_WORDS
+            ? first + ' ' + second : first;
+          if (questionKey(lead).split(' ').length > SPOKEN_CUE_TARGET_WORDS) {
+            const questionWords = new Set(questionKey(resolved.questionHint).split(' ').filter(word => word.length > 3));
+            const clauses = lead.split(/;| — /).map(text => text.trim()).filter(Boolean)
+              .map(text => ({ text, words: questionKey(text).split(' ') }))
+              .filter(({ words }) => words.length <= SPOKEN_CUE_TARGET_WORDS);
+            clauses.sort((a, b) => b.words.filter(word => questionWords.has(word)).length
+              - a.words.filter(word => questionWords.has(word)).length);
+            if (clauses.length) lead = clauses[0].text;
+          }
+          cue.answer = COACHING_VERB.test(lead) ? lead : 'In your own words: ' + lead;
+          const synthesisStarted = performance.now();
           notify(cue.answer);
           surfacedCue = true;
           state.lastPitchCue = { text: cue.answer, points: [] };
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
-          const speechBudget = cue.answer.length > 180 ? this.settings.longCueSpeechMs : this.settings.pitchSpeechMs;
-          const url = await this.speakPitchCue(seat, cue.answer, signal, speechBudget);
-          return { ...cue, url, source, timing: { hubMs: Math.round(performance.now() - started) } };
+          const url = await this.speakPitchCue(seat, cue.answer, signal);
+          return { ...cue, url, source, timing: {
+            speechMs: Math.round(performance.now() - synthesisStarted), hubMs: Math.round(performance.now() - started),
+          } };
         }
         const cue = await this.racePitchCue(resolved, started, signal).catch(() => null)
           ?? { answer: this.fallbackCue(question), source: 'local-fallback', sources: [], timing: {} };
@@ -1218,7 +1236,7 @@ export class Session {
         return { ...cue, url, timing: {
           ...cue.timing, speechMs: Math.round(rendered - composed), hubMs: Math.round(rendered - started),
         } };
-      }, this.settings.pitchRaceMs + (oneShot ? this.settings.longCueSpeechMs : this.settings.pitchSpeechMs), lifecycle);
+      }, this.settings.pitchRaceMs + this.settings.pitchSpeechMs, lifecycle);
       if (lifecycle.aborted) return;
       if (!reply) return;
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
@@ -1228,7 +1246,7 @@ export class Session {
       if (messageId) {
         state.awaitingHeard.set(messageId, entry);
         if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
-        this.cue(seat, 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
+        this.cue(seat, oneShot ? null : 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
       } else {
         this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
       }

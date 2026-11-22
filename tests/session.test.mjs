@@ -1582,14 +1582,15 @@ test('a single room-answer gesture sends the full transcript and hybrid evidence
   assert.equal(calls[0].roomTranscript[0].text, 'Our first introduction starts here.');
   assert.ok(calls[0].roomTranscript.some(turn => turn.text === 'Who is the target buyer?'));
   assert.ok(calls[0].passages.some(passage => passage.text.includes('sales team lead')));
-  assert.deepEqual(whispers, [{ seat: 'A', text: 'The buyer is a sales team lead.', whisper: true }]);
+  assert.deepEqual(whispers, [{ seat: 'A', text: 'In your own words: The buyer is a sales team lead.', whisper: true }]);
+  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').cue, null);
   assert.equal(seatFrames.A.filter(frame => frame.kind === 'pitch_help').length, 1);
   assert.equal(seatFrames.B.some(frame => frame.kind === 'pitch_help'), false);
   session.addTranscript('room', 'Who are your competitors?');
   assert.equal(calls.length, 1);
 });
 
-test('Cue now plays a long sourced answer and gives useful speech if the model cannot answer', async t => {
+test('Cue now condenses a long draft and coaches what to say next', async t => {
   const longAnswer = 'Our buyer is the sales team lead. We built this demo to illustrate how a presenter can get useful context without stopping the conversation. Let me show you what a presenter actually hears when a question comes up.';
   let attempts = 0;
   const { session, act, seatFrames } = await createLiveSession({
@@ -1599,8 +1600,9 @@ test('Cue now plays a long sourced answer and gives useful speech if the model c
       if (++attempts === 1) return { status: 'answer', question: 'Who is the buyer?', answer: longAnswer,
         sources: [{ id: passages.find(passage => passage.name === 'brief.md').id, quote: 'The buyer is the sales team lead.' }] };
       if (attempts === 2) return { status: 'unsupported', answer: '', sources: [] };
-      if (attempts === 4) return { status: 'advice', sources: [],
-        answer: 'The buyer is the sales team lead. Let me show what the presenter hears next.' };
+      if (attempts === 4) return { status: 'advice',
+        sources: [{ id: passages.find(passage => passage.name === 'brief.md').id, quote: 'The buyer is the sales team lead.' }],
+        answer: 'The buyer is the sales team lead. Show what the presenter hears next.' };
       return { status: 'advice', answer: 'Could you clarify which part you want me to show?', sources: [] };
     } },
   });
@@ -1617,10 +1619,11 @@ test('Cue now plays a long sourced answer and gives useful speech if the model c
   await request('followup');
   const cues = seatFrames.A.filter(frame => frame.kind === 'pitch_help');
   assert.equal(cues.length, 4);
-  assert.equal(cues[0].text, longAnswer);
-  assert.match(cues[1].text, /show you how it behaves/);
-  assert.equal(cues[2].text, 'Could you clarify which part you want me to show?');
-  assert.equal(cues[3].text, 'Let me show what the presenter hears next.');
+  assert.equal(cues[0].text, 'In your own words: Our buyer is the sales team lead.');
+  assert.match(cues[1].text, /Restate the question briefly/);
+  assert.equal(cues[2].text, 'In your own words: Could you clarify which part you want me to show?');
+  assert.equal(cues[3].text, 'Show what the presenter hears next.');
+  assert.equal(session.log.filter(entry => entry.kind === 'pitch_help').at(-1).source, 'openai');
   assert.ok(!seatFrames.A.some(frame => frame.text?.includes('No supported cue')));
 });
 

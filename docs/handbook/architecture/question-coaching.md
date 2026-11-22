@@ -1,6 +1,6 @@
 # Question coaching
 
-The Mac streams room audio to ElevenLabs. After a judge asks something, the presenter squeezes AirPods Pro once, double-taps AirPods 1 once, or taps **Cue now**. The hub sends OpenAI the complete room transcript so far, adding any fresh partial text and assigned diarization labels. OpenAI finds the latest substantive question and checks the speech that followed it. It answers an open question, fills in what the presenter missed, or suggests a follow-up or transition after a complete answer. The hub issues one request per accepted gesture.
+The Mac streams room audio to ElevenLabs. After a judge asks something, the presenter squeezes AirPods Pro once, double-taps AirPods 1 once, or taps **Cue now**. The hub sends OpenAI the complete room transcript so far, adding any fresh partial text and assigned diarization labels. OpenAI finds the latest substantive question and checks the speech that followed it. It tells the presenter how to answer, what missing point to add, or where to go next, using one or two short instructions. The hub issues one request per accepted gesture.
 
 ## Retrieval and citations
 
@@ -10,4 +10,4 @@ The room transcript lives in session memory and is cleared on reset. The vector 
 
 ## Playback
 
-After the answer is validated, ElevenLabs synthesizes a whisper. The phone plays the cached chime before the cue, using the same Voice volume as teammate messages. Only the requesting seat receives the answer. If playback fails, the written answer stays visible. Cues require another gesture, so the presenter chooses when to hear one.
+After the answer is validated, ElevenLabs synthesizes a whisper. Cue now plays as soon as the phone decodes the whisper. It uses the same Voice volume as teammate messages. Only the requesting seat receives the answer. If playback fails, the written answer stays visible. Cues require another gesture, so the presenter chooses when to hear one.
