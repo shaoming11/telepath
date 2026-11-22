@@ -1,4 +1,27 @@
 {
-  "revision": 12,
-  "claims": []
+  "revision": 13,
+  "claims": [
+    {
+      "id": "d18fc714-1428-49b7-a695-79de85d1bd7d",
+      "owner": "fireheartjerry",
+      "agent": "codex-airpods1",
+      "branch": "jerry/airpods-1",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "public/earbuds/airpods-1",
+        "public/calibrate.mjs",
+        "public/phone.mjs",
+        "tests/airpods-1.test.mjs",
+        "tests/phone-session.test.mjs"
+      ],
+      "paths": [
+        "public/calibrate.mjs",
+        "public/earbuds/airpods-1",
+        "public/phone.mjs",
+        "tests/airpods-1.test.mjs",
+        "tests/phone-session.test.mjs"
+      ],
+      "claimedAt": "2026-11-22T03:17:49.267Z"
+    }
+  ]
 }
