@@ -1,0 +1,8 @@
+{
+  "records": [
+    "A stage opened mid-session immediately showed the confirmed whisper.",
+    "The projector showed Seat A offline, then recovered. The same session delivered the next cue without duplicating the earlier line.",
+    "Reset from the second stage cleared the first stage and returned both to a fresh lobby."
+  ],
+  "errors": []
+}

@@ -1,0 +1,21 @@
+{
+  "Chromium": {
+    "mobileStills": true,
+    "presenterNavigation": true,
+    "operatorDialog": true,
+    "external": [],
+    "errors": [],
+    "filePlayback": [
+      62,
+      1920,
+      1080
+    ]
+  },
+  "WebKit": {
+    "mobileStills": true,
+    "presenterNavigation": true,
+    "operatorDialog": true,
+    "external": [],
+    "errors": []
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "sampleRate": 48000,
+  "sourceSeconds": 62.0,
+  "decodeSeconds": 62.016,
+  "comparisons": [
+    {
+      "time": 10.4,
+      "offsetSamples": 0,
+      "correlation": 0.99998
+    },
+    {
+      "time": 13.6,
+      "offsetSamples": -1,
+      "correlation": 0.99996
+    },
+    {
+      "time": 16.1,
+      "offsetSamples": -1,
+      "correlation": 0.99997
+    },
+    {
+      "time": 31.4,
+      "offsetSamples": -2,
+      "correlation": 0.99994
+    },
+    {
+      "time": 34.0,
+      "offsetSamples": -3,
+      "correlation": 0.99987
+    },
+    {
+      "time": 36.5,
+      "offsetSamples": 2,
+      "correlation": 0.99995
+    },
+    {
+      "time": 41.2,
+      "offsetSamples": 0,
+      "correlation": 1.0
+    },
+    {
+      "time": 48.5,
+      "offsetSamples": 0,
+      "correlation": 0.99999
+    },
+    {
+      "time": 55.2,
+      "offsetSamples": 1,
+      "correlation": 0.99994
+    }
+  ]
+}

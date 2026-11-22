@@ -1,0 +1,35 @@
+{
+  "observations": [
+    "Stage socket opened",
+    "Simulated setup complete for A",
+    "Simulated setup complete for B",
+    "B fixed whisper, confirmed playback, A receipt",
+    "B private preview heard, B approved, A playback confirmed",
+    {
+      "phase": "reveal",
+      "bits": 7,
+      "messages": [
+        {
+          "text": "Slow down",
+          "played": true
+        },
+        {
+          "text": "One minute left",
+          "played": true
+        },
+        {
+          "text": "The judge on the left looks lost",
+          "played": true
+        },
+        {
+          "text": "Wrap it up now",
+          "played": true
+        }
+      ],
+      "receipt": true
+    },
+    "Canned take reached reveal"
+  ],
+  "errors": [],
+  "lastPhase": "reveal"
+}

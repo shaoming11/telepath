@@ -1,0 +1,22 @@
+import React,{useCallback,useRef} from "react";
+import {createRoot} from "react-dom/client";
+import {advance} from "@react-three/fiber";
+import {Film} from "./src/film/Film";
+import {FILM_SECONDS} from "./src/film/timeline";
+
+function CapturePage(){
+  const clock=useRef(0);
+  const onReady=useCallback(()=>{
+    const canvas=document.querySelector("canvas");
+    const gl=canvas.getContext("webgl2");
+    function draw(t){
+      clock.current=Math.max(0,Math.min(FILM_SECONDS,t));
+      advance(clock.current,true);
+      gl.finish();
+    }
+    draw(0);
+    window.__film={seconds:FILM_SECONDS,seek:async t=>{draw(t);await new Promise(r=>requestAnimationFrame(r));}};
+  },[]);
+  return <Film clock={clock} paused onReady={onReady}/>;
+}
+createRoot(document.getElementById("root")).render(<CapturePage/>);

@@ -1,0 +1,5 @@
+plugins:[{name:"render-compatibility",setup(build){build.onLoad({filter:/[\\/]Scene\.tsx$/},async({path})=>{
+  const src=await readFile(path,"utf8");
+  if(!src.includes("<EffectComposer multisampling={4}>"))throw Error("Unexpected comparison scene.");
+  return {loader:"tsx",resolveDir:dirname(path),contents:src.replace("<EffectComposer multisampling={4}>",'<EffectComposer multisampling={0}>')};
+});}}],

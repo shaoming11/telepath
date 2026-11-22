@@ -1,0 +1,15 @@
+{
+  "packagedLinuxRuntime": true,
+  "references": [
+    {
+      "name": "fixture.pdf",
+      "characters": 47
+    },
+    {
+      "name": "fixture.docx",
+      "characters": 47
+    }
+  ],
+  "mobileCinema": true,
+  "errors": []
+}

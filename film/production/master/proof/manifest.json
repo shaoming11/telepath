@@ -1,0 +1,125 @@
+{
+  "burst": [
+    {
+      "at": 0,
+      "name": "reveal-00"
+    },
+    {
+      "at": 0.16666666666666666,
+      "name": "reveal-01"
+    },
+    {
+      "at": 0.3333333333333333,
+      "name": "reveal-02"
+    },
+    {
+      "at": 0.5,
+      "name": "reveal-03"
+    },
+    {
+      "at": 0.6666666666666666,
+      "name": "reveal-04"
+    },
+    {
+      "at": 0.8333333333333334,
+      "name": "reveal-05"
+    },
+    {
+      "at": 1,
+      "name": "reveal-06"
+    },
+    {
+      "at": 1.1666666666666667,
+      "name": "reveal-07"
+    },
+    {
+      "at": 1.3333333333333333,
+      "name": "reveal-08"
+    },
+    {
+      "at": 1.5,
+      "name": "reveal-09"
+    },
+    {
+      "at": 1.6666666666666667,
+      "name": "reveal-10"
+    },
+    {
+      "at": 1.8333333333333333,
+      "name": "reveal-11"
+    },
+    {
+      "at": 2,
+      "name": "reveal-12"
+    },
+    {
+      "at": 2.1666666666666665,
+      "name": "reveal-13"
+    },
+    {
+      "at": 2.3333333333333335,
+      "name": "reveal-14"
+    },
+    {
+      "at": 2.5,
+      "name": "reveal-15"
+    },
+    {
+      "at": 2.6666666666666665,
+      "name": "reveal-16"
+    },
+    {
+      "at": 2.8333333333333335,
+      "name": "reveal-17"
+    },
+    {
+      "at": 3,
+      "name": "reveal-18"
+    },
+    {
+      "at": 3.1666666666666665,
+      "name": "reveal-19"
+    },
+    {
+      "at": 3.3333333333333335,
+      "name": "reveal-20"
+    },
+    {
+      "at": 3.5,
+      "name": "reveal-21"
+    },
+    {
+      "at": 3.6666666666666665,
+      "name": "reveal-22"
+    },
+    {
+      "at": 3.8333333333333335,
+      "name": "reveal-23"
+    },
+    {
+      "at": 4,
+      "name": "reveal-24"
+    }
+  ],
+  "bits": 7,
+  "messages": [
+    {
+      "text": "Slow down",
+      "played": true
+    },
+    {
+      "text": "One minute left",
+      "played": true
+    },
+    {
+      "text": "The judge on the left looks lost",
+      "played": true
+    },
+    {
+      "text": "Wrap it up now",
+      "played": true
+    }
+  ],
+  "receipt": true,
+  "privatePreviewBeforeApproval": true
+}

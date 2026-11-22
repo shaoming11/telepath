@@ -1,0 +1,10 @@
+{"time":"2026-11-22T08:05:20.758Z","event":"started","deadline":"2026-11-23T12:00:00.000Z"}
+{"time":"2026-11-22T08:05:41.989Z","event":"pass","passes":1,"sockets":1,"messages":4,"bits":7,"heap":32069179,"movieSha256":"5a28d7c5d83e2795d63a8ce4ff2afdae7f29b6d974604a8aaee18c018f7c88b0"}
+{"time":"2026-11-22T08:05:42.000Z","event":"holding","next":"2026-11-22T10:05:42.000Z"}
+{"time":"2026-11-22T10:06:01.879Z","event":"pass","passes":2,"sockets":1,"messages":4,"bits":7,"heap":27687801,"movieSha256":"5a28d7c5d83e2795d63a8ce4ff2afdae7f29b6d974604a8aaee18c018f7c88b0"}
+{"time":"2026-11-22T10:06:01.938Z","event":"holding","next":"2026-11-22T12:06:01.938Z"}
+{"time":"2026-11-22T12:06:22.484Z","event":"pass","passes":3,"sockets":1,"messages":4,"bits":7,"heap":27991377,"movieSha256":"5a28d7c5d83e2795d63a8ce4ff2afdae7f29b6d974604a8aaee18c018f7c88b0"}
+{"time":"2026-11-22T12:06:22.500Z","event":"holding","next":"2026-11-22T14:06:22.499Z"}
+{"time":"2026-11-22T14:06:45.982Z","event":"pass","passes":4,"sockets":2,"messages":4,"bits":7,"heap":29066606,"movieSha256":"5a28d7c5d83e2795d63a8ce4ff2afdae7f29b6d974604a8aaee18c018f7c88b0"}
+{"time":"2026-11-22T14:06:45.986Z","event":"holding","next":"2026-11-22T16:06:45.986Z"}
+{"time":"2026-11-22T15:29:05.5856047Z","event":"paused","reason":"User requested pause","completedCheckpoints":4}

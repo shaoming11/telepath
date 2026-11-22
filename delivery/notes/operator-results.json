@@ -1,0 +1,21 @@
+{
+  "results": [
+    "Reset disarms on close and takes effect only after confirmation.",
+    "Synthetic document uploaded and cleared.",
+    {
+      "syntheticMicrophone": "Room microphone\nInput device\nSystem default\nFake Default Audio Input\nFake Audio Input 1\nFake Audio Input 2\nInput level\nStart listening\n\nUnavailable · Transcription unavailable. Check the configured speech provider.\n\nRoom transcript 0"
+    },
+    {
+      "coach": "local",
+      "heard": [
+        "A",
+        "B"
+      ]
+    },
+    "Both simulated seats acknowledged the manual announcement.",
+    "Operator injection delivered the selected line and Replay produced a hub replay event.",
+    "Meeting codebook became active.",
+    "Operator Reveal changed the hub phase."
+  ],
+  "errors": []
+}

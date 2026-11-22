@@ -1,0 +1,1 @@
+[Parsed_ssim_0 @ 000001ba84d82f00] SSIM Y:1.000000 (inf) U:1.000000 (inf) V:1.000000 (inf) All:1.000000 (inf)

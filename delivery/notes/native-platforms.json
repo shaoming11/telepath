@@ -1,0 +1,20 @@
+{
+  "darwin-arm64": {
+    "name": "@napi-rs/canvas-darwin-arm64",
+    "version": "1.2.0",
+    "lockedTarballVerified": true,
+    "bytes": 29146272
+  },
+  "darwin-x64": {
+    "name": "@napi-rs/canvas-darwin-x64",
+    "version": "1.2.0",
+    "lockedTarballVerified": true,
+    "bytes": 33967816
+  },
+  "linux-x64-gnu": {
+    "name": "@napi-rs/canvas-linux-x64-gnu",
+    "version": "1.2.0",
+    "lockedTarballVerified": true,
+    "bytes": 35755872
+  }
+}
