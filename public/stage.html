@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark only">
+<title>Telepathy · Stage</title>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAHklEQVR42mMQEOAnCTHQUcP/FCs8aFTD8NEwaBIfAEVtvfmzixrdAAAAAElFTkSuQmCC">
+<link rel="stylesheet" href="./stage.css">
+</head>
+<body data-stage-root data-phase="lobby" data-link="connecting">
+<a class="skip-link" href="#stage-main">Skip to stage content</a>
+
+<header class="masthead">
+  <div class="masthead__brand">
+    <span class="wordmark">Telepathy</span>
+    <span class="masthead__rule" aria-hidden="true"></span>
+    <span class="mono micro" id="session-readout">session &mdash;</span>
+  </div>
+
+  <nav class="phases" aria-label="Stage phase">
+    <ol>
+      <li data-phase-step="lobby"><span class="phases__name">Lobby</span></li>
+      <li data-phase-step="live"><span class="phases__name">Live board</span></li>
+      <li data-phase-step="reveal"><span class="phases__name">Reveal</span></li>
+    </ol>
+  </nav>
+
+  <div class="masthead__meta">
+    <p class="meta-line"><span class="dot" id="link-dot" aria-hidden="true"></span><span class="mono micro" id="link-readout">hub connecting</span></p>
+    <p class="meta-line mono micro" id="preset-readout">preset &mdash;</p>
+    <p class="meta-line mono micro" id="clock-readout" hidden>00:00</p>
+    <button class="op-toggle" id="op-toggle" type="button" aria-expanded="false" aria-controls="operator" title="Operator controls (keyboard O)">
+      <span class="op-toggle__dot" aria-hidden="true"></span>
+      <span class="sr-only">Operator controls</span>
+    </button>
+  </div>
+</header>
+
+<p class="canned-banner" id="canned-banner" hidden>
+  <span class="canned-banner__tag mono">Canned take</span>
+  <span id="canned-detail">Playing the recorded demo take.</span>
+</p>
+
+<main id="stage-main">
+
+  <!-- ─────────────── LOBBY ─────────────── -->
+  <section class="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>
+    <div class="lobby__head">
+      <h1 class="display" id="lobby-title">Two seats,<br>one silent channel.</h1>
+      <p class="lede">Have both phones join over the hotspot. Test the voices and earbuds before you begin.</p>
+    </div>
+
+    <div class="join">
+      <h2 class="eyebrow">Join address</h2>
+      <p class="join__url mono" id="join-url">&mdash;</p>
+      <dl class="readout">
+        <div class="readout__row"><dt>Stage</dt><dd class="mono" id="stage-url">&mdash;</dd></div>
+        <div class="readout__row"><dt>Transport</dt><dd class="mono" id="secure-readout">&mdash;</dd></div>
+        <div class="readout__row" id="certificate-row" hidden><dt>Certificate</dt><dd class="mono" id="certificate-readout"></dd></div>
+      </dl>
+      <p class="note" id="join-guidance" hidden></p>
+      <h2 class="eyebrow eyebrow--spaced">Rehearsal</h2>
+      <ul class="linkset">
+        <li><a class="linkset__link" href="/?sim=1&amp;seat=A"><span class="mono">A</span> Simulated seat A</a></li>
+        <li><a class="linkset__link" href="/?sim=1&amp;seat=B"><span class="mono">B</span> Simulated seat B</a></li>
+        <li><a class="linkset__link" href="/?calibrate=1"><span class="mono">&#8212;</span> Calibration bench</a></li>
+      </ul>
+    </div>
+
+    <div class="lobby__seats" id="lobby-seats"></div>
+
+    <div class="lobby__codebook">
+      <h2 class="eyebrow">Codebook <span class="mono micro" id="codebook-preset"></span></h2>
+      <dl class="readout readout--codebook" id="lobby-codebook"></dl>
+    </div>
+
+    <div class="primary-bar">
+      <button class="primary" id="begin-button" type="button">
+        <span class="primary__label">Begin session</span>
+        <span class="primary__hint mono" id="begin-hint">both seats ready</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ─────────────── LIVE BOARD ─────────────── -->
+  <section class="screen screen--live" id="screen-live" aria-labelledby="live-title" hidden>
+    <div class="live__head">
+      <h1 class="eyebrow" id="live-title">Live board</h1>
+      <p class="live__preset" id="live-preset">&mdash;</p>
+      <p class="live__context" id="live-context"></p>
+      <div class="bits">
+        <span class="bits__value display-num" id="bits-value">&mdash;</span>
+        <span class="bits__unit mono">bits from taps</span>
+      </div>
+    </div>
+
+    <div class="live__seats" id="live-seats"></div>
+
+    <div class="stream">
+      <h2 class="eyebrow">Signals, drafts, messages</h2>
+      <ol class="stream__list" id="stream-list" aria-label="Session stream"></ol>
+      <p class="empty mono" id="stream-empty">waiting for the first tap</p>
+    </div>
+
+    <div class="primary-bar">
+      <button class="primary" id="reveal-button" type="button">
+        <span class="primary__label">Reveal</span>
+        <span class="primary__hint mono">show the timeline and both transcripts</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- ─────────────── REVEAL ─────────────── -->
+  <section class="screen screen--reveal" id="screen-reveal" aria-labelledby="reveal-title" hidden>
+    <div class="reveal__head">
+      <h1 class="display" id="reveal-title">Everything that<br>went across.</h1>
+      <div class="reveal__total">
+        <span class="display-num" id="reveal-bits">&mdash;</span>
+        <span class="mono micro">total bits tapped</span>
+        <span class="mono micro" id="reveal-count"></span>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <h2 class="eyebrow">Timeline</h2>
+      <ol class="timeline__list" id="timeline-list" aria-label="Message timeline"></ol>
+      <p class="empty mono" id="timeline-empty">no messages in this session</p>
+    </div>
+
+    <div class="transcripts" id="reveal-transcripts"></div>
+  </section>
+</main>
+
+<p class="phase-announce" id="phase-announce" role="status" aria-live="polite"></p>
+
+<aside class="operator" id="operator" aria-labelledby="operator-title" hidden>
+  <div class="operator__head">
+    <h2 class="eyebrow" id="operator-title">Operator</h2>
+    <button class="ghost" id="op-close" type="button">Close <span class="mono micro">esc</span></button>
+  </div>
+
+  <div class="operator__group">
+    <div class="operator__buttons">
+      <button class="op-action" id="op-begin" type="button" data-action="begin">Begin</button>
+      <button class="op-action" id="op-reveal" type="button" data-action="reveal">Reveal</button>
+      <button class="op-action" id="op-replay" type="button" data-action="replay">Replay last</button>
+      <button class="op-action op-action--accent" id="op-canned" type="button" data-action="canned">Canned take</button>
+    </div>
+  </div>
+
+  <form class="operator__group" id="op-announce">
+    <h3 class="operator__label">Announce to both seats</h3>
+    <label class="sr-only" for="op-announce-preset">Preset announcement</label>
+    <select id="op-announce-preset" class="control mono">
+      <option value="">Choose a preset line</option>
+    </select>
+    <label class="field-label" for="op-announce-text">Message</label>
+    <textarea id="op-announce-text" class="control control--text" rows="2" maxlength="140"></textarea>
+    <button id="op-announce-send" class="op-action" type="submit">Send announcement</button>
+    <p class="operator__note" id="op-announce-status" role="status"></p>
+  </form>
+
+  <div class="operator__group">
+    <h3 class="operator__label">Preset</h3>
+    <div class="field-row">
+      <label class="sr-only" for="op-preset">Preset</label>
+      <select id="op-preset" class="control mono">
+        <option value="Pitch">Pitch</option>
+        <option value="Party">Party</option>
+        <option value="Meeting">Meeting</option>
+        <option value="Custom">Custom</option>
+      </select>
+      <button class="op-action" id="op-set-preset" type="button">Set</button>
+    </div>
+    <label class="field-label" for="op-context">Context (sent with the preset when filled)</label>
+    <textarea id="op-context" class="control control--text mono" rows="2" spellcheck="false"></textarea>
+  </div>
+
+  <div class="operator__group">
+    <h3 class="operator__label">Inject a signal</h3>
+    <div class="field-row">
+      <label class="sr-only" for="op-seat">Sending seat</label>
+      <select id="op-seat" class="control mono">
+        <option value="A">Seat A</option>
+        <option value="B">Seat B</option>
+      </select>
+      <label class="sr-only" for="op-signal">Signal</label>
+      <select id="op-signal" class="control mono"></select>
+      <button class="op-action" id="op-inject" type="button">Inject</button>
+    </div>
+  </div>
+
+  <div class="operator__group operator__group--danger">
+    <h3 class="operator__label">Reset session</h3>
+    <p class="operator__note">Clears the log, the seats and the bits. The reveal is in memory only.</p>
+    <button class="op-action op-action--danger" id="op-reset" type="button" aria-describedby="op-reset-note">Reset</button>
+    <span class="mono micro" id="op-reset-note"></span>
+  </div>
+
+  <p class="operator__status mono" id="op-status" role="status" aria-live="polite">standing by</p>
+</aside>
+
+<script type="module" src="./stage.mjs"></script>
+</body>
+</html>
