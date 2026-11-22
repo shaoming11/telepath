@@ -21,9 +21,7 @@ Two fixed seats, one MacBook hub. Earbud gestures let a teammate send a cached p
 
 ## Start
 
-For the Wasp frontend on this branch, use `./start-wasp`. See [Wasp UI setup and verification](docs/wasp-ui.md).
-
-From this folder, run `./start`. Node 22.13 or newer is required. The launcher installs missing npm dependencies, starts the stage on loopback, prints the HTTPS phone address, and shows which text model the hub will use.
+From the repository root, run `npm start` or `./start-wasp` to launch the Wasp phone and Stage UI. Use Node.js 24.22.1 or later and Python 3. The launcher builds the frontend when needed, starts the Stage on loopback, and prints the HTTPS phone address for the current network. The classic frontend is available through `./start`. [Wasp setup and verification](docs/wasp-ui.md)
 
 Set `ELEVENLABS_API_KEY` and optionally `OPENAI_API_KEY` in the launcher’s environment, or point `TELEPATHY_ENV_FILE` and `TELEPATHY_OPENAI_ENV_FILE` to owner-only environment files. The default files are `.env.local` and `.env.openai.local`, both ignored by Git. The phones never receive the keys.
 
@@ -85,7 +83,7 @@ The browser rehearsal uses bundled ElevenLabs audio and scripted excerpts. It ca
 - [Exported product spec](docs/spec.md)
 - [Verification report](docs/report.md)
 
-To keep the printed phone URL fixed, set `TELEPATHY_HOST` to the Mac’s hotspot address. If the Mac changes networks, restart the hub for the new IP. Using your own trusted LAN certificate is also supported by setting both `TELEPATHY_TLS_CERT` and `TELEPATHY_TLS_KEY`.
+When switching hotspots, connect the Mac and both phones to the new network, restart the hub, and open the new **Phone join** URL printed in the terminal. The Stage URL stays local to the Mac. On the same checkout, keep `.runtime/tls` so phones can reuse their trusted **Telepathy Local Demo** root certificate. A fresh checkout creates a new root unless you bring over the existing TLS directory. If you set `TELEPATHY_HOST` manually, update it for the new network or unset it for automatic detection.
 
 The checked-in speech and chime files are ElevenLabs-generated demo assets. Fixed, live speech uses the sender’s configured or session clone when it is available. Dynamic provider-generated audio and microphone samples are held in memory. Live seat speech requests Eleven v4 Turbo’s whisper delivery. If the model fails in time to retry, the hub uses Flash from the same ElevenLabs voice at the seat’s quiet playback gain. Check the resulting delivery and volume on both actual earbuds.
 

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "telepathy-coach",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["TELEPATHY_MARITIME=on", "TELEPATHY_MARITIME_PITCH_HELP=on", "./start"],
+      "port": 5780
+    }
+  ]
+}
