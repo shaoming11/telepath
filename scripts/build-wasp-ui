@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+repo="$PWD"
+python3 scripts/generate-wasp-surfaces.py --check
+cd wasp-ui
+wasp=(npm exec --yes --package=@wasp.sh/wasp-cli@0.26.0 -- wasp)
+if [[ ! -d .wasp/spec ]]; then "${wasp[@]}" install; fi
+"${wasp[@]}" build
+PATH="$PWD/node_modules/.bin:$PATH" REACT_APP_API_URL=http://127.0.0.1:5780 vite build
+dist="$PWD/.wasp/out/web-app/build"
+target="$repo/.runtime/wasp-client"
+test -s "$dist/200.html"
+test -d "$dist/wasp-assets"
+mkdir -p "$target/wasp-assets"
+cp -R "$dist/wasp-assets/." "$target/wasp-assets/"
+cp "$dist/200.html" "$target/index.html.next"
+mv "$target/index.html.next" "$target/index.html"

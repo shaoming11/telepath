@@ -1,0 +1,245 @@
+body.wasp-liquid {
+  --base: #080b12;
+  --panel: #111722;
+  --raised: #1a2333;
+  --fg: #f6f8fb;
+  --fg-2: #c6cfdd;
+  --fg-3: #a1aec1;
+  --line: #e4edff19;
+  --line-2: #e4edff2e;
+  --glass-solid: #192331;
+  --glass: #192331c9;
+  --glass-edge: #e4edff38;
+  --glass-shadow: 0 16px 50px #0006, inset 0 1px 0 #ffffff16;
+  --press: 85ms;
+  --settle: 210ms;
+  --glide: cubic-bezier(.22,.68,.24,1.02);
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--sans);
+  color: var(--fg);
+  background: var(--base);
+}
+
+.wasp-liquid :is(.masthead, .live-nav, .nav, #question-mode) {
+  background-color: var(--glass-solid);
+  border-color: var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+}
+
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .wasp-liquid :is(.masthead, .live-nav, .nav, #question-mode) {
+    background-color: var(--glass);
+    -webkit-backdrop-filter: saturate(145%) blur(19px);
+    backdrop-filter: saturate(145%) blur(19px);
+  }
+}
+
+.wasp-liquid :is(button, summary, a, select, input) {
+  transition: background-color var(--settle) ease, border-color var(--settle) ease,
+    box-shadow var(--settle) ease, color var(--settle) ease, transform var(--settle) var(--glide);
+}
+
+.wasp-liquid button:active:not(:disabled) {
+  transform: scale(.978);
+  transition-duration: var(--press);
+  box-shadow: inset 0 1px 0 #ffffff36, inset 0 0 16px #ffffff0e;
+}
+
+.wasp-liquid :focus-visible {
+  outline: 2px solid #f1f6ff;
+  outline-offset: 3px;
+}
+.wasp-liquid button:disabled { cursor: not-allowed; }
+
+.wasp-liquid[data-surface="phone"] .app { background: var(--base); }
+.wasp-liquid[data-surface="phone"] .masthead {
+  top: 7px;
+  height: 52px;
+  margin: 7px 8px 0;
+  padding-inline: 13px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 18px;
+  box-shadow: 0 5px 28px #0005, inset 0 1px 0 #e4edff1c;
+}
+.wasp-liquid .screen.enter:not(#screen-calibrate) { animation: liquid-enter 240ms var(--glide) both; }
+.wasp-liquid .screen h2 { letter-spacing: -.04em; }
+
+.wasp-liquid[data-surface="phone"] :is(.signal, .draft, .pitch-notes, .cal-trial, .cal-check, .last, .channel-monitor) {
+  border-radius: 17px;
+}
+
+.wasp-liquid[data-surface="phone"] :is(button, select):not(.back) { border-radius: 13px; }
+.wasp-liquid #screen-calibrate :is(button, select) { border-radius: 13px; }
+.wasp-liquid #screen-calibrate .cal-check[data-checking=true] {
+  border-color: color-mix(in srgb, var(--seat) 48%, var(--line-2));
+  box-shadow: inset 0 1px 0 rgba(var(--seat-rgb), .12);
+}
+
+.wasp-liquid .live-nav {
+  margin-inline: 6px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 20px 20px 0 0;
+}
+
+.wasp-liquid[data-surface="phone"] #question-mode {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: start;
+  min-height: 64px;
+  gap: 4px;
+  isolation: isolate;
+  border-radius: 18px;
+  padding: 10px 14px;
+  position: relative;
+  text-align: left;
+}
+
+.wasp-liquid #question-mode::after {
+  content: '';
+  position: absolute;
+  right: 15px;
+  top: 15px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--muted, #a1aec1);
+  transition: background var(--settle), box-shadow var(--settle), border-color var(--settle);
+}
+
+.wasp-liquid #question-mode::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(155deg, #ffffff16 0%, transparent 44%);
+  opacity: .5;
+  transition: opacity var(--settle) ease;
+}
+.wasp-liquid #question-mode:is(:active, :focus-visible, [aria-pressed=true])::before { opacity: 1; }
+
+.wasp-liquid #question-mode[aria-pressed=true] {
+  background-color: color-mix(in srgb, var(--seat) 15%, var(--glass-solid));
+  border-color: color-mix(in srgb, var(--seat) 62%, var(--glass-edge));
+}
+
+.wasp-liquid #question-mode[aria-pressed=true]::after {
+  background-color: var(--seat);
+  border-color: var(--seat);
+  box-shadow: 0 0 0 4px rgba(var(--seat-rgb), .12);
+  animation: liquid-affirm 360ms var(--glide) both;
+}
+
+.wasp-liquid .pitch-notes:not([hidden]), .wasp-liquid .draft:not([hidden]) {
+  animation: liquid-enter 220ms var(--glide) both;
+}
+.wasp-liquid .pitch-notes.cue-started {
+  animation: liquid-touch 440ms var(--glide) both;
+}
+
+.wasp-liquid .signal.fired {
+  animation: liquid-touch 440ms var(--glide) both;
+}
+
+.wasp-liquid #cal-trial[data-phase=now] {
+  transition: border-color 180ms ease, box-shadow 210ms ease;
+  box-shadow: 0 0 0 3px rgba(var(--seat-rgb), .09);
+}
+
+.wasp-liquid #cal-summary[data-result=saved] {
+  animation: liquid-enter 230ms var(--glide) both;
+}
+
+.wasp-liquid[data-surface="stage"] {
+  --outer: #05070b;
+  --pad: clamp(18px, 3.3vw, 56px);
+  --sa: #ffa25b;
+  --sb: #8dc5ff;
+}
+
+.wasp-liquid[data-surface="stage"] .frame {
+  border: 1px solid var(--line-2);
+  border-radius: 23px;
+  background: var(--base);
+}
+
+.wasp-liquid[data-surface="stage"] .nav {
+  position: relative;
+  height: auto;
+  min-height: 60px;
+  margin: 12px var(--pad) 0;
+  padding: 7px 16px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 20px;
+}
+
+.wasp-liquid[data-surface="stage"] .hero {
+  min-height: clamp(350px, 51vh, 560px);
+  background: radial-gradient(ellipse at 79% 96%, #253c612c 0%, transparent 62%), var(--base);
+}
+
+.wasp-liquid[data-surface="stage"] .hero__copy { padding-block: 28px; }
+.wasp-liquid[data-surface="stage"] .diagram { animation: liquid-hero 520ms var(--glide); }
+.wasp-liquid .op-toggle { background: #ffffff0b; border-color: var(--glass-edge); }
+.wasp-liquid .op-toggle[aria-expanded=true] { background: #ffffff1c; }
+
+.wasp-liquid :is(.room-console, .operator, .reference-panel, .channel-monitor, .board-seat, .stream) {
+  background-color: var(--panel);
+}
+
+.wasp-liquid .room-console { border-radius: 17px; overflow: hidden; }
+.wasp-liquid :is(.room-console, .reference-panel) :is(button, select) { border-radius: 10px; }
+.wasp-liquid .operator:not([hidden]) {
+  transform-origin: top right;
+  animation: liquid-panel 240ms var(--glide) both;
+}
+.wasp-liquid .stream__row[data-new], .wasp-liquid[data-phase=reveal] .timeline__row {
+  animation: liquid-enter 255ms var(--glide) both;
+}
+.wasp-liquid[data-phase=reveal] .timeline__row:nth-child(2) { animation-delay: 35ms; }
+.wasp-liquid[data-phase=reveal] .timeline__row:nth-child(3) { animation-delay: 70ms; }
+.wasp-liquid[data-phase=reveal] .timeline__row:nth-child(4) { animation-delay: 105ms; }
+
+@keyframes liquid-enter {
+  from { opacity: .88; transform: translateY(7px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes liquid-affirm {
+  from { transform: scale(.62); }
+  62% { transform: scale(1.2); }
+  to { transform: scale(1); }
+}
+@keyframes liquid-touch {
+  0%, 100% { box-shadow: inset 0 1px 0 #ffffff0b; }
+  35% { border-color: var(--seat); box-shadow: inset 0 0 20px rgba(var(--seat-rgb), .16); }
+}
+@keyframes liquid-panel {
+  from { opacity: .88; transform: translate(5px, -4px) scale(.985); }
+  to { opacity: 1; transform: translate(0) scale(1); }
+}
+@keyframes liquid-hero {
+  from { transform: translateY(8px); opacity: .84; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (max-width: 760px) {
+  .wasp-liquid[data-surface="stage"] .frame { border: 0; border-radius: 0; }
+  .wasp-liquid[data-surface="stage"] .nav { margin: 8px 12px 0; padding-inline: 12px; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .wasp-liquid :is(.masthead, .live-nav, .nav, .op-toggle, #question-mode) {
+    background: var(--glass-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: #b5c4d7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.wasp-liquid *, body.wasp-liquid *::before, body.wasp-liquid *::after {
+    animation: none !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

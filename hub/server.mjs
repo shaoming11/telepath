@@ -17,6 +17,7 @@ import { findLanAddress, hotspotIPv6Peers, resolveTLS } from './tls.mjs';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const RUNTIME = fileURLToPath(new URL('../.runtime/', import.meta.url));
+const WASP_CLIENT = resolve(RUNTIME, 'wasp-client');
 const DIAG_LOG = resolve(RUNTIME, 'diag.log');
 const MAX_SOCKET_BACKLOG = 2 * 1024 * 1024;
 const PROJECT_REFERENCE_REFRESH_MS = 2500;
@@ -29,6 +30,7 @@ const TEST_AUDIO = {
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.mjs': 'application/javascript; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.mp3': 'audio/mpeg',
@@ -80,6 +82,7 @@ export function createHub({
   env = process.env, audio, codec, coach, settings, tls = null,
   lan = env.TELEPATHY_HOST ?? findLanAddress(), localPath = null, ledgerPath, projectRoot,
   projectRefreshMs = PROJECT_REFERENCE_REFRESH_MS,
+  waspClient = env.TELEPATHY_WASP_UI === 'on' ? WASP_CLIENT : null,
 } = {}) {
   const assets = new Map();
   const seats = new Map();
@@ -213,15 +216,25 @@ export function createHub({
         if (dynamic) return respond(req, res, 200, dynamic.mime, dynamic.buffer);
       }
       if (TEST_AUDIO[path]) path = '/assets/' + TEST_AUDIO[path];
-      if (path === '/') path = '/index.html';
-      if (path === '/stage') path = '/stage.html';
+      let publicRoot = PUBLIC;
+      if (waspClient && ['/index.html', '/stage.html'].includes(path)) {
+        res.writeHead(302, { Location: (path === '/index.html' ? '/' : '/stage') + request_url.search, 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      if (waspClient && (path === '/' || path === '/stage' || path.startsWith('/wasp-assets/'))) {
+        publicRoot = waspClient;
+        if (!path.startsWith('/wasp-assets/')) path = '/index.html';
+      } else {
+        if (path === '/') path = '/index.html';
+        if (path === '/stage') path = '/stage.html';
+      }
       if (path === '/room' || path === '/room.html') {
         res.writeHead(302, { Location: '/stage#room-microphone-panel', 'Cache-Control': 'no-store' });
         return res.end();
       }
       if (path.split('/').some(segment => segment.startsWith('.'))) return respond(req, res, 404, 'text/plain', 'Not found.');
-      const absolute = resolve(PUBLIC, '.' + path);
-      if (!absolute.startsWith(resolve(PUBLIC) + sep)) return respond(req, res, 404, 'text/plain', 'Not found.');
+      const absolute = resolve(publicRoot, '.' + path);
+      if (!absolute.startsWith(resolve(publicRoot) + sep)) return respond(req, res, 404, 'text/plain', 'Not found.');
       const file = await stat(absolute);
       const mime = TYPES[extname(absolute)];
       if (!file.isFile() || !mime) return respond(req, res, 404, 'text/plain', 'Not found.');
@@ -393,6 +406,9 @@ export function createHub({
   return {
     session, assets,
     async start({ port = 5780, tlsPort = 5743, host = '0.0.0.0' } = {}) {
+      if (waspClient && !(await stat(resolve(waspClient, 'index.html')).catch(() => null))?.isFile()) {
+        throw new Error('Wasp client is missing. Run ./scripts/build-wasp-ui first.');
+      }
       if (ledgerPath) await speech.sweepLedger?.();
       project = await buildProjectReferences({ root: projectRoot });
       session.pitchReferences = project.documents;
@@ -415,6 +431,7 @@ export function createHub({
         localPort: http_address.port,
         tlsPort: https_address?.port ?? null,
         codec: language.mode ?? 'injected',
+        frontend: waspClient ? 'wasp' : 'classic',
         voicePreview: true,
         roomMic: true,
         roomInput: session.roomInput,
