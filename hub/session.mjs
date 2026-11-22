@@ -1,3 +1,4 @@
+import { createResearch } from './research.mjs';
 import { BUILD_STORY_EVIDENCE, BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, missingBuildPoint, nearlySameQuestion, sameQuestion, sourcedProjectCue } from './pitch-question.mjs';
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
@@ -135,12 +136,13 @@ function signalIntent(frame, state, now) {
 }
 
 export class Session {
-  constructor({ emitSeat, emitStage, audio, codec, coach, settings = {}, now = Date.now }) {
+  constructor({ emitSeat, emitStage, audio, codec, coach, researchFactory = () => createResearch({ env: {} }), settings = {}, now = Date.now }) {
     this.emitSeat = emitSeat;
     this.emitStage = emitStage;
     this.audio = audio;
     this.codec = codec;
     this.coach = coach;
+    this.researchFactory = researchFactory;
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.now = now;
     this.generation = 0;
@@ -180,6 +182,8 @@ export class Session {
     this.calibration = null;
     this.sensing = false;
     this.references = [];
+    this.researchReferences = [];
+    this.research = this.researchFactory();
     this.referencesLoading = false;
     this.answerVersion = 0;
     this.answerController = null;
@@ -801,6 +805,7 @@ export class Session {
       at: this.now(), text,
       ...(Number.isInteger(meta?.segment) && { streamId: meta.streamId, segment: meta.segment }),
     });
+    if (this.phase === 'live') this.researchInBackground(state.transcript);
     if (seat === 'room' && state.transcript.length > 60) state.transcript.splice(0, state.transcript.length - 60);
     if (this.phase === 'live' && !(seat === 'room' && SEATS.some(person => this.seats[person].questionMode)) && this.references.length && this.codec?.questionAnswering) {
       const key = questionKey(text);
@@ -898,6 +903,20 @@ export class Session {
     this.pitchPlanner.clear();
   }
 
+  researchInBackground(turns) {
+    const generation = this.generation;
+    void this.research.observe(turns, { signal: this.lifecycle.signal }).then(document => {
+      if (!document || this.closed || generation !== this.generation || this.phase !== 'live') return;
+      this.researchReferences = [...this.researchReferences, document].slice(-8);
+      this.clearPitchPlanning();
+      for (const seat of SEATS) {
+        const mode = this.seats[seat].questionMode;
+        mode?.candidate?.controller.abort();
+        if (mode) mode.candidate = null;
+      }
+    }).catch(() => {});
+  }
+
   pitchContext(seat, began, includePartial = true) {
     const history = this.room.transcript.flatMap(turn =>
       turn.speakers?.length ? turn.speakers.map(run => ({ at: turn.at, speaker: run.label, text: run.text }))
@@ -913,7 +932,7 @@ export class Session {
     const earlier = recallRoomTurns(history.filter(turn => !recent.includes(turn)), latest);
     const pitch = this.coachScenario === 'pitch';
     const query = recent.slice(-3).map(turn => turn.text).join(' ') || SCENARIO_QUERY[this.coachScenario];
-    const corpus = pitch ? [...this.references, ...this.pitchReferences] : this.references;
+    const corpus = [...this.references, ...this.researchReferences, ...(pitch ? this.pitchReferences : [])];
     let passages = corpus.length ? retrieveProjectReferences(corpus, query, 7, latest) : [];
     const frontendStack = pitch ? this.pitchReferences.find(doc => doc.kind === 'frontend')
       ?.chunks.find(chunk => chunk.heading === 'Active frontend stack') : undefined;
@@ -1004,7 +1023,7 @@ export class Session {
       const realtime = this.pitchRealtime(mode);
       const task = withDeadline(signal => this.composePitchCue(input, signal, started, realtime),
         this.settings.pitchComposeMs, scope).catch(() => null);
-      mode.candidate = { text, controller, task, at: this.now(), corpus: this.pitchReferences, uploads: this.references };
+      mode.candidate = { text, controller, task, at: this.now(), corpus: this.pitchReferences, uploads: this.references, research: this.researchReferences };
     }
   }
 
@@ -1109,7 +1128,7 @@ export class Session {
           candidate?.controller.abort();
           return;
         }
-        const prepared = candidate && candidate.corpus === this.pitchReferences && candidate.uploads === this.references
+        const prepared = candidate && candidate.corpus === this.pitchReferences && candidate.uploads === this.references && candidate.research === this.researchReferences
           && (this.coachScenario === 'pitch' ? sameQuestion(candidate.text, entry.text) : nearlySameQuestion(candidate.text, entry.text)) ? candidate : null;
         if (!prepared) candidate?.controller.abort();
         mode.lastQuestion = entry;
@@ -1350,7 +1369,7 @@ export class Session {
     const current = () => !signal.aborted && version === this.answerVersion && generation === this.generation && this.phase === 'live' && !this.canned;
     const turns = this.questionTurns.filter(turn => this.now() - turn.at < 45_000);
     if (!turns.length) return;
-    const passages = retrieveReferences(this.references, [this.questionState.question ?? '', ...turns.slice(-6).map(turn => turn.text)].join(' '));
+    const passages = retrieveReferences([...this.references, ...this.researchReferences], [this.questionState.question ?? '', ...turns.slice(-6).map(turn => turn.text)].join(' '));
     const activeQuestion = this.questionState.question ?? '';
     this.questionState = { status: 'researching', question: activeQuestion };
     this.publish();

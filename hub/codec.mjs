@@ -102,7 +102,7 @@ function simulated({ preset, seats, requestedSeat }) {
   return { situations, candidates };
 }
 
-const PITCH_CUE_STYLE = 'Answer the judge’s question with the concrete fact, mechanism, or next step the presenter should expand on. For how you built the project, name the actual components in a useful speaking order. Keep citation details in the evidence fields. Phrases like "grounded in project references" are not cues unless the judge asks how grounding works.';
+const PITCH_CUE_STYLE = 'Fiber background passages describe an external person, never the presenter or project. Use them only when relevant; never infer beliefs or speaker identity. Answer the judge’s question with the concrete fact, mechanism, or next step the presenter should expand on. For how you built the project, name the actual components in a useful speaking order. Keep citation details in the evidence fields. Phrases like "grounded in project references" are not cues unless the judge asks how grounding works.';
 
 const PITCH_HELP_INSTRUCTIONS = [
   'You are the private in-ear coach for an ongoing live Telepathy pitch about Telepathy itself.',
