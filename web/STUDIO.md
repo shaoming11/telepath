@@ -21,7 +21,7 @@ wasp start --client-port 4131 --server-port 4132
 
 Run the existing Telepathy hub separately on its usual port 5780. For a local rehearsal, install its dependencies once in the checkout and run its documented startup. The cinema is at /cinema, the presenter edition at /, the bare seekable 3D scene at /film and the projector stage at /stage on the Wasp port. The development proxy accepts the stage from the operator’s loopback browser. TELEPATHY_PORT can select a different local hub before starting Wasp.
 
-Space or the right arrow plays the next cinema chapter. The left arrow returns to the previous hold. The chapter buttons also work. On a small screen, with reduced motion, or without WebGL, five illustrated chapters lead to the same stage. The presenter edition supports its arrow buttons, the left and right arrow keys, Page Up and Page Down. The stage operator opens with O and closes with Escape.
+The projector operator and both seats have a matching run of show in web/CINEMA-CUES.md. Space or the right arrow plays the next cinema chapter. The left arrow returns to the previous hold. The chapter buttons also work. On a small screen, with reduced motion, or without WebGL, five illustrated chapters lead to the same stage. The presenter edition supports its arrow buttons, the left and right arrow keys, Page Up and Page Down. The stage operator opens with O and closes with Escape.
 
 ## Rebuild the illustrated fallback and offline edition
 
@@ -62,5 +62,6 @@ Use --mode=plates to render the 3D sequence and --mode=encode to compose the edi
 Telepathy’s hub and helper functions come from telepathy-demo at cb4dee8. The finished five-beat 3D direction comes from the existing parallel site at 832bb27. The launch timeline, typography and local audio composition come from the existing parallel video at 63107fe. This edition adds the presenter story, React stage and live controls, GPU compatibility and deterministic capture, reduced-motion and mobile product stills, a portable offline runtime and a freshly captured two-seat edit.
 
 The classic GLB was adapted in the source site from foasho/r3f-wireless-earphones. See web/public/models/README.md. The opening product photo in the presenter edition is from Apple’s original AirPods announcement. [Apple announcement](https://www.apple.com/newsroom/2016/09/apple-reinvents-the-wireless-headphones-with-airpods/)
+
 
 
