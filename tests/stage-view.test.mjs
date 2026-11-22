@@ -13,7 +13,14 @@ test('reveal compares tap bits with spoken words and distinguishes playback evid
     ],
   });
   assert.equal(state.hubId, 'pitch-hub');
-  assert.deepEqual(stage.revealSummary(state), { messages: 2, words: 6, playbackStarts: 1 });
+  assert.deepEqual(stage.revealSummary(state), { messages: 2, words: 6, playbackStarts: 1, playbackWords: 4 });
+});
+
+test('recorded cue words do not count as confirmed browser playback', () => {
+  const state = stage.normalizeState({ canned: true, log: [
+    { kind: 'message', text: 'Show the demo.', source: 'canned' },
+  ] });
+  assert.deepEqual(stage.revealSummary(state), { messages: 1, words: 3, playbackStarts: 0, playbackWords: 0 });
 });
 
 test('operator room status distinguishes a local mic from an accepted ElevenLabs stream', () => {

@@ -26,8 +26,9 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
       const boundary = room.indexOf('export function StageRoomConsole');
       const meter = room.slice(room.indexOf('function RoomInputMeter'), boundary);
       const rendered = room.slice(boundary).replace('<RoomInputMeter wanted={state.wanted} />', meter);
-      const replaced = jsx.replace('<StageRoomConsole />', rendered);
-      const dynamic = new Set(['data-state:off', 'data-room-owner:react']);
+      const reveal = await text('wasp-ui/src/StageRevealHeader.tsx');
+      const replaced = jsx.replace('<StageRoomConsole />', rendered).replace('<StageRevealHeader />', reveal);
+      const dynamic = new Set(['data-state:off', 'data-room-owner:react', 'data-reveal-owner:react']);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
       assert.match(room, /data-state=\{state\.tone\}/);
@@ -85,4 +86,15 @@ test('the Stage console separates live meter frames from room state and keeps ac
   }
   assert.match(component, /function RoomInputMeter/);
   assert.doesNotMatch(component, /getUserMedia|WebSocket/);
+});
+
+test('the Wasp reveal displays the session controller’s score and keeps motion on the stable sections', async () => {
+  const controller = await text('public/stage.mjs');
+  const component = await text('wasp-ui/src/StageRevealHeader.tsx');
+  const styles = await text('wasp-ui/src/liquid.css');
+  assert.ok(controller.includes('telepathy:reveal'));
+  assert.match(component, /addEventListener\('telepathy:reveal'/);
+  assert.match(component, /id="reveal-words">\{reveal.words\}/);
+  assert.match(styles, /\[data-phase=reveal\] \.reveal__head \.score \{ animation:/);
+  assert.doesNotMatch(styles, /\[data-phase=reveal\] \.timeline__row/);
 });

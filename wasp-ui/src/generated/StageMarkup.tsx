@@ -1,5 +1,6 @@
 // Generated from public/stage.html. Run python3 scripts/generate-wasp-surfaces.py after edits.
 import { StageRoomConsole } from '../StageRoomConsole';
+import { StageRevealHeader } from '../StageRevealHeader';
 
 export function StageMarkup() {
   return (
@@ -183,7 +184,7 @@ export function StageMarkup() {
               <dl className="stats">
                 <div className="stat stat--lead"><dt>Bits tapped</dt><dd className="bits__value" id="bits-value">—</dd></div>
                 <div className="stat"><dt>Messages</dt><dd id="live-messages">0</dd></div>
-                <div className="stat"><dt>Words heard</dt><dd id="live-words">0</dd></div>
+                <div className="stat"><dt>Words sent</dt><dd id="live-words">0</dd></div>
               </dl>
             </div>
 
@@ -209,18 +210,7 @@ export function StageMarkup() {
 
 
           <section className="screen screen--reveal" id="screen-reveal" aria-labelledby="reveal-title" hidden>
-            <div className="reveal__head">
-              <div>
-                <p className="kicker" id="reveal-kicker">REVEAL</p>
-                <h1 className="display display--reveal" id="reveal-title"><span className="display__dim">Everything that</span>{" went across."}</h1>
-              </div>
-              <div className="score">
-                <div className="score__num"><span id="reveal-bits">—</span><small>bits tapped</small></div>
-                <svg className="score__arrow" width="34" height="14" viewBox="0 0 34 14" aria-hidden="true"><path d="M0 7h31M26 2l5 5-5 5" /></svg>
-                <div className="score__num"><span id="reveal-words">—</span><small>words heard</small></div>
-                <p className="score__count" id="reveal-count"></p>
-              </div>
-            </div>
+            <StageRevealHeader />
 
             <section className="lanes-wrap" aria-labelledby="lanes-title">
               <h2 className="section-title" id="lanes-title">{"Timeline "}<span>Speech, taps and whispers</span></h2>

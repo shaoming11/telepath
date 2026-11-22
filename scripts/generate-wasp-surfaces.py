@@ -27,6 +27,10 @@ REACT_REGIONS = {
             "StageRoomConsole",
             r'<section[^>]* id="room-microphone-panel"[^>]*>[\s\S]*?</section>',
         ),
+        (
+            "StageRevealHeader",
+            r'<div[^>]* id="reveal-head"[^>]*>[\s\S]*?<p[^>]* id="reveal-count"[^>]*></p>\s*</div>\s*</div>',
+        ),
     ),
 }
 DESTINATION = ROOT / "wasp-ui/src/generated"

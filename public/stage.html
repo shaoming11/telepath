@@ -231,7 +231,7 @@
         <dl class="stats">
           <div class="stat stat--lead"><dt>Bits tapped</dt><dd class="bits__value" id="bits-value">&mdash;</dd></div>
           <div class="stat"><dt>Messages</dt><dd id="live-messages">0</dd></div>
-          <div class="stat"><dt>Words heard</dt><dd id="live-words">0</dd></div>
+          <div class="stat"><dt>Words sent</dt><dd id="live-words">0</dd></div>
         </dl>
       </div>
 
@@ -257,16 +257,16 @@
 
     <!-- Reveal -->
     <section class="screen screen--reveal" id="screen-reveal" aria-labelledby="reveal-title" hidden>
-      <div class="reveal__head">
+      <div class="reveal__head" id="reveal-head">
         <div>
           <p class="kicker" id="reveal-kicker">REVEAL</p>
-          <h1 class="display display--reveal" id="reveal-title"><span class="display__dim">Everything that</span> went across.</h1>
+          <h1 class="display display--reveal" id="reveal-title" tabindex="-1"><span class="display__dim">Everything that</span> went across.</h1>
         </div>
         <div class="score">
           <div class="score__num"><span id="reveal-bits">&mdash;</span><small>bits tapped</small></div>
           <svg class="score__arrow" width="34" height="14" viewBox="0 0 34 14" aria-hidden="true"><path d="M0 7h31M26 2l5 5-5 5"/></svg>
-          <div class="score__num"><span id="reveal-words">&mdash;</span><small>words heard</small></div>
-          <p class="score__count" id="reveal-count"></p>
+          <div class="score__num"><span id="reveal-words">&mdash;</span><small id="reveal-word-label">words in confirmed cues</small></div>
+          <p class="score__count" id="reveal-count" aria-live="polite"></p>
         </div>
       </div>
 
