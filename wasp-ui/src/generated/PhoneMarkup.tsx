@@ -1,6 +1,7 @@
 // Generated from public/index.html. Run python3 scripts/generate-wasp-surfaces.py after edits.
 import { PhonePitchControls } from '../PhonePitchControls';
 import { CalibrationTrial } from '../CalibrationTrial';
+import { AppearanceControl } from '../AppearanceControl';
 import { ChannelMonitor } from '../ChannelMonitor';
 
 export function PhoneMarkup() {
@@ -268,6 +269,7 @@ export function PhoneMarkup() {
 
           <section className="screen" id="screen-settings" data-screen="settings" hidden>
             <header className="step-head"><h2>Settings</h2><span className="step-index" id="settings-context"></span></header>
+            <AppearanceControl />
 
             <fieldset className="segmented">
               <legend>Earbuds</legend>
