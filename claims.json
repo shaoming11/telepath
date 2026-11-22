@@ -1,5 +1,5 @@
 {
-  "revision": 22,
+  "revision": 23,
   "claims": [
     {
       "id": "c5c7d17e-5893-4804-afb4-5b4158f3c29d",
@@ -26,30 +26,6 @@
         "public/stage.mjs"
       ],
       "claimedAt": "2026-11-22T03:35:18.377Z"
-    },
-    {
-      "id": "65181cb2-f0b0-498a-a29d-172ada34d63d",
-      "owner": "influxtion",
-      "agent": "missed-point-coaching",
-      "branch": "codex/conversation-answers",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub/questions.mjs",
-        "hub/codec.mjs",
-        "hub/session.mjs",
-        "tests/references.test.mjs",
-        "tests/session.test.mjs",
-        "README.md"
-      ],
-      "paths": [
-        "README.md",
-        "hub/codec.mjs",
-        "hub/questions.mjs",
-        "hub/session.mjs",
-        "tests/references.test.mjs",
-        "tests/session.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T03:35:49.746Z"
     }
   ]
 }
