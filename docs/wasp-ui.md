@@ -16,13 +16,13 @@ The Stage room console is also React-owned. The capture controller handles micro
 
 ## Build, run and verify
 
-Use Node.js 24.22.1 or later for the Wasp compiler. From the repository root:
+Use Node.js 24.22.1 or later, npm, and Python 3. The first build downloads the pinned Wasp compiler and dependencies. From the repository root:
 
 ```sh
 ./start-wasp
 ```
 
-The launcher builds the Wasp client if the artifact is missing. The hub then prints Stage and phone addresses as usual. Rebuild after UI changes with `./scripts/build-wasp-ui`. If the source HTML changes, run `python3 scripts/generate-wasp-surfaces.py` before building. The generator preserves the current event hooks while rendering the surfaces as React components. Wasp output and the staged static client live in ignored build folders.
+The launcher builds the Wasp client when the artifact is missing or its build inputs changed. The hub then prints Stage and phone addresses as usual. To force a rebuild, run `./scripts/build-wasp-ui`. If you change the source HTML, run `python3 scripts/generate-wasp-surfaces.py` before building. The generator preserves the controller hooks in the React surfaces. Wasp output and staged client files live in ignored build folders.
 
 The regular `./start` command opens the classic frontend. To test the Wasp presentation against an isolated hub instead of the live rehearsal, start a separate port with provider credentials absent from that process.
 
