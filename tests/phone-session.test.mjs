@@ -21,6 +21,7 @@ const fake_microphone = {
 };
 const stored = new Map();
 const seat_buttons = [];
+const pro_radio = { value: 'pro', addEventListener(type, fn) { this[type] = fn; } };
 
 function make_element(id) {
   const base = {
@@ -79,7 +80,7 @@ const globals = {
     visibilityState: 'visible',
     activeElement: null,
     getElementById: get_element,
-    querySelectorAll: selector => (selector === '.seat' ? seat_buttons : []),
+    querySelectorAll: selector => selector === '.seat' ? seat_buttons : selector === 'input[name="settings_mode"]' ? [pro_radio] : [],
     querySelector: () => null,
     createElement: () => make_element('created'),
     addEventListener(name, handler) { document_listeners.set(name, handler); },
@@ -347,6 +348,52 @@ test('keyboard clicker signals can be sent while the phone mic stays open', asyn
   document_listeners.get('keydown')({ key: 'PageDown', preventDefault() {}, target: {} });
   assert.ok(socket.sent.slice(before).some(frame => frame.type === 'signal' && frame.signal === 'R1'));
   assert.equal(mic.readyState, 'live');
+});
+
+test('both AirPods profiles toggle question mode with one press and retain receipt and approval priority', async () => {
+  const settings = { pitchHelp: true, questionModeAvailable: true, roomInput: 'mac', sessionId: '2' };
+  const base = seat_state(null, settings);
+  const sent = () => socket.sent.filter(frame => frame.type === 'signal');
+  socket.receive({ type: 'state', state: base });
+  await settle();
+  socket.sent.length = 0;
+  media_actions.get('nexttrack')();
+  world.advance(1200);
+  await settle();
+  assert.equal(sent().length, 1);
+  assert.equal(sent()[0].purpose, 'question_mode');
+
+  pro_radio.change();
+  socket.sent.length = 0;
+  media_actions.get('pause')();
+  assert.equal(sent()[0]?.purpose, 'question_mode');
+  media_actions.get('previoustrack')();
+  assert.equal(sent().at(-1)?.signal, 'L1');
+  assert.equal(sent().at(-1)?.purpose, undefined);
+
+  base.seats.A.receipt = { messageId: 'receipt-help', until: Date.now() + 4000 };
+  socket.receive({ type: 'state', state: base });
+  media_actions.get('play')();
+  assert.equal(sent().at(-1)?.receiptId, 'receipt-help');
+  assert.equal(sent().at(-1)?.purpose, undefined);
+
+  const pending = draft({ id: 'pitch-approved', heardAt: Date.now(), expiresAt: Date.now() + 6000 });
+  socket.receive({ type: 'state', state: seat_state(pending, settings) });
+  media_actions.get('pause')();
+  assert.equal(sent().at(-1)?.draftId, 'pitch-approved');
+  assert.equal(sent().at(-1)?.purpose, undefined);
+});
+
+test('the live screen keeps the private cue visible until the hub clears it', async () => {
+  const state = seat_state(null, { sessionId: '2' });
+  state.seats.A.lastPitchCue = { text: 'Phone catches taps.', points: ['Safari sends a browser event.'] };
+  socket.receive({ type: 'state', state });
+  await settle();
+  assert.equal(get_element('live-pitch-notes').hidden, false);
+  assert.equal(get_element('live-pitch-cue').textContent, 'Phone catches taps.');
+  socket.receive({ type: 'state', state: seat_state(null, { sessionId: '2' }) });
+  await settle();
+  assert.equal(get_element('live-pitch-notes').hidden, true);
 });
 
 test('a full hub reset clears previously ready setup and returns the seat to Voice', async () => {

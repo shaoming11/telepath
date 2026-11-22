@@ -587,7 +587,7 @@ export function createAudio({
     }
   }
 
-  async function speech(speakerSeat, text, { voice, sim = false, role = 'seat', timeoutMs, signal } = {}) {
+  async function speech(speakerSeat, text, { voice, sim = false, role = 'seat', timeoutMs, signal, whisper = false } = {}) {
     if (typeof text !== 'string' || !text.trim() || signal?.aborted) return null;
     const epoch = epochBox.n;
     const assistant = ['assistant', 'system', 'draft', 'status', 'codebook', 'announcement'].includes(role);
@@ -613,7 +613,8 @@ export function createAudio({
     asset_holds.add(held);
     try {
       const r = await speakLine(voiceId, text, {
-        whisper: !assistant && role !== 'voice-preview', whisperTimeoutMs: 2100, timeoutMs, speed: can_speed ? READOUT_SPEED : undefined, signal, held,
+        whisper: whisper || !assistant && role !== 'voice-preview', whisperTimeoutMs: whisper ? 850 : 2100,
+        timeoutMs, speed: can_speed ? READOUT_SPEED : undefined, signal, held,
       });
       if (epoch !== epochBox.n || signal?.aborted) return null;
       ephemeral.push(r.id);

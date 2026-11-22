@@ -22,7 +22,7 @@ test('AirPods 1 counts next events using its own timing and ignores other media 
 });
 
 test('AirPods 1 owns the double and triple trial plan and the personal timing fit', () => {
-  assert.deepEqual(buildCountTrials(2, 3).map(step => step.signal), ['R2', 'R2', 'R2', 'L1', 'L1', 'L1']);
+  assert.deepEqual(buildCountTrials(2).map(step => step.signal), ['R2', 'R2', 'L1', 'L1']);
   assert.deepEqual(fitCountTiming([700, 800, 910]), { countMedianMs: 800, countWindowMs: 1130 });
 });
 

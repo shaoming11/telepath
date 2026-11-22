@@ -53,3 +53,44 @@ export function reviewCue(pitch, candidateCueId) {
   }
   return { ...baseline, engine: 'rules' };
 }
+
+const PITCH_HELP_INTENTS = ['answer', 'add_point', 'next_beat'];
+const MAX_HELP_TURNS = 6;
+const MAX_HELP_PASSAGES = 4;
+
+export function normalizePitchHelp(value) {
+  if (value?.type !== 'pitch_help' || !['A', 'B'].includes(value.seat)
+      || !boundedInteger(value.elapsedSeconds, MAX_ELAPSED_SECONDS)
+      || !Array.isArray(value.turns) || !Array.isArray(value.passages)) return null;
+  const clip = (input, size) => typeof input === 'string' ? input.trim().slice(0, size) : '';
+  return {
+    type: 'pitch_help',
+    seat: value.seat,
+    elapsedSeconds: value.elapsedSeconds,
+    turns: value.turns.slice(-MAX_HELP_TURNS).flatMap(turn => {
+      const text = clip(turn?.text, 260);
+      return text ? [{ text, speaker: clip(turn.speaker, 32) }] : [];
+    }),
+    passages: value.passages.slice(0, MAX_HELP_PASSAGES).flatMap(passage => {
+      const id = clip(passage?.id, 100);
+      const text = clip(passage?.text, 560);
+      return id && text ? [{ id, text }] : [];
+    }),
+  };
+}
+
+export function validatePitchHelpPlan(value, input) {
+  if (!PITCH_HELP_INTENTS.includes(value?.intent) || !Array.isArray(value.passageIds)
+      || value.passageIds.length > MAX_HELP_PASSAGES || !value.passageIds.every(id => input.passages.some(passage => passage.id === id))) return null;
+  return { intent: value.intent, passageIds: [...new Set(value.passageIds)] };
+}
+
+export function planPitchHelp(input) {
+  const recent = input.turns.slice(-3);
+  const question = recent.findLastIndex(turn => /\?|^\s*(?:could you|can you|what|why|how|who|when|where|does|do you|is it)\b/i.test(turn.text));
+  const unanswered = question === recent.length - 1 || recent.slice(question + 1).every(turn => turn.speaker === recent[question]?.speaker);
+  return {
+    intent: question < 0 ? 'next_beat' : unanswered ? 'answer' : 'add_point',
+    passageIds: input.passages.slice(0, 2).map(passage => passage.id),
+  };
+}

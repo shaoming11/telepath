@@ -19,7 +19,7 @@ const $ = id => document.getElementById(id);
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 export function build_plan(scope, current_mode, model) {
-  if (model === AIRPODS_1_ID) return buildCountTrials(current_mode, TRIALS_PER_PATTERN);
+  if (model === AIRPODS_1_ID) return buildCountTrials(current_mode);
   const modes = scope === 'both' ? [2, 1] : [current_mode];
   const plan = [];
   for (const mode of modes) {
@@ -110,6 +110,7 @@ export function createCalibration(services) {
     seat_row: $('cal-seat'), emulate_row: $('cal-emulate-row'), emulate: $('cal-emulate'),
     start: $('cal-start'), skip: $('cal-skip'), stop: $('cal-stop'), run_skip: $('cal-run-skip'),
     count: $('cal-count'), phase: $('cal-phase'), pattern: $('cal-pattern'), detail: $('cal-detail'),
+    trial: $('cal-trial'), repetition: $('cal-repetition'), beats: $('cal-beats'), summary: $('cal-summary'),
     bar: $('cal-bar'), ticks: $('cal-ticks'),
     verdict: $('cal-verdict'), metrics: $('cal-metrics'), applied: $('cal-applied'),
     apply: $('cal-apply'), download: $('cal-download'), done: $('cal-done'), again: $('cal-again'),
@@ -152,12 +153,13 @@ export function createCalibration(services) {
     elements.emulate_row.hidden = !sim;
     elements.emulate.disabled = !sim;
     elements.quick.hidden = sim;
+    elements.quick.dataset.checking = String(checking);
     elements.quick_start.disabled = !has_seat;
     elements.quick_model.disabled = checking;
-    if (!checking) elements.quick_start.textContent = elements.quick_model.value === AIRPODS_PRO_ID ? 'Test squeezes' : 'Calibrate timing';
+    if (!checking) elements.quick_start.textContent = 'Start test sound';
     if (!checking && has_seat && !sim) elements.quick_status.textContent = elements.quick_model.value === AIRPODS_PRO_ID
-      ? 'Use either stem. Keep the earbuds in while testing.'
-      : 'Set an AirPods double-tap to Next Track. Repeat it two or three times at your normal pace.';
+      ? 'Check the single, double, and triple squeeze on either stem.'
+      : 'Set double-tap to Next Track. The check is followed by four short timing trials.';
     $('cal-full').hidden = !sim;
     $('cal-quick-controls').hidden = !checking;
     elements.start.disabled = !has_seat;
@@ -200,15 +202,30 @@ export function createCalibration(services) {
   }
 
   function render_trial(step, index, phase) {
-    elements.count.textContent = 'Step ' + (index + 1) + ' of ' + plan.length;
+    elements.count.textContent = 'Trial ' + (index + 1) + ' / ' + plan.length;
     elements.phase.textContent = phase;
     elements.phase.dataset.phase = phase === 'Now' ? 'now' : phase === 'Got it' ? 'hit' : phase === 'Not recognized' ? 'miss' : 'ready';
+    elements.trial.dataset.phase = elements.phase.dataset.phase;
     elements.pattern.textContent = step.gestureModel ? 'Next Track ' + (step.signal === 'R2' ? 'twice' : 'three times')
       : step.kind === 'remove' ? 'Remove an earbud'
       : step.kind === 'insert' ? 'Put the earbud back' : PATTERNS[step.mode][step.signal];
-    elements.detail.textContent = 'Try ' + (step.trial + 1) + ' of ' + TRIALS_PER_PATTERN;
-    elements.bar.style.transform = 'scaleX(' + (index + (phase === 'Get ready' ? 0 : 0.5)) / plan.length + ')';
+    const count = step.gestureModel ? plan.filter(trial => trial.signal === step.signal).length : TRIALS_PER_PATTERN;
+    elements.repetition.textContent = 'Repeat ' + (step.trial + 1) + ' of ' + count + ' for this pattern';
+    elements.detail.textContent = phase === 'Get ready' ? 'Wait for the cue.' : phase === 'Now' ? 'Use your normal pace.' : phase === 'Got it' ? 'Pattern detected.' : '';
+    update_beats(step, phase === 'Got it' ? step.signal === 'R2' ? 2 : 3 : 0);
+    elements.bar.style.transform = 'scaleX(' + (index + Number(phase === 'Got it')) / plan.length + ')';
     render_ticks(index);
+  }
+
+  function update_beats(step, observed) {
+    elements.beats.hidden = !step.gestureModel;
+    if (!step.gestureModel) return;
+    const expected = step.signal === 'R2' ? 2 : 3;
+    elements.beats.replaceChildren(...Array.from({ length: expected }, (_, index) => {
+      const beat = document.createElement('i');
+      beat.dataset.filled = String(index < observed);
+      return beat;
+    }));
   }
 
   function wait_for_response(window_ms, settle_ms) {
@@ -349,6 +366,7 @@ export function createCalibration(services) {
     } catch (error) {
       last_output = null;
       elements.verdict.textContent = 'Calibration failed';
+      elements.summary.dataset.result = 'retry';
       elements.metrics.replaceChildren();
       elements.applied.textContent = 'Nothing changed. ' + (error?.message ?? '');
       elements.apply.hidden = true;
@@ -367,6 +385,7 @@ export function createCalibration(services) {
     const silent = profile.metrics.responded === 0;
     elements.verdict.textContent = silent ? 'No earbud events'
       : calibrated ? 'Calibrated' : enough_events ? 'Review the timing' : 'Too few taps';
+    elements.summary.dataset.result = calibrated ? 'saved' : 'retry';
     elements.metrics.replaceChildren(...metric_rows(profile).map(([label, value]) => {
       const row = document.createElement('div');
       const term = document.createElement('dt');
@@ -447,21 +466,21 @@ export function createCalibration(services) {
     checked_actions.clear();
     services.input.reset();
     elements.quick_continue.hidden = true;
-    elements.quick_start.textContent = 'Test earbud controls';
-    elements.quick_status.textContent = '';
     services.on_run_state(false);
+    render_intro();
   }
 
   function render_control_check(received) {
     if (elements.quick_model.value !== AIRPODS_PRO_ID) {
       const item = $('cal-quick-nexttrack');
       item.textContent = checked_actions.has('nexttrack') ? 'Next Track received' : 'Waiting for one Next Track event';
+      item.dataset.received = String(checked_actions.has('nexttrack'));
       $('cal-quick-pause').hidden = true;
       $('cal-quick-previoustrack').hidden = true;
       elements.quick_status.textContent = received === 'nexttrack'
         ? 'Safari received the double-tap. Start the timing trials when ready.'
         : received ? 'Safari sent ' + ACTION_LABELS[received] + '. Set the earbud double-tap to Next Track.'
-          : 'Double-tap the earbud assigned to Next Track once. The microphone is off for this check. If nothing changes, check Now Playing in Control Center.';
+          : 'Double-tap the earbud assigned to Next Track once. If nothing changes, check Now Playing in Control Center.';
       elements.quick_continue.textContent = 'Start timing trials';
       elements.quick_continue.hidden = !checked_actions.has('nexttrack');
       return;
@@ -472,6 +491,7 @@ export function createCalibration(services) {
     for (const [action, { label, hint }] of Object.entries(PRO_CHECKS)) {
       const item = $('cal-quick-' + action);
       item.textContent = label + (checked_actions.has(action) ? ' · received' : ' · ' + hint);
+      item.dataset.received = String(checked_actions.has(action));
     }
     const next = Object.keys(PRO_CHECKS).find(action => !checked_actions.has(action));
     elements.quick_status.textContent = !received
@@ -491,7 +511,8 @@ export function createCalibration(services) {
     services.set_gesture_model?.(elements.quick_model.value);
     services.input.reset();
     checking = true;
-    elements.quick_start.textContent = 'Stop listening';
+    elements.quick_start.textContent = 'Stop test sound';
+    render_intro();
     render_control_check();
     services.arm();
     services.on_run_state(true);
@@ -558,6 +579,7 @@ export function createCalibration(services) {
       if (!running) return;
       if (current) {
         current.events.push({ action: event.action, at: event.at });
+        if (current.gestureModel) update_beats(current, current.events.filter(entry => entry.action === 'nexttrack').length);
         if (!services.is_sim() && ACTION_LABELS[event.action]) {
           elements.detail.textContent = 'Received ' + current.events.map(entry => ACTION_LABELS[entry.action]).join(', ') + '.';
         }

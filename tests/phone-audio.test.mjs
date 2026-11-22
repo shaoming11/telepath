@@ -258,3 +258,33 @@ test('the same cue balance applies to live notifications and calibration taps', 
   assert.equal(receipt.destination.gain.value, 0.43);
   assert.equal(sent.destination.gain.value, 2.25);
 });
+
+test('holding a private cue stops even started speech and prevents a late duplicate', async () => {
+  const engine = await ready_engine();
+  const frame = { type: 'audio', kind: 'pitch_help', url: '/assets/long.mp3', messageId: 'quiet-1' };
+  engine.play(frame);
+  await world.flush();
+  world.advance(120);
+  const source = context().sources.at(-1);
+  assert.ok(source.startAt !== null);
+  assert.deepEqual(heard, ['quiet-1']);
+  engine.stop_pitch_help('quiet-1');
+  assert.equal(source.stopped, true);
+  const count = context().sources.length;
+  engine.play(frame);
+  await world.flush();
+  assert.equal(context().sources.length, count);
+});
+
+test('the private chime precedes speech and the receipt follows the speech start', async () => {
+  world.durations['https://hub.test/assets/cue-sent.mp3'] = 0.48;
+  const engine = await ready_engine();
+  engine.play({ type: 'audio', kind: 'pitch_help', cue: 'sent', url: '/assets/short.mp3', messageId: 'private-cue' });
+  await world.flush();
+  const [chime, speech] = context().sources.slice(-2);
+  assert.ok(speech.startAt - chime.startAt >= 0.54);
+  world.advance(400);
+  assert.deepEqual(heard, []);
+  world.advance(250);
+  assert.deepEqual(heard, ['private-cue']);
+});

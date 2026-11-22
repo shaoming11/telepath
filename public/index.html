@@ -116,22 +116,28 @@
             <button type="button" data-cal-seat="A">Seat A</button>
             <button type="button" data-cal-seat="B">Seat B</button>
           </div>
-          <div class="setup-group" id="cal-quick">
+          <div class="cal-check" id="cal-quick">
+            <div class="cal-check__heading">
+              <h3>Check the controls</h3>
+              <p>Keep both earbuds in and pause other audio.</p>
+            </div>
             <label class="field" for="cal-earbud-model"><span>AirPods model</span>
               <select id="cal-earbud-model">
                 <option value="next-only">AirPods 1</option>
                 <option value="pro">AirPods Pro</option>
               </select>
             </label>
-            <button class="primary" id="cal-quick-start" type="button">Test earbud controls</button>
-            <button id="cal-quick-continue" type="button" hidden>Continue with defaults</button>
+            <ol class="cal-check__events" id="cal-quick-controls" aria-label="Detected media commands" hidden>
+              <li id="cal-quick-pause"></li>
+              <li id="cal-quick-nexttrack"></li>
+              <li id="cal-quick-previoustrack"></li>
+            </ol>
+            <p class="cal-check__status" id="cal-quick-status" role="status"></p>
+            <div class="cal-check__actions">
+              <button class="primary" id="cal-quick-continue" type="button" hidden>Continue with defaults</button>
+              <button class="primary" id="cal-quick-start" type="button">Start test sound</button>
+            </div>
           </div>
-          <ol class="fineprint" id="cal-quick-controls" aria-label="Detected media commands" hidden>
-            <li id="cal-quick-pause"></li>
-            <li id="cal-quick-nexttrack"></li>
-            <li id="cal-quick-previoustrack"></li>
-          </ol>
-          <p class="meta" id="cal-quick-status" role="status"></p>
           <details class="setup-details" id="cal-full">
             <summary>Full timing calibration</summary>
             <fieldset class="choice">
@@ -153,25 +159,36 @@
         </div>
 
         <div class="cal-section cal-run" id="cal-run" hidden>
-          <div class="cal-top">
-            <span id="cal-count"></span>
-            <span class="cal-phase" id="cal-phase" role="status" aria-live="assertive"></span>
+          <div class="cal-trial" id="cal-trial">
+            <div class="cal-top">
+              <span id="cal-count"></span>
+              <span class="cal-phase" id="cal-phase" role="status" aria-live="assertive"></span>
+            </div>
+            <div class="cal-trial__prompt">
+              <h3 class="cal-pattern" id="cal-pattern"></h3>
+              <p id="cal-repetition"></p>
+              <div class="cal-trial__beats" id="cal-beats" aria-hidden="true" hidden></div>
+            </div>
+            <p class="cal-trial__feedback" id="cal-detail"></p>
+            <div class="progress" aria-hidden="true"><i id="cal-bar"></i></div>
           </div>
-          <h3 class="cal-pattern" id="cal-pattern"></h3>
-          <p class="meta" id="cal-detail"></p>
-          <div class="progress" aria-hidden="true"><i id="cal-bar"></i></div>
-          <ol class="ticks" id="cal-ticks"></ol>
-          <div class="actions">
+          <ol class="ticks" id="cal-ticks" aria-label="Trial progress"></ol>
+          <div class="cal-footer">
             <button id="cal-stop" type="button">Stop calibration</button>
             <button id="cal-run-skip" type="button" hidden>Skip and use defaults</button>
           </div>
         </div>
 
         <div class="cal-section" id="cal-result" hidden>
-          <h3 class="cal-verdict" id="cal-verdict"></h3>
-          <p class="meta" id="cal-applied" role="status"></p>
-          <dl class="metrics" id="cal-metrics"></dl>
-          <div class="actions">
+          <div class="cal-result__summary" id="cal-summary">
+            <h3 class="cal-verdict" id="cal-verdict"></h3>
+            <p class="meta" id="cal-applied" role="status"></p>
+          </div>
+          <details class="cal-result__details">
+            <summary>Timing details</summary>
+            <dl class="metrics" id="cal-metrics"></dl>
+          </details>
+          <div class="cal-footer cal-footer--result">
             <button class="primary" id="cal-done" type="button">Done</button>
             <button id="cal-apply" type="button" hidden>Apply anyway</button>
             <button id="cal-download" type="button">Download JSON</button>
@@ -207,6 +224,11 @@
           <div><dt>Messages</dt><dd id="live-cache"></dd></div>
         </dl>
 
+        <section class="pitch-notes" id="live-pitch-notes" aria-labelledby="live-pitch-notes-label" hidden>
+          <h3 class="kicker" id="live-pitch-notes-label">Private cue</h3>
+          <p id="live-pitch-cue" class="pitch-notes__cue"></p>
+          <ul id="live-pitch-points" class="pitch-notes__points"></ul>
+        </section>
         <section class="channel-monitor channel-monitor--phone" id="phone-monitor" aria-label="Live audio and context"></section>
 
         <div class="lock-controls" id="lock-controls" hidden>
@@ -239,6 +261,7 @@
 
         <p class="live-note" id="live-note" role="status"></p>
 
+        <button class="signal" id="question-mode" type="button" aria-pressed="false" hidden><b>Question mode</b><span>Prepare while the judge speaks</span></button>
         <div class="signals" id="signals" role="group" aria-label="Send a signal"></div>
 
         <form class="room-input" id="sim-room" hidden>

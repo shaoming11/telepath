@@ -1,9 +1,11 @@
-import { COACH_CUES, normalizePitch } from '../maritime/policy.mjs';
+import { COACH_CUES, normalizePitch, normalizePitchHelp, validatePitchHelpPlan } from '../maritime/policy.mjs';
 
 const MARITIME_API = 'https://api.maritime.sh';
 const OPENAI_RESPONSES = 'https://api.openai.com/v1/responses';
 const MAX_REASON_LENGTH = 180;
 const ASSIST_TIMEOUT_MS = 2400;
+const CAPACITY_BACKOFF_MS = 15_000;
+const BILLING_BACKOFF_MS = 60_000;
 const SOURCES = { model: 'maritime', rules: 'maritime-rules', assisted: 'maritime-assisted' };
 const ASSIST_INSTRUCTIONS = [
   'Suggest one cue for a two-minute Telepathy pitch using only these five telemetry values.',
@@ -47,30 +49,61 @@ async function suggestCue(input, env, fetchImpl, shared_signal) {
   }
 }
 
-export function createMaritimeCoach({ env = process.env, fetchImpl = fetch } = {}) {
+function retryDelay(response, at) {
+  const value = response.headers.get('retry-after');
+  if (value && /^\d+$/.test(value.trim()) && Number.isFinite(Number(value))) return Number(value) * 1000;
+  const date = value ? Date.parse(value) : NaN;
+  return Number.isFinite(date) ? Math.max(0, date - at) : CAPACITY_BACKOFF_MS;
+}
+
+export function createMaritimeCoach({ env = process.env, fetchImpl = fetch, now = Date.now } = {}) {
   const key = env.MARITIME_API_KEY?.trim();
   const agent_id = env.TELEPATHY_MARITIME_AGENT_ID?.trim();
-  if (!key || !agent_id || env.TELEPATHY_MARITIME === 'off') return null;
+  if (!key || !agent_id || env.TELEPATHY_MARITIME !== 'on') return null;
+
+  let pausedUntil = 0;
+  async function chat(message, signal) {
+    const at = now();
+    if (at < pausedUntil) throw new Error('Maritime is in its retry window');
+    const response = await fetchImpl(MARITIME_API + '/api/agents/' + encodeURIComponent(agent_id) + '/chat', {
+      method: 'POST',
+      redirect: 'error',
+      headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: JSON.stringify(message) }),
+      signal,
+    });
+    if (!response.ok) {
+      if (response.status === 429 || response.status === 503) pausedUntil = Math.max(pausedUntil, now() + retryDelay(response, now()));
+      if (response.status === 402) pausedUntil = Math.max(pausedUntil, now() + BILLING_BACKOFF_MS);
+      throw new Error('Maritime returned HTTP ' + response.status);
+    }
+    const { response: reply, error } = await response.json();
+    if (error) throw new Error('Maritime did not confirm the response');
+    if (typeof reply !== 'string' || reply.length > 1_000) throw new Error('Invalid Maritime reply');
+    return JSON.parse(reply) ?? {};
+  }
 
   return {
+    ...(env.TELEPATHY_MARITIME_PITCH_HELP === 'on' && {
+      async planPitchHelp(context, { signal } = {}) {
+        const input = normalizePitchHelp(context);
+        if (!input) throw new Error('Invalid Maritime pitch help context');
+        signal?.throwIfAborted();
+        const result = await chat(input, signal);
+        const plan = validatePitchHelpPlan(result, input);
+        if (!plan || !['model', 'rules'].includes(result.engine)) throw new Error('Invalid Maritime pitch help plan');
+        return { ...plan, source: SOURCES[result.engine] };
+      },
+    }),
     async recommend(pitch, { signal } = {}) {
       const input = normalizePitch(pitch);
       if (!input) throw new Error('Invalid pitch state');
       signal?.throwIfAborted();
+      if (now() < pausedUntil) throw new Error('Maritime is in its retry window');
       const candidate = await suggestCue(input, env, fetchImpl, signal);
       signal?.throwIfAborted();
       const message = candidate ? { ...input, candidateCueId: candidate } : input;
-      const response = await fetchImpl(MARITIME_API + '/api/agents/' + encodeURIComponent(agent_id) + '/chat', {
-        method: 'POST',
-        redirect: 'error',
-        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: JSON.stringify(message) }),
-        signal,
-      });
-      if (!response.ok) throw new Error('Maritime returned HTTP ' + response.status);
-      const { response: reply } = await response.json();
-      if (typeof reply !== 'string' || reply.length > 1_000) throw new Error('Invalid Maritime reply');
-      const { cueId, reason, engine } = JSON.parse(reply) ?? {};
+      const { cueId, reason, engine } = await chat(message, signal);
       if (!COACH_CUES.includes(cueId) || typeof engine !== 'string' || !Object.hasOwn(SOURCES, engine)
         || engine === 'assisted' && cueId !== candidate
         || typeof reason !== 'string' || !reason.trim() || reason.length > MAX_REASON_LENGTH) {

@@ -24,6 +24,19 @@ test('operator room status distinguishes a local mic from an accepted ElevenLabs
   assert.equal(stage.roomStatus({ sim: true }), 'Simulated');
 });
 
+test('the room console distinguishes permission, provider connection, live input, and errors', () => {
+  const base = { link: 'live', phase: 'lobby' };
+  assert.equal(stage.roomConsoleStatus({ ...base, starting: true, wanted: true }).label, 'Starting');
+  assert.equal(stage.roomConsoleStatus({ ...base, wanted: true, transcription: 'waiting' }).label, 'Connecting');
+  assert.deepEqual(stage.roomConsoleStatus({ ...base, wanted: true, transcription: 'live', device: 'MacBook Microphone' }),
+    { tone: 'live', label: 'Transcribing', detail: 'MacBook Microphone' });
+  assert.equal(stage.roomConsoleStatus({ ...base, wanted: true, transcription: 'recovering' }).label, 'Reconnecting');
+  assert.equal(stage.roomConsoleStatus({ ...base, wanted: true, interrupted: true, transcription: 'live' }).label, 'Interrupted');
+  assert.equal(stage.roomConsoleStatus({ ...base, transcription: 'unavailable' }).tone, 'error');
+  assert.equal(stage.roomConsoleStatus({ ...base, ownedElsewhere: true }).label, 'In use');
+  assert.equal(stage.roomConsoleStatus({ ...base, phase: 'reveal', wanted: true }).label, 'Off');
+});
+
 test('the operator sends a short explicit announcement rather than a seat signal', () => {
   assert.equal(stage.operatorFrame('announce', { text: '  ' }), null);
   assert.deepEqual(stage.operatorFrame('announce', { text: '  Thirty  seconds left.   ' }),

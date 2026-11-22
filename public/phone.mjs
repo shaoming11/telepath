@@ -224,7 +224,7 @@ function set_consent(granted) {
 }
 
 function set_text(element, text) {
-  if (element.textContent !== text) element.textContent = text;
+  if (element && element.textContent !== text) element.textContent = text;
 }
 
 function my_state() {
@@ -286,6 +286,7 @@ function gesture_scope() {
     hubId: state?.hubId,
     sessionId: state?.sessionId,
     cacheId: state?.cacheId ?? null,
+    pitchHelp: state?.phase === 'live' && state.pitchHelp === true,
     draftId: drafts.can_approve(pending) ? pending.id : null,
     previewWaiting: drafts.visible(pending) && pending.heardAt == null,
     receiptId: receipt && (ui.receipt_deadline ?? 0) >= performance.now() ? receipt.messageId : null,
@@ -320,7 +321,7 @@ function on_media_play() {
   void audio.resume();
 }
 
-function on_signal(signal, trace) {
+function on_signal(signal, trace, toggle_question_mode = false) {
   diag('signal', { signal, calibrating: calibration.active() });
   if (calibration.active()) {
     calibration.note_signal(signal);
@@ -328,7 +329,6 @@ function on_signal(signal, trace) {
   }
   if (signal === 'OUT') ui.earbud_out = true;
   if (signal === 'BACK') ui.earbud_out = false;
-  flash_signal(signal);
   schedule_render();
   if (!is_online()) {
     audio.play_cue('error');
@@ -341,10 +341,15 @@ function on_signal(signal, trace) {
     show_note('Wait for the preview before sending.');
     return;
   }
+  const pitch_help = scope.pitchHelp && ui.state?.phase === 'live' && ui.state.pitchHelp
+    && (signal === 'LR' || signal === 'R1' && first && !scope.draftId && !scope.receiptId);
+  const question_mode = pitch_help && ui.state.questionModeAvailable && (toggle_question_mode || signal === 'R1');
+  if (pitch_help) signal = 'LR';
+  flash_signal(signal);
   ui.signal_count += 1;
   const id = ui.seat + '-' + Date.now().toString(36) + '-' + ui.signal_count;
-  const { previewWaiting, ...intent } = scope;
-  if (!send({ type: 'signal', signal, id, ...intent })) {
+  const { previewWaiting, pitchHelp, ...intent } = scope;
+  if (!send({ type: 'signal', signal, id, ...intent, ...(pitch_help && { purpose: question_mode ? 'question_mode' : 'pitch_help' }) })) {
     audio.play_cue('error');
     show_note('Signal did not reach the hub.');
     return;
@@ -378,6 +383,7 @@ function flash_signal(signal) {
 }
 
 function touch_signal(signal) {
+  if (['R1', 'LR'].includes(signal) && ui.state?.pitchHelp && ui.state.phase === 'live') return on_signal(signal);
   if (signal === 'BACK') resume_anchor();
   touch_emulator.configure(touch_profile());
   touch_emulator.signal(signal, settings.mode);
@@ -551,7 +557,7 @@ function handle_frame(frame, source) {
       return is_stale_frame(frame) ? undefined : void on_cache(frame, source);
     case 'audio':
       if (source.synced && is_stale_frame(frame)) return;
-      if (frame.kind === 'announcement' && (!source.synced || ui.state?.canned || ui.state?.phase === 'reveal')) return;
+      if (['announcement', 'pitch_help'].includes(frame.kind) && (!source.synced || ui.state?.canned || ui.state?.phase === 'reveal')) return;
       return audio.play(frame);
     case 'signal_ack': {
       const timer = awaiting_signal_ack.get(frame.id);
@@ -564,6 +570,12 @@ function handle_frame(frame, source) {
       }
       return;
     }
+    case 'pitch_help_status':
+      if (!is_stale_frame(frame)) show_note(frame.text);
+      return;
+    case 'pitch_help_hold':
+      if (!is_stale_frame(frame)) audio.stop_pitch_help(frame.messageId);
+      return;
     case 'voice_status': return is_stale_frame(frame) ? undefined : on_voice_status(frame);
     case 'voice_preview_error': return is_stale_frame(frame) ? undefined : set_issue('voice', 'The speaking preview could not load. Try again.');
     case 'room_mic_invite':
@@ -1342,7 +1354,15 @@ function render_signals() {
   const codebook = ui.state?.codebook ?? {};
   const order = SIGNAL_ORDER[settings.mode];
   const host = $('signals');
-  const key = settings.mode + JSON.stringify(codebook);
+  const pitch_help = ui.state?.pitchHelp === true;
+  const mode_button = $('question-mode');
+  const armed = my_state()?.questionMode === true;
+  mode_button.hidden = !ui.state?.questionModeAvailable || is_sim();
+  mode_button.setAttribute('aria-pressed', String(armed));
+  set_text(mode_button.querySelector('b'), armed ? 'Question mode on' : 'Question mode');
+  set_text(mode_button.querySelector('span'), armed ? 'Listening for questions. Tap to stop.' : 'Prepare while the judge speaks');
+
+  const key = settings.mode + settings.gesture_model + String(pitch_help) + JSON.stringify(codebook);
   if (ui.signals_key !== key) {
     ui.signals_key = key;
     host.replaceChildren(...order.map(signal => {
@@ -1352,11 +1372,13 @@ function render_signals() {
       button.dataset.signal = signal;
       if (signal === 'LR' && settings.mode === 2) button.dataset.wide = 'true';
       const name = document.createElement('b');
-      name.textContent = SIGNAL_LABELS[signal];
+      name.textContent = signal === 'LR' && pitch_help ? 'What should I say?' : SIGNAL_LABELS[signal];
       const meaning = document.createElement('span');
-      meaning.textContent = codebook[signal] ?? SYSTEM_MEANINGS[signal] ?? '';
+      meaning.textContent = signal === 'LR' && pitch_help
+        ? settings.gesture_model === 'pro' ? 'Single stem squeeze' : 'One next-track event'
+        : codebook[signal] ?? SYSTEM_MEANINGS[signal] ?? '';
       button.append(name, meaning);
-      button.setAttribute('aria-label', SIGNAL_LABELS[signal] + ': ' + meaning.textContent);
+      button.setAttribute('aria-label', name.textContent + ' · ' + meaning.textContent);
       return button;
     }));
   }
@@ -1399,6 +1421,21 @@ function render_live() {
   const preset = state?.preset ?? 'Pitch';
   set_text($('live-preset'), state?.presetPending && state.presetPending !== preset ? preset + ' to ' + state.presetPending : preset);
   const phase = state?.phase ?? 'lobby';
+  const speaking_notes = $('live-pitch-notes');
+  const cue = phase === 'live' && !state?.canned && preset === 'Pitch' ? mine?.lastPitchCue : null;
+  speaking_notes.hidden = !cue?.text;
+  set_text($('live-pitch-cue'), cue?.text ?? '');
+  const points = Array.isArray(cue?.points) ? cue.points : [];
+  const notes_key = JSON.stringify(points);
+  const list = $('live-pitch-points');
+  if (list.dataset.key !== notes_key) {
+    list.dataset.key = notes_key;
+    list.replaceChildren(...points.map(point => {
+      const item = document.createElement('li');
+      item.textContent = point;
+      return item;
+    }));
+  }
   $('live-phase').dataset.phase = phase;
   set_text($('live-phase'), state?.canned ? 'Canned take' : PHASE_LABELS[phase] ?? '');
   set_text($('live-partner'), partner?.online ? (partner.ready ? 'Ready' : 'Connected') : 'Offline');
@@ -1458,14 +1495,16 @@ function render_codebook() {
   $('codebook-list').replaceChildren(...SIGNAL_ORDER[settings.mode].map(signal => {
     const row = document.createElement('li');
     const name = document.createElement('b');
-    name.textContent = SIGNAL_LABELS[signal];
+    name.textContent = signal === 'LR' && ui.state?.pitchHelp ? 'What should I say?' : SIGNAL_LABELS[signal];
     const meaning = document.createElement('strong');
-    meaning.textContent = codebook[signal] ?? SYSTEM_MEANINGS[signal] ?? '';
+    meaning.textContent = signal === 'LR' && ui.state?.pitchHelp ? 'Hear a private pitch cue' : codebook[signal] ?? SYSTEM_MEANINGS[signal] ?? '';
     const pattern = document.createElement('small');
     const count = ['R1', 'R2', 'L1'].indexOf(signal) + 1;
     pattern.textContent = is_sim() ? PATTERN_LABELS[settings.mode][signal]
       : !count ? 'On-screen control'
         : settings.gesture_model === 'pro' ? SIGNAL_LABELS[signal] + ' squeeze' : 'Next Track × ' + count;
+    if (ui.state?.questionModeAvailable && signal === 'R1') pattern.textContent = 'On-screen fixed cue. Earbud press confirms, acknowledges, or toggles question mode.';
+    if (ui.state?.questionModeAvailable && signal === 'LR') pattern.textContent = 'On-screen cue. One earbud press toggles question mode.';
     row.append(name, meaning, pattern);
     return row;
   }));
@@ -1550,6 +1589,7 @@ function set_earbud_model(model) {
 }
 
 function bind_events() {
+  $('question-mode').addEventListener('click', () => on_signal('LR', undefined, true));
   installDiag({ send, keepalive });
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);
