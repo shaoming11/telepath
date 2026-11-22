@@ -49,6 +49,7 @@ export function PhoneMarkup() {
               <div className="step-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
               <h2>Voice</h2><span className="step-index" id="voice-step">1 / 4</span>
             </header>
+            <button className="voice-choice" id="voice-skip" type="button">Use the premade voice</button>
             <label className="check" id="voice-consent-row">
               <input type="checkbox" id="voice-consent" />
               <span id="voice-consent-text"></span>
@@ -72,7 +73,6 @@ export function PhoneMarkup() {
               <button className="primary" id="voice-finish" type="button" hidden>Use this sample</button>
               <button id="voice-room" type="button">Room sample only</button>
               <button id="voice-cancel" type="button" hidden>Cancel</button>
-              <button className="quiet" id="voice-skip" type="button">Use the premade voice</button>
             </div>
           </section>
 
