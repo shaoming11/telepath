@@ -1,21 +1,4 @@
 {
-  "revision": 125,
-  "claims": [
-    {
-      "id": "b42473b5-9c33-47e7-946b-3a813a6e9164",
-      "owner": "fireheartjerry",
-      "agent": "codex-wasp-deployed-evidence",
-      "branch": "jerry/wasp-liquid-glass",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub/server.mjs",
-        "scripts/build-wasp-ui"
-      ],
-      "paths": [
-        "hub/server.mjs",
-        "scripts/build-wasp-ui"
-      ],
-      "claimedAt": "2026-11-22T08:27:02.603Z"
-    }
-  ]
+  "revision": 126,
+  "claims": []
 }
