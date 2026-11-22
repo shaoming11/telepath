@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")"
+if [[ ! -s .runtime/wasp-client/index.html ]]; then ./scripts/build-wasp-ui; fi
+export TELEPATHY_WASP_UI=on
+exec ./start

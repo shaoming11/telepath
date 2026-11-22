@@ -21,6 +21,8 @@ Two fixed seats, one MacBook hub. Earbud gestures let a teammate send a cached p
 
 ## Start
 
+For the Wasp frontend on this branch, use `./start-wasp`. See [Wasp UI setup and verification](docs/wasp-ui.md).
+
 From this folder, run `./start`. Node 22.13 or newer is required. The launcher installs missing npm dependencies, starts the stage on loopback, prints the HTTPS phone address, and shows which text model the hub will use.
 
 Set `ELEVENLABS_API_KEY` and optionally `OPENAI_API_KEY` in the launcher’s environment, or point `TELEPATHY_ENV_FILE` and `TELEPATHY_OPENAI_ENV_FILE` to owner-only environment files. The default files are `.env.local` and `.env.openai.local`, both ignored by Git. The phones never receive the keys.

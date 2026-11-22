@@ -92,6 +92,7 @@ let last_output_phase;
 let last_output_at = 0;
 const gesture_scopes = new Map();
 const awaiting_signal_ack = new Map();
+const privateCueAudio = new Set();
 const SIGNAL_ACK_MS = 1800;
 
 const keepalive = $('keepalive');
@@ -116,7 +117,15 @@ const audio = createAudioEngine({
   volumes: settings.volumes,
   timing: settings.app,
   on_status: ({ key, text }) => set_issue(key, text),
-  on_heard: message_id => send({ type: 'heard', messageId: message_id }),
+  on_heard: message_id => {
+    if (privateCueAudio.delete(message_id)) {
+      const notes = $('live-pitch-notes');
+      notes.classList.remove('cue-started');
+      void notes.offsetWidth;
+      notes.classList.add('cue-started');
+    }
+    return send({ type: 'heard', messageId: message_id });
+  },
 });
 
 // A draft the hub has retired (answered, expired, replaced, revealed) must not start playing late,
@@ -558,6 +567,10 @@ function handle_frame(frame, source) {
     case 'audio':
       if (source.synced && is_stale_frame(frame)) return;
       if (['announcement', 'pitch_help'].includes(frame.kind) && (!source.synced || ui.state?.canned || ui.state?.phase === 'reveal')) return;
+      if (frame.kind === 'pitch_help' && frame.messageId) {
+        privateCueAudio.add(frame.messageId);
+        if (privateCueAudio.size > 32) privateCueAudio.delete(privateCueAudio.values().next().value);
+      }
       return audio.play(frame);
     case 'signal_ack': {
       const timer = awaiting_signal_ack.get(frame.id);
@@ -574,7 +587,10 @@ function handle_frame(frame, source) {
       if (!is_stale_frame(frame)) show_note(frame.text);
       return;
     case 'pitch_help_hold':
-      if (!is_stale_frame(frame)) audio.stop_pitch_help(frame.messageId);
+      if (!is_stale_frame(frame)) {
+        privateCueAudio.delete(frame.messageId);
+        audio.stop_pitch_help(frame.messageId);
+      }
       return;
     case 'voice_status': return is_stale_frame(frame) ? undefined : on_voice_status(frame);
     case 'voice_preview_error': return is_stale_frame(frame) ? undefined : set_issue('voice', 'The speaking preview could not load. Try again.');
@@ -598,6 +614,7 @@ function on_state(next, source) {
   }
   const new_session = previous && (previous.sessionId !== next.sessionId || previous.hubId !== next.hubId);
   if (new_session) {
+    privateCueAudio.clear();
     monitor_snapshot = null;
     audio.clear_session();
     drafts.reset();
