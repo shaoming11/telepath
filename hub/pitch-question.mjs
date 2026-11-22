@@ -59,6 +59,16 @@ export function sameQuestion(partial, final) {
   return normalize(partial) === normalize(final);
 }
 
+// A draft from a partial transcript still fits when the final question only added a few closing words.
+export function nearlySameQuestion(partial, final, maxExtraWords = 4) {
+  const normalize = value => questionKey(value).replace(/ (?:please|thanks|thank you)$/, '');
+  const draft = normalize(partial);
+  const done = normalize(final);
+  if (!draft || draft === done) return Boolean(draft);
+  if (!(done + ' ').startsWith(draft + ' ')) return false;
+  return done.split(' ').length - draft.split(' ').length <= maxExtraWords;
+}
+
 export function fallbackPitchCue(text, question = false) {
   if (isBuildStoryQuestion(text)) return BUILD_STORY_CUE;
   if (/\b(macbook|mac|microphone)\b/i.test(text)) return 'Mac listens. Phones keep earbud controls.';

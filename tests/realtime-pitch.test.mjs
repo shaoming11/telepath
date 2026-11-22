@@ -57,3 +57,12 @@ test('Realtime keeps the connection warm, sends separate text revisions, and rej
   lifecycle.abort();
   assert.equal(socket.readyState, 3);
 });
+
+test('a partial-question draft still fits when the final question only adds a few words', async () => {
+  const { nearlySameQuestion } = await import('../hub/pitch-question.mjs');
+  assert.equal(nearlySameQuestion('What is the hardest latency problem you', 'What is the hardest latency problem you solved?'), true);
+  assert.equal(nearlySameQuestion('Why the Mac', 'Why the Mac?'), true);
+  assert.equal(nearlySameQuestion('What is the hardest', 'What is the hardest latency problem you have ever solved at work?'), false);
+  assert.equal(nearlySameQuestion('Where did you grow', 'What do you do for fun?'), false);
+  assert.equal(nearlySameQuestion('', 'Anything?'), false);
+});
