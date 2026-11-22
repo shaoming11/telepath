@@ -8,7 +8,7 @@ import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcement
 import { COUNT_CALIBRATION_WINDOW_MS } from '../public/earbuds/airpods-1/input.mjs';
 import { normalizePitch, normalizePitchHelp, recommendLocally } from '../maritime/policy.mjs';
 import { createPitchPlanner } from './pitch-planner.mjs';
-import { coachScenario, isGroundedScenario, scenarioFallbackCue, SCENARIO_QUERY } from './coach-scenarios.mjs';
+import { coachScenario, isGroundedScenario, scenarioFallbackCue, SCENARIO_QUERY, validateSocialCue } from './coach-scenarios.mjs';
 import { createSessionMonitor } from '../monitor/session.mjs';
 import { createSpeakerBindings, splitDiarizedSegment } from '../monitor/speakers.mjs';
 
@@ -32,7 +32,10 @@ const DEFAULT_SETTINGS = Object.freeze({
   questionTimeoutMs: 8000,
   pitchHelpTimeoutMs: 4800,
   pitchComposeMs: 1850,
-  pitchSpeechMs: 1800,
+  pitchRaceMs: 6000,
+  pitchVerifyMs: 10_000,
+  pitchSpeechMs: 4600,
+  pitchPlaybackMs: 8000,
   pitchPauseBudgetMs: 12_000,
   pitchReviewMs: 1200,
   pitchQuestionSettleMs: 120,
@@ -1127,7 +1130,7 @@ export class Session {
     const scenario = this.coachScenario;
     const pitch = scenario === 'pitch';
     const known = pitch ? sourcedProjectCue(question, passages, frontendStack) : null;
-    if (known) {
+    if (known && !this.coach?.draftPitchCue) {
       return { ...validateAnswer(known, passages, recent), source: 'project-reference', timing: {} };
     }
     if (!this.codec?.pitchHelp || (!passages.length && isGroundedScenario(scenario))) return null;
@@ -1160,6 +1163,57 @@ export class Session {
     return { ...cue, source, timing: { planMs: Math.round(planned - started), composeMs: Math.round(performance.now() - planned) } };
   }
 
+  async racePitchCue(input, prepared, started, realtime, signal) {
+    const compose = deadline => prepared?.task ?? this.composePitchCue(input, deadline, started, realtime);
+    if (!this.coach?.draftPitchCue) {
+      return withDeadline(compose, this.settings.pitchComposeMs, signal);
+    }
+    const { passages, recent } = input;
+    const scenario = this.coachScenario;
+    const context = { ...input.context, passages, turns: recent, scenario };
+    const validate = raw => {
+      const cue = scenario === 'social' ? validateSocialCue(raw, passages) : validateAnswer(raw, passages, recent);
+      if (cue.status !== 'answer' || cue.answer.split(/\s+/).length > MAX_PITCH_CUE_WORDS
+          || (scenario === 'pitch' && !isUsefulPitchCue(cue.answer, recent.at(-1)?.text))) {
+        throw new Error('Provider did not return a usable cue');
+      }
+      return cue;
+    };
+    const providers = [
+      { name: 'OpenAI', source: 'openai', draft: compose, verify: this.codec?.verifyPitchCue?.bind(this.codec) },
+      { name: 'Maritime', source: 'maritime', draft: deadline => this.coach.draftPitchCue(context, { signal: deadline }),
+        verify: this.coach.verifyPitchCue?.bind(this.coach) },
+    ];
+    const drafts = providers.map(provider => withDeadline(provider.draft, this.settings.pitchRaceMs, signal));
+    const candidates = drafts.map((draft, index) => draft.then(raw => {
+      const cue = validate(raw);
+      return { ...cue, source: raw.source === 'openai-realtime' ? raw.source : providers[index].source, timing: raw.timing ?? {}, index };
+    }));
+    const winner = await Promise.any(candidates);
+    const index = 1 - winner.index;
+    const reviewer = providers[index];
+    return { ...winner, verify: reviewer.verify && (async deadline => {
+      const alternate = await drafts[index];
+      deadline.throwIfAborted();
+      const verdict = await reviewer.verify({
+        ...context, firstCue: winner.answer, alternative: typeof alternate?.answer === 'string' ? alternate.answer.slice(0, 180) : '',
+      }, { signal: deadline });
+      if (verdict?.status === 'resolved') return { provider: reviewer.name };
+      if (verdict?.status !== 'answer' || scenario === 'social') return null;
+      const corrected = validate(verdict);
+      if (questionKey(corrected.answer) === questionKey(winner.answer)) return null;
+      return { provider: reviewer.name, correction: corrected };
+    }) };
+  }
+
+  async speakPitchCue(seat, text, signal) {
+    try {
+      return toUrl(await withDeadline(deadline => this.audio.speech(seat, text, {
+        voice: null, sim: false, role: 'assistant', signal: deadline, whisper: true,
+      }), this.settings.pitchSpeechMs, signal));
+    } catch { return null; }
+  }
+
   async requestPitchHelp(seat, { input, prepared, question, anchor, spoken, scope, realtime } = {}) {
     const state = this.seats[seat];
     const began = this.now();
@@ -1180,14 +1234,14 @@ export class Session {
     const resolved = input ?? this.pitchContext(seat, began);
     const started = performance.now();
     let surfacedCue = false;
+    let verifying = false;
     notify('Preparing a private pitch cue…');
     this.publishMonitor();
     try {
       const reply = await withDeadline(async signal => {
         let cue = spoken
           ? await this.reviewPitchAnswer(question, spoken, resolved.passages, signal)
-          : await withDeadline(deadline => prepared?.task ?? this.composePitchCue(resolved, deadline, started, realtime),
-            this.settings.pitchComposeMs, signal).catch(() => null)
+          : await this.racePitchCue(resolved, prepared, started, realtime, signal).catch(() => null)
             ?? { answer: this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} };
         if (anchor) await this.waitForPitchPause(signal);
         let checkedAnswer = spoken || this.pitchAnswerAfter(seat, anchor);
@@ -1195,11 +1249,6 @@ export class Session {
         if (checkedAnswer && !spoken && reviewAnswers) cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
         if (!cue) return null;
         const composed = performance.now();
-        const speak = async text => {
-          try { return toUrl(await withDeadline(deadline => this.audio.speech(seat, text, {
-            voice: null, sim: false, role: 'assistant', signal: deadline, whisper: true,
-          }), this.settings.pitchSpeechMs, signal)); } catch { return null; }
-        };
         const showCue = () => {
           notify(cue.answer);
           surfacedCue = true;
@@ -1212,7 +1261,7 @@ export class Session {
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
         };
         showCue();
-        let url = await speak(cue.answer);
+        let url = await this.speakPitchCue(seat, cue.answer, signal);
         if (anchor) await this.waitForPitchPause(signal);
         const latestAnswer = this.pitchAnswerAfter(seat, anchor);
         if (reviewAnswers && latestAnswer && latestAnswer !== checkedAnswer) {
@@ -1220,7 +1269,7 @@ export class Session {
           cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
           if (!cue) return null;
           showCue();
-          url = await speak(cue.answer);
+          url = await this.speakPitchCue(seat, cue.answer, signal);
           if (anchor) await this.waitForPitchPause(signal);
           if (this.pitchAnswerAfter(seat, anchor) !== checkedAnswer) return null;
         }
@@ -1238,12 +1287,42 @@ export class Session {
         state.awaitingHeard.set(messageId, entry);
         if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
         if (anchor && !reply.reviewed) state.pitchPlayback = { entry, question, anchor, until: this.now() + 10_000 };
-        this.cue(seat, 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: 2000 });
+        this.cue(seat, 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
+      } else {
+        this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
+      }
+      if (reply.verify && state.lastPitchCue) {
+        verifying = true;
+        const shown = state.lastPitchCue;
+        const lastTurn = this.room.transcript.at(-1);
+        const current = () => !lifecycle.aborted && state.lastPitchCue === shown
+          && (!state.pitchHelp || state.pitchHelp === controller)
+          && this.room.transcript.at(-1) === lastTurn && !this.room.partial;
+        void withDeadline(reply.verify, this.settings.pitchVerifyMs, lifecycle).then(async result => {
+          if (!current() || !result) return;
+          const revised = result.correction;
+          const url = revised ? await this.speakPitchCue(seat, 'Correction. ' + revised.answer, lifecycle) : null;
+          if (!current()) return;
+          state.lastPitchCue = revised ? {
+            text: revised.answer, points: ['Correction verified by ' + result.provider, ...revised.sources.map(source => source.quote)],
+          } : { ...shown, points: [...shown.points, 'Verified by ' + result.provider] };
+          this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
+          if (revised && !url) this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
+          if (url) {
+            const messageId = 'pitch-help-' + (this.sequence + 1);
+            const correction = this.append('pitch_help', { seat, text: revised.answer, sources: revised.sources,
+              source: result.provider.toLowerCase() + '-review', scenario: this.coachScenario, requestedAt: began, messageId });
+            state.awaitingHeard.set(messageId, correction);
+            if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
+            this.cue(seat, 'sent', { kind: 'pitch_help', url, text: revised.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
+            this.publish();
+          }
+        }).catch(() => {}).finally(() => prepared?.controller.abort());
       }
     } catch {
       if (!lifecycle.aborted && !surfacedCue) notify(this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)));
     } finally {
-      prepared?.controller.abort();
+      if (!verifying) prepared?.controller.abort();
       if (state.pitchHelp === controller) state.pitchHelp = null;
       if (!lifecycle.aborted) this.publish();
     }

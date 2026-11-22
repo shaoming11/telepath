@@ -1,3 +1,4 @@
+import { CUE_REVIEW_INSTRUCTIONS } from '../maritime/policy.mjs';
 import { openRealtimePitch } from './realtime-pitch.mjs';
 import { spawn } from 'node:child_process';
 import { QUESTION_INSTRUCTIONS, QUESTION_SCHEMA, validateAnswer } from './questions.mjs';
@@ -184,6 +185,11 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath, W
       const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, 'pitch_help', instructions);
       return scenario === 'social' ? validateSocialCue(raw, passages) : validateAnswer(raw, passages, context.turns);
     },
+    ...(mode === 'openai' && env.OPENAI_API_KEY && {
+      async verifyPitchCue(context, { signal } = {}) {
+        return fromOpenAI(env, fetchImpl, JSON.stringify(context), signal, 'pitch_help', CUE_REVIEW_INSTRUCTIONS);
+      },
+    }),
     async answer({ signal, passages, ...context }) {
       if (mode !== 'openai' || !env.OPENAI_API_KEY) throw new Error('Document answers require the OpenAI text provider.');
       const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, true);

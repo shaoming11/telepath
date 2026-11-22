@@ -375,3 +375,12 @@ test('a preview and assistant cue do not expose an incoming teammate chime', asy
   world.advance(100);
   assert.equal(engine.incomingChimeActive(), false);
 });
+
+test('a private cue makes room for speech when a chime would consume its remaining playback window', async () => {
+  const engine = await ready_engine();
+  engine.play({ type: 'audio', kind: 'pitch_help', cue: 'draft', url: '/assets/short.mp3',
+    messageId: 'private-voice-first', expiresAfterMs: 200 });
+  await world.flush();
+  world.advance(150);
+  assert.deepEqual(heard, ['private-voice-first']);
+});

@@ -6,6 +6,12 @@ Maritime can prepare a plan for the presenter after a completed room turn. The h
 
 A short cached chime announces the private whisper. Stage records which planner ran, OpenAI and ElevenLabs turnaround in the hub, and elapsed time from receipt of the gesture to the phone’s reported speech start. The last measurement includes phone audio decoding and scheduling. Bluetooth latency and the AirPods 1 recognition window are outside it.
 
+## Parallel private cues
+
+Set `TELEPATHY_MARITIME_CUE_RACE=on` alongside `TELEPATHY_MARITIME=on` to start an independent Maritime draft when the seat requests a cue. OpenAI can prepare its draft while the question is still being spoken. The hub plays the first usable cue to the requesting seat. The other provider reviews the cue with the same conversation and source excerpts after its own draft finishes. Verification appears next to the private cue. A material correction must cite a supplied passage. It can play a follow-up whisper while the conversation and request are still current.
+
+The hub allows up to six seconds for the initial race and up to ten seconds for review. ElevenLabs renders the whisper on the Mac hub. Browser playback has an eight-second start window to allow for decoding, waking audio, and earlier queued messages. If speech is unavailable, the phone keeps the cue readable and shows the audio status.
+
 ## Platform choices
 
 The direct agent chat endpoint returns a completed reply. Its documented 30-second completion budget leaves room for agent work, while the earbud needs a much shorter deadline. The hub prepares plans ahead of the gesture and applies its own deadline. Webhooks acknowledge that they accepted work before the agent finishes, which makes them a poor fit for returning a private cue. [Direct chat and webhooks](https://maritime.sh/docs/api) · [Runtime limits](https://maritime.sh/docs/limits)

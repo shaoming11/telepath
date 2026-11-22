@@ -359,10 +359,20 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
     const earliest = context.currentTime + START_MARGIN_S;
     const serial = Boolean(speech) || !IMMEDIATE_CUES.has(frame.cue);
     const cue_at = serial ? Math.max(earliest, playhead) : earliest;
-    const cue_audible = Boolean(cue) && levels.cue > 0;
+    let cue_audible = Boolean(cue) && levels.cue > 0;
     const voice_audible = Boolean(speech) && levels.voice > 0;
-    const first_speech_at = cue_at + (cue_audible && voice_audible ? cue.duration + app_timing.cueGapMs / 1000 : 0);
-    if (guard.deadline != null && (first_speech_at - context.currentTime) * 1000 > guard.deadline - performance.now()) return;
+    if (guard.deadline != null) {
+      const remaining = guard.deadline - performance.now();
+      const wait = (cue_at - context.currentTime) * 1000;
+      const prelude = cue_audible && voice_audible ? cue.duration * 1000 + app_timing.cueGapMs : 0;
+      if (wait + prelude > remaining) {
+        if (frame.kind === 'pitch_help' && voice_audible && wait <= remaining) cue_audible = false;
+        else {
+          if (frame.kind === 'pitch_help') report('playback', 'Whisper expired. Read the private cue on screen.');
+          return;
+        }
+      }
+    }
     const meta = {
       message_id: frame.messageId ?? null, preview: guard.preview, announcement: guard.announcement != null, serial,
       pitch_help: frame.kind === 'pitch_help',
@@ -425,7 +435,11 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
       && (guard.announcement == null || guard.announcement === announcement_generation)
       && !(frame.messageId && retired.has(frame.messageId));
     const now = performance.now();
-    if (!current() || guard.deadline != null && now >= guard.deadline) return;
+    if (!current()) return;
+    if (guard.deadline != null && now >= guard.deadline) {
+      if (frame.kind === 'pitch_help') report('playback', 'Whisper expired. Read the private cue on screen.');
+      return;
+    }
     if (context?.state === 'running') {
       schedule(frame, cue, speech, guard);
       return;

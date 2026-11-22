@@ -625,6 +625,9 @@ function handle_frame(frame, source) {
       if (source.synced && is_stale_frame(frame)) return;
       if (['announcement', 'pitch_help'].includes(frame.kind) && (!source.synced || ui.state?.canned || ui.state?.phase === 'reveal')) return;
       if (frame.kind === 'pitch_help' && frame.messageId) {
+        if (!capture.open && !capture.opening) {
+          try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+        }
         privateCueAudio.set(frame.messageId, frame.text);
         if (privateCueAudio.size > 32) privateCueAudio.delete(privateCueAudio.keys().next().value);
       }
@@ -644,6 +647,9 @@ function handle_frame(frame, source) {
       if (source.synced && frame.hubId === ui.state?.hubId && frame.sessionId === ui.state?.sessionId) {
         audio.confirm_heard(frame.messageId);
       }
+      return;
+    case 'pitch_help_audio_failed':
+      if (!is_stale_frame(frame)) set_issue('playback', 'Whisper audio unavailable. Read the private cue on screen.');
       return;
     case 'pitch_help_status':
       if (!is_stale_frame(frame)) show_note(frame.text);
