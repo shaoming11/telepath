@@ -1,21 +1,4 @@
 {
-  "revision": 31,
-  "claims": [
-    {
-      "id": "5e1add8c-09d2-47df-8268-b00c213a56d4",
-      "owner": "fireheartjerry",
-      "agent": "codex-phone-mic-check",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/earbuds/phone-mic-check.html",
-        "public/earbuds/phone-mic-check.mjs"
-      ],
-      "paths": [
-        "public/earbuds/phone-mic-check.html",
-        "public/earbuds/phone-mic-check.mjs"
-      ],
-      "claimedAt": "2026-11-22T04:06:45.168Z"
-    }
-  ]
+  "revision": 32,
+  "claims": []
 }
