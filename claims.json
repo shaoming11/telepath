@@ -1,5 +1,5 @@
 {
-  "revision": 24,
+  "revision": 25,
   "claims": [
     {
       "id": "c5c7d17e-5893-4804-afb4-5b4158f3c29d",
@@ -44,6 +44,22 @@
         "tests/session.test.mjs"
       ],
       "claimedAt": "2026-11-22T03:39:22.276Z"
+    },
+    {
+      "id": "cbffcd70-63eb-4906-8389-5b38f09f09c1",
+      "owner": "fireheartjerry",
+      "agent": "codex-pro-check",
+      "branch": "jerry/airpods-1",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "public/earbuds/airpods-pro/check.html",
+        "public/earbuds/airpods-pro/check.mjs"
+      ],
+      "paths": [
+        "public/earbuds/airpods-pro/check.html",
+        "public/earbuds/airpods-pro/check.mjs"
+      ],
+      "claimedAt": "2026-11-22T03:42:52.729Z"
     }
   ]
 }
