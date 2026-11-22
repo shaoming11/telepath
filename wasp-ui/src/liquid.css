@@ -429,6 +429,27 @@ body.wasp-liquid[data-solid-surfaces] {
 .wasp-liquid .room-console__head h2 { font-size: clamp(19px, 2.1cqi, 24px); }
 .wasp-liquid .room-console__actions button { min-block-size: 44px; }
 .wasp-liquid .room-console__state::before { border-radius: 50%; }
+.wasp-liquid[data-surface=stage] .room-console__actions .room-console__start {
+  transition-property: box-shadow, transform;
+}
+.wasp-liquid[data-surface=stage]:is([data-phase=live], [data-phase=lobby]:has(#begin-button:enabled))
+  .room-console__actions .room-console__start {
+  background: var(--raised);
+  color: var(--fg);
+  border-color: var(--line-2);
+}
+.wasp-liquid[data-surface=stage]:is([data-phase=live], [data-phase=lobby]:has(#begin-button:enabled))
+  .room-console__actions .room-console__start:hover:not(:disabled) {
+  border-color: var(--sa);
+}
+.wasp-liquid[data-surface=stage] .room-console[data-state=starting] .room-console__state::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--fg-2);
+}
+.wasp-liquid[data-surface=stage] .room-console[data-state=live] .room-console__state::before,
+.wasp-liquid[data-surface=stage] .room-console__meter span[data-active] {
+  background: var(--fg);
+}
 .wasp-liquid .room-console__disclosure[aria-expanded=true] {
   border-color: var(--glass-edge);
   background-color: var(--glass-solid);
@@ -466,6 +487,74 @@ body.wasp-liquid[data-solid-surfaces] {
 .wasp-liquid .room-console__latest span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .wasp-liquid .room-console[data-expanded=true] :is(.room-console__input, .room-console__transcript) {
   animation: liquid-enter 210ms var(--glide) both;
+}
+@container frame (min-width: 761px) {
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 16px;
+    margin-block-start: 16px;
+    padding: 7px var(--console-gutter);
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false]
+    :is(.room-console__head, .room-console__head > div:first-child) {
+    display: contents;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] #room-mic-title {
+    grid-area: 1 / 1;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false]
+    :is(.room-console__head p, #room-mic-status, .room-console__latest) {
+    grid-area: 2 / 1;
+    min-inline-size: 0;
+    min-block-size: 0;
+    margin: 5px 0 0;
+    padding: 0;
+    border: 0;
+    animation: none;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__actions {
+    grid-area: 1 / 2 / span 2;
+    align-self: center;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__state {
+    min-inline-size: 16ch;
+    justify-content: flex-end;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false]
+    :is(#room-mic-start, #room-mic-stop) {
+    min-inline-size: 7.5rem;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live]
+    .room-console[data-expanded=false]:has(> #room-mic-status:not([hidden]), > .room-console__latest) .room-console__head p,
+  .wasp-liquid[data-surface=stage][data-phase=live]
+    .room-console[data-expanded=false]:has(> #room-mic-status:not([hidden])) > .room-console__latest {
+    visibility: hidden;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] > #room-mic-details {
+    position: absolute;
+    inset: auto 0 0;
+    padding: 0;
+    pointer-events: none;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__signal {
+    display: block;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__meter-head {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__meter {
+    min-block-size: 3px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    gap: 1px;
+  }
 }
 .wasp-liquid .operator:not([hidden]) {
   transform-origin: top right;

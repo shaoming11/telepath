@@ -120,7 +120,9 @@ export function StageRoomConsole() {
         <RoomInputMeter wanted={state.wanted} />
       </div>
       <p className="room-console__notice" id="room-mic-status" role="status"
-        hidden={!expanded && ['off', 'live'].includes(state.tone)}>{state.notice}</p>
+        hidden={!expanded && (state.tone === 'live' || (state.tone === 'off' && (state.canStart || state.reviewing)))}>
+        {state.notice}
+      </p>
       {!expanded && !state.reviewing && latest && (
         <p className="room-console__latest" key={latest.label + ':' + latest.text}><b>{latest.label}.</b> <span>{latest.text}</span></p>
       )}
