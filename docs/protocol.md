@@ -1,4 +1,4 @@
-# Telepathy hub protocol
+# Telepath hub protocol
 
 The Mac serves the stage at `/stage` and the seats at `/`. The stage socket accepts loopback connections only. Phones connect to `/ws?role=seat&seat=A` or `B`. Rehearsal seats add `sim=1` and use the same input recognizer and session. Opening a replacement socket closes the earlier one for that seat.
 

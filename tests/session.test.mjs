@@ -1921,6 +1921,9 @@ for (const fastest of ['openai', 'maritime']) {
     releaseSlow();
     const reviewer = fastest === 'openai' ? 'Maritime' : 'OpenAI';
     await eventually(() => session.seats.A.lastPitchCue.points.includes('Verified by ' + reviewer));
+    const evidence = session.log.find(entry => entry.kind === 'pitch_help');
+    assert.equal(evidence.draftedBy, fastest === 'openai' ? 'OpenAI' : 'Maritime');
+    assert.equal(evidence.verifiedBy, reviewer);
     assert.equal(review.name, reviewer);
     assert.equal(review.input.firstCue, 'The buyer is a sales team lead.');
   });

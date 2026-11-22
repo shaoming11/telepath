@@ -2,7 +2,7 @@
 
 ## Set up earbud controls
 
-- **AirPods 1:** In Bluetooth settings, assign double-tap on one earbud to **Next Track**. Choose **AirPods 1 → Calibrate timing** in Telepathy. When the screen says **Now**, send two Next Track events for each of the first three trials and three for each of the last three. Use your normal cadence. Telepathy measures the gaps and saves the resulting timing window on this phone.
+- **AirPods 1:** In Bluetooth settings, assign double-tap on one earbud to **Next Track**. Choose **AirPods 1 → Calibrate timing** in Telepath. When the screen says **Now**, send two Next Track events for each of the first three trials and three for each of the last three. Use your normal cadence. Telepath measures the gaps and saves the resulting timing window on this phone.
 - **AirPods Pro:** Select **AirPods Pro** and optionally use **Test squeezes**. Squeeze either stem once, twice, or three times. Safari reports Play/Pause, Next Track, or Previous Track respectively. The app uses the command immediately, so there is no timing calibration. Keep the earbuds in during the test so automatic ear detection does not send Play or Pause.
 - During the demo, use the on-screen controls for the codebook, assistant, Out, and Back. Use those controls for fixed messages too if Safari does not receive earbud commands.
 
@@ -12,7 +12,7 @@ Start the hub and trust its certificate before the stopwatch. Keep the MacBook l
 
 Connect one AirPods pair directly to each phone. Use **Test audio** on each phone to confirm which pair it drives. Keep the Mac on the same network to run Stage. If the phones are on the same venue Wi-Fi and cannot load the HTTP trust link, try a private hotspot and use the new HTTPS address printed by `./start`.
 
-- **iPhone.** Install the downloaded certificate profile. Then go to **Settings → General → About → Certificate Trust Settings** and enable trust for **Telepathy Local Demo**. [Apple’s certificate trust guide](https://support.apple.com/en-ca/102390)
+- **iPhone.** Install the downloaded certificate profile. Then go to **Settings → General → About → Certificate Trust Settings** and enable trust for **Telepath Local Demo** (or **Telepathy Local Demo** on an existing install). [Apple’s certificate trust guide](https://support.apple.com/en-ca/102390)
 - **Android Chrome.** Install the downloaded file as a user CA through your phone’s **Encryption & credentials** settings, then reopen the HTTPS join page. The labels vary by phone. [Chrome local certificate verification](https://blog.chromium.org/2022/09/announcing-launch-of-chrome-root-program.html)
 - [Apple’s AirPods controls](https://support.apple.com/en-ie/108764)
 

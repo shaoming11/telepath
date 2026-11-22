@@ -31,7 +31,7 @@ start.addEventListener('click', () => {
     return;
   }
   if (navigator.audioSession) navigator.audioSession.type = 'playback';
-  if (globalThis.MediaMetadata) media.metadata = new MediaMetadata({ title: 'Telepathy AirPods Pro check' });
+  if (globalThis.MediaMetadata) media.metadata = new MediaMetadata({ title: 'Telepath AirPods Pro check' });
   const missing = [];
   for (const action of ['play', 'pause', 'nexttrack', 'previoustrack']) {
     try {
@@ -43,7 +43,7 @@ start.addEventListener('click', () => {
     }
   }
   status.textContent = missing.length ? 'Unavailable controls: ' + missing.join(', ') + '.'
-    : 'Now Playing should say Telepathy AirPods Pro check.';
+    : 'Now Playing should say Telepath AirPods Pro check.';
   armed = true;
   void audio.play().catch(() => {
     armed = false;

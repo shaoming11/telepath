@@ -23,7 +23,7 @@ export const BOOKS = Object.freeze({
 });
 
 export const DEFAULT_CONTEXT = Object.freeze({
-  Pitch: 'Telepathy pitch order: hook, two-seat setup, live silent exchange, reveal. Seat A presents. Seat B watches the judges and time. Before the exchange, help A pace the explanation. During the exchange, use concrete cues about what the coach actually reports. After the wrap-up, let the presenter bring up the timeline. Keep coaching terse. Treat an unreported judge reaction as unknown.',
+  Pitch: 'Telepath pitch order: hook, two-seat setup, live silent exchange, reveal. Seat A presents. Seat B watches the judges and time. Before the exchange, help A pace the explanation. During the exchange, use concrete cues about what the coach actually reports. After the wrap-up, let the presenter bring up the timeline. Keep coaching terse. Treat an unreported judge reaction as unknown.',
   Party: 'Friends in a noisy social setting. Use casual, discreet suggestions to coordinate without interrupting a conversation.',
   Meeting: 'Colleagues in a meeting. Use discreet, concise suggestions tied to what was said.',
   Custom: 'Use the shared situation and the context provided by the operator.',

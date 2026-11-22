@@ -1,4 +1,4 @@
-# Telepathy classic browser client
+# Telepath classic browser client
 
 ## Active frontend stack
 

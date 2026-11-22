@@ -43,7 +43,7 @@ export function resolveTLS(env, runtime, host) {
   const root_cer = join(dir, 'telepathy-ca.cer');
   if (!existsSync(root_key) || !existsSync(root_pem)) {
     const cfg = join(dir, 'root.cnf');
-    writeFileSync(cfg, '[req]\nprompt=no\ndistinguished_name=dn\nx509_extensions=ca\n[dn]\nCN=Telepathy Local Demo\n[ca]\nbasicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n');
+    writeFileSync(cfg, '[req]\nprompt=no\ndistinguished_name=dn\nx509_extensions=ca\n[dn]\nCN=Telepath Local Demo\n[ca]\nbasicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\n');
     openssl(['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '365', '-sha256', '-config', cfg, '-keyout', root_key, '-out', root_pem]);
   }
   openssl(['x509', '-in', root_pem, '-outform', 'DER', '-out', root_cer]);
@@ -54,7 +54,7 @@ export function resolveTLS(env, runtime, host) {
   const san = ['DNS:localhost', 'IP:127.0.0.1'];
   if (host !== 'localhost') san.push((isIP(host) ? 'IP:' : 'DNS:') + host);
   writeFileSync(cfg, 'basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\nsubjectAltName=' + san.join(',') + '\n');
-  openssl(['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=Telepathy Hub', '-keyout', key, '-out', request]);
+  openssl(['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-subj', '/CN=Telepath Hub', '-keyout', key, '-out', request]);
   openssl(['x509', '-req', '-in', request, '-CA', root_pem, '-CAkey', root_key, '-CAcreateserial', '-out', cert, '-days', '90', '-sha256', '-extfile', cfg]);
   rmSync(request, { force: true });
   return { key: readFileSync(key), cert: readFileSync(cert), publicRoot: readFileSync(root_cer) };

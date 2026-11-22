@@ -1187,7 +1187,7 @@ export class Session {
     const drafts = providers.map(provider => withDeadline(provider.draft, this.settings.pitchVerifyMs, signal));
     const candidates = drafts.map((draft, index) => draft.then(raw => {
       const cue = validate(raw);
-      return { ...cue, source: raw.source === 'openai-realtime' ? raw.source : providers[index].source, timing: raw.timing ?? {}, index };
+      return { ...cue, source: raw.source === 'openai-realtime' ? raw.source : providers[index].source, timing: raw.timing ?? {}, index, draftedBy: providers[index].name };
     }));
     const winner = await withDeadline(() => Promise.any(candidates), this.settings.pitchRaceMs, signal);
     const index = 1 - winner.index;
@@ -1281,7 +1281,7 @@ export class Session {
       if (lifecycle.aborted || !reply) return;
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
-        scenario: this.coachScenario, ...(reply.ungrounded && { ungrounded: true }),
+        scenario: this.coachScenario, ...(reply.draftedBy && { draftedBy: reply.draftedBy }), ...(reply.ungrounded && { ungrounded: true }),
         timing: reply.timing, requestedAt: began, messageId });
       if (messageId) {
         state.awaitingHeard.set(messageId, entry);
@@ -1306,6 +1306,8 @@ export class Session {
           state.lastPitchCue = revised ? {
             text: revised.answer, points: ['Correction verified by ' + result.provider, ...revised.sources.map(source => source.quote)],
           } : { ...shown, points: [...shown.points, 'Verified by ' + result.provider] };
+          entry.verifiedBy = result.provider;
+          entry.corrected = Boolean(revised);
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
           if (revised && !url) this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
           if (url) {
@@ -1315,8 +1317,8 @@ export class Session {
             state.awaitingHeard.set(messageId, correction);
             if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
             this.cue(seat, 'sent', { kind: 'pitch_help', url, text: revised.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
-            this.publish();
           }
+          this.publish();
         }).catch(() => {}).finally(() => prepared?.controller.abort());
       }
     } catch {

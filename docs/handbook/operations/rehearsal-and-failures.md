@@ -10,7 +10,7 @@ Use a third teammate as the judge. Confirm the room transcript shows turns as pe
 
 - **Begin is grey.** Check each seat’s network status, voice, earbud test, calibration and Ready state, and whether its cache has loaded. Reset or hub restart can require both seats to reconnect.
 - **No transcript.** Select the MacBook microphone, approve Safari microphone access and confirm the input level moves. If Safari denied permission, check browser and macOS microphone settings. Input activity alone does not prove the transcription provider has connected.
-- **Gestures disappear.** Confirm each pair is connected to its own phone, the phone is playing the Telepathy anchor, and Safari is in front for initial testing. Start with the touch controls to separate transport problems from media-session problems.
+- **Gestures disappear.** Confirm each pair is connected to its own phone, the phone is playing the Telepath anchor, and Safari is in front for initial testing. Start with the touch controls to separate transport problems from media-session problems.
 - **Cue overlaps the presenter.** The private voice has softer playback gain. The hub holds or cuts its own cue when it detects overlapping room speech and tries to review the resulting answer. An unrelated speaker can also interrupt it. Correct speaker assignment helps.
 - **Model output is generic or unavailable.** Verify the latest question in the transcript. Check the cited evidence and whether it describes a concrete mechanism. Fixed cues stay available during model failures, and a cached canned take can demonstrate the complete pitch flow.
 

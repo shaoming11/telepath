@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark only">
-<title>Telepathy · Stage</title>
+<title>Telepath · Stage</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%23060708'/%3E%3Cpath d='M10 3.5l6 3.4v6.2L10 16.5l-6-3.4V6.9z' fill='none' stroke='%23F1F3F5' stroke-width='1.4'/%3E%3C/svg%3E">
 <link rel="preload" href="./fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="./stage.css">
@@ -17,7 +17,7 @@
   <header class="nav">
     <span class="brand">
       <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l7.5 4.3v6.4L10 17.5l-7.5-4.3V6.8z"/><path d="M2.5 6.8L10 11l7.5-4.2M10 11v6.5" opacity=".55"/></svg>
-      Telepathy
+      Telepath
     </span>
 
     <nav class="phases" aria-label="Stage phase">
@@ -89,8 +89,8 @@
     <section class="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>
       <div class="hero">
         <div class="hero__copy">
-          <h1 class="display" id="lobby-title"><span class="display__dim">Two seats.</span> One silent channel.</h1>
-          <p class="lede">Tap an earbud to cue your teammate. The Mac listens to the room so Question Mode can whisper a private prompt.</p>
+          <h1 class="display" id="lobby-title">Demo setup</h1>
+          <p class="lede">Connect both phones, then start the room microphone and begin.</p>
           <div class="cta">
             <button class="begin" id="begin-button" type="button" disabled>
               <span class="begin__label">Begin session</span>
@@ -98,8 +98,7 @@
             </button>
           </div>
           <p class="begin-hint" id="begin-hint">both seats ready</p>
-          <a class="join__link" href="#reference-setup">Add team brief &amp; references ↓</a>
-          <dl class="readout-row" id="lobby-readout">
+            <dl class="readout-row" id="lobby-readout">
             <div><dt id="readout-a-name">PRESENTER</dt><dd id="readout-a">Waiting</dd></div>
             <div><dt id="readout-b-name">COACH</dt><dd id="readout-b">Waiting</dd></div>
             <div><dt>PRESET</dt><dd id="readout-preset">&mdash;</dd></div>
@@ -108,6 +107,45 @@
         </div>
 
         <p class="sr-only" id="lobby-room-notice" role="status"></p>
+
+        <div class="join">
+          <p class="kicker">Join from each phone on the hotspot</p>
+          <div class="join__row">
+            <span class="join__url" id="join-url">&mdash;</span>
+            <button class="ghost" id="join-copy" type="button" disabled>Copy link</button>
+          </div>
+          <p class="join__note" id="join-guidance" hidden></p>
+          <p class="join__note" id="join-copy-status" role="status" hidden></p>
+        </div>
+      </div>
+
+      <details class="reference-panel stage-inspector" id="reference-setup">
+        <summary id="reference-title">Coach setup and documents</summary>
+        <label for="coach-scenario">Coaching scenario</label>
+        <select id="coach-scenario">
+          <option value="pitch">Pitch Q&amp;A</option>
+          <option value="interview">Interview</option>
+          <option value="social">Date or small talk</option>
+        </select>
+        <p class="reference-note" id="coach-scenario-note"></p>
+        <label for="reference-files">Reference documents</label>
+        <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx">
+        <div class="reference-actions">
+          <button id="reference-upload" type="button">Load documents</button>
+          <button id="reference-clear" type="button">Clear documents</button>
+        </div>
+        <p class="reference-note">TXT, Markdown, PDF with selectable text, or DOCX. Up to 8 files and 8 MB total. Loading replaces the current set. The coach sends relevant excerpts to the configured AI providers.</p>
+        <p id="reference-status" role="status" aria-live="polite"></p>
+        <ul id="reference-list"></ul>
+      </details>
+
+      <details class="stage-inspector stage-inspector--lobby">
+        <summary>Connections and rehearsal tools</summary>
+        <nav class="stage-rehearsal-links" aria-label="Rehearsal tools">
+          <a class="join__link" href="/?sim=1&amp;seat=A">Simulate A</a>
+          <a class="join__link" href="/?sim=1&amp;seat=B">Simulate B</a>
+          <a class="join__link" href="/?calibrate=1">Calibrate</a>
+        </nav>
         <svg class="diagram" id="lobby-diagram" viewBox="-560 -250 1120 700" role="img" aria-labelledby="diagram-label">
           <title id="diagram-label">Seat A and Seat B linked through the hub</title>
           <defs>
@@ -174,42 +212,8 @@
           <circle class="d-pt" cx="0" cy="-24" r="2.4"/><circle class="d-pt" cx="173.2" cy="76" r="2.4"/><circle class="d-pt" cx="-173.2" cy="76" r="2.4"/>
           <circle class="d-pt" cx="0" cy="-130" r="2.4"/><circle class="d-pt" cx="138.6" cy="-50" r="2.4"/><circle class="d-pt" cx="-138.6" cy="-50" r="2.4"/>
         </svg>
-
-        <div class="join">
-          <p class="kicker">Join from each phone on the hotspot</p>
-          <div class="join__row">
-            <span class="join__url" id="join-url">&mdash;</span>
-            <a class="join__link" href="/?sim=1&amp;seat=A">Simulate A <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?sim=1&amp;seat=B">Simulate B <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?calibrate=1">Calibrate <span aria-hidden="true">↗</span></a>
-          </div>
-          <p class="join__note" id="join-guidance" hidden></p>
-        </div>
-      </div>
-
       <section class="channel-monitor" id="lobby-monitor" aria-label="Live audio and context"></section>
-      <section class="reference-panel" id="reference-setup" aria-labelledby="reference-title">
-        <h2 class="kicker" id="reference-title">TEAM BRIEF &amp; REFERENCES</h2>
-        <label for="coach-scenario">Coaching scenario</label>
-        <select id="coach-scenario">
-          <option value="pitch">Pitch Q&amp;A</option>
-          <option value="interview">Interview</option>
-          <option value="social">Date or small talk</option>
-        </select>
-        <p class="reference-note" id="coach-scenario-note"></p>
-        <p>Add documents so the coach can find supported answers to live questions. Answers are previewed privately and require a tap to send.</p>
-        <label for="reference-files">Choose a brief and reference documents</label>
-        <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx">
-        <div class="reference-actions">
-          <button id="reference-upload" type="button">Load selected documents</button>
-          <button id="reference-clear" type="button">Clear documents</button>
-        </div>
-        <p class="reference-note">TXT, Markdown, text-based PDF or DOCX. Up to 8 files, 5 MB each / 8 MB total. Uploading replaces the current set. Documents stay in hub memory until reset; relevant passages are sent to the configured OpenAI model when answering.</p>
-        <p id="reference-status" role="status" aria-live="polite"></p>
-        <ul id="reference-list"></ul>
-      </section>
-
-      <div class="detail">
+        <div class="detail">
         <div class="detail__seats" id="lobby-seats"></div>
 
         <div class="detail__col">
@@ -225,7 +229,8 @@
             <div class="kv__row" id="certificate-row" hidden><dt>Certificate</dt><dd class="mono" id="certificate-readout"></dd></div>
           </dl>
         </div>
-      </div>
+        </div>
+      </details>
     </section>
 
     <!-- Live board -->
@@ -234,7 +239,6 @@
         <div class="live__title">
           <h1 class="kicker" id="live-title">LIVE BOARD</h1>
           <p class="live__preset" id="live-preset">&mdash;</p>
-          <p class="live__context" id="live-context"></p>
         </div>
         <dl class="stats">
           <div class="stat stat--lead"><dt>Bits tapped</dt><dd class="bits__value" id="bits-value">&mdash;</dd></div>
@@ -243,7 +247,10 @@
         </dl>
       </div>
 
-      <section class="channel-monitor" id="stage-monitor" aria-label="Live audio and context"></section>
+      <details class="stage-inspector stage-inspector--live">
+        <summary>Live diagnostics</summary>
+        <p class="live__context" id="live-context"></p>
+        <section class="channel-monitor" id="stage-monitor" aria-label="Live audio and context"></section>
 
       <div class="board">
         <div class="board__seats" id="live-seats"></div>
@@ -253,6 +260,8 @@
           <p class="empty" id="stream-empty">Waiting for the first tap.</p>
         </div>
       </div>
+
+      </details>
 
       <div class="actionbar">
         <p class="actionbar__note">Keep the deck on the projector until the pitch ends.</p>
@@ -291,14 +300,14 @@
 
       <div class="transcripts" id="reveal-transcripts"></div>
     </section>
-    <section class="reference-panel" id="answer-panel" aria-labelledby="answer-title" hidden>
-      <h2 class="kicker" id="answer-title">CONVERSATION ANSWERS</h2>
+    <details class="reference-panel stage-inspector" id="answer-panel" hidden>
+      <summary id="answer-title">Coach evidence</summary>
       <p id="answer-status" role="status" aria-live="polite"></p>
       <p id="answer-question"></p>
       <p id="answer-text"></p>
       <ul id="answer-sources"></ul>
-      <details><summary>Answer evidence from this session</summary><ul id="answer-history"></ul></details>
-    </section>
+      <ul id="answer-history"></ul>
+    </details>
   </main>
 </div>
 
@@ -354,8 +363,8 @@
       <p class="operator__note" id="op-announce-status" role="status"></p>
     </form>
 
-    <div class="operator__group">
-      <h3 class="operator__label">Preset</h3>
+    <details class="operator__group stage-inspector">
+      <summary>Preset and context</summary>
       <div class="field-row">
         <label class="sr-only" for="op-preset">Preset</label>
         <select id="op-preset" class="control">
@@ -368,10 +377,10 @@
       </div>
       <label class="field-label" for="op-context">Context (optional, sent with the preset)</label>
       <textarea id="op-context" class="control control--text" rows="2" spellcheck="false" placeholder="Pitch outline, slide order, judge seating"></textarea>
-    </div>
+    </details>
 
-    <div class="operator__group">
-      <h3 class="operator__label">Inject a signal</h3>
+    <details class="operator__group stage-inspector">
+      <summary>Test a signal</summary>
       <div class="field-row">
         <label class="sr-only" for="op-seat">Sending seat</label>
         <select id="op-seat" class="control control--fit">
@@ -382,7 +391,7 @@
         <select id="op-signal" class="control"></select>
         <button class="op-action op-action--fit" id="op-inject" type="button">Inject</button>
       </div>
-    </div>
+    </details>
 
     <div class="operator__group">
       <h3 class="operator__label">Reset session</h3>

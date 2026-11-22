@@ -25,7 +25,7 @@ start.addEventListener('click', () => {
   }
   try {
     if (navigator.audioSession) navigator.audioSession.type = 'playback';
-    if (globalThis.MediaMetadata) media.metadata = new MediaMetadata({ title: 'Telepathy AirPods check' });
+    if (globalThis.MediaMetadata) media.metadata = new MediaMetadata({ title: 'Telepath AirPods check' });
     media.setActionHandler('nexttrack', () => {
       if (audio.paused) return;
       count.textContent = 'Next Track received: ' + ++received;
@@ -38,7 +38,7 @@ start.addEventListener('click', () => {
   for (const [action, handler] of [['pause', () => audio.pause()], ['play', play]]) {
     try { media.setActionHandler(action, handler); } catch {}
   }
-  status.textContent = 'Listen for the test cue. Now Playing should say Telepathy AirPods check.';
+  status.textContent = 'Listen for the test cue. Now Playing should say Telepath AirPods check.';
   void play();
 });
 

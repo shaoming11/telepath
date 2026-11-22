@@ -1,4 +1,4 @@
-# Telepathy on Maritime
+# Telepath on Maritime
 
 The MacBook remains the hub. It runs the session and holds the uploaded references and shared room transcript in memory. ElevenLabs transcribes the Mac microphone and labels speaker clusters. The hub sends recent speaker-labelled turns and relevant excerpts to the Maritime planner when hosted mode is enabled. The planner chooses whether to answer a question, add a missed point, or suggest the next pitch beat. OpenAI on the hub uses that plan and the supporting passages to write a brief speaking cue. ElevenLabs speaks it only to the seat that asked.
 
@@ -32,7 +32,7 @@ To exercise the agent directly, run `PORT=18789 node maritime/server.mjs` withou
 
 ## Enable hosted planning after approval
 
-1. Upload the ZIP as a **private custom agent**, or update the existing Telepathy agent. Keep public web access disabled. The API deployment script creates a custom ZIP agent with `useMaritimeLlm: true`. For an existing agent created without Maritime LLM, enable it in the agent's environment settings and restart it. The agent uses the injected OpenAI-compatible base URL and its metered agent token. If you supply a direct OpenAI key to the agent, set a direct OpenAI base URL or remove the Maritime proxy base URL. [Maritime LLM setup](https://maritime.sh/docs/llm)
+1. Upload the ZIP as a **private custom agent**, or update the existing Telepath agent. Keep public web access disabled. The API deployment script creates a custom ZIP agent with `useMaritimeLlm: true`. For an existing agent created without Maritime LLM, enable it in the agent's environment settings and restart it. The agent uses the injected OpenAI-compatible base URL and its metered agent token. If you supply a direct OpenAI key to the agent, set a direct OpenAI base URL or remove the Maritime proxy base URL. [Maritime LLM setup](https://maritime.sh/docs/llm)
 2. Wait for the source deployment to finish and the agent to become healthy. Put the agent ID and a server-side Maritime bearer key in the Mac hub's ignored `.env.maritime.local`. A key with the `deploy` scope can chat with an existing agent. Keep provisioning credentials separate. [Deployment API](https://maritime.sh/docs/api) · [Key scopes](https://maritime.sh/docs/sdk/authentication)
 3. Start the hub with `TELEPATHY_MARITIME=on TELEPATHY_MARITIME_PITCH_HELP=on ./start`. The first switch allows hosted operator coaching. The second also enables preparation and hosted planning for live Pitch help. Leave either unset for the corresponding local behavior. The phone receives no keys.
 4. Rehearse a synthetic question before sharing a real room transcript with the hosted agent. Confirm that the Stage answer evidence names the actual planner and cites the brief. Test both an awake and a sleeping agent. Maritime wakes a sleeping agent on chat, so the first plan may take longer. [Sleep and wake](https://maritime.sh/docs/how-it-works)

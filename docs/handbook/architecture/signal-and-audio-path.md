@@ -2,7 +2,7 @@
 
 ## What the demo proves
 
-Telepathy lets two people coordinate a live presentation without interrupting it. Seat A presents and seat B coaches. Fixed messages cover routine needs such as “Slow down” and “One minute left.” Question Mode covers a different situation: the presenter needs a concise reminder in their ear while answering a judge. A third person operates the Mac and can send a system announcement to both seats. The project pitches itself, so the judge hears the presenter use the same system the presenter is describing.
+Telepath lets two people coordinate a live presentation without interrupting it. Seat A presents and seat B coaches. Fixed messages cover routine needs such as “Slow down” and “One minute left.” Question Mode covers a different situation: the presenter needs a concise reminder in their ear while answering a judge. A third person operates the Mac and can send a system announcement to both seats. The project pitches itself, so the judge hears the presenter use the same system the presenter is describing.
 
 A convincing demo shows a real gesture, the resulting private cue, and a human response in the presenter’s own words. The operator’s Reveal view shows recorded message events and reported playback starts. The board’s bit count counts the protocol’s message selections. It is not a measurement of total network traffic or information conveyed by a human voice.
 
@@ -20,6 +20,6 @@ Web Audio schedules cues and whispers on the device. A receipt means the browser
 
 ## Why the Mac listens
 
-Safari microphone capture on the phone may place the audio session in a recording configuration that competes with earbud controls. Telepathy normally leaves both phones in playback mode. The Mac Stage selects the MacBook microphone and sends 16 kHz mono PCM over the hub connection. Its audio worklet resamples and batches PCM before network delivery. The Stage owns only the current room input. A second Stage tab cannot start another default room stream while a valid owner is active.
+Safari microphone capture on the phone may place the audio session in a recording configuration that competes with earbud controls. Telepath normally leaves both phones in playback mode. The Mac Stage selects the MacBook microphone and sends 16 kHz mono PCM over the hub connection. Its audio worklet resamples and batches PCM before network delivery. The Stage owns only the current room input. A second Stage tab cannot start another default room stream while a valid owner is active.
 
 ElevenLabs Scribe v3 Live consumes this audio stream and returns evolving partial text, completed text segments and diarization events. Speaker labels are clusters from the stream. They can be assigned manually to the presenter or coach on Stage. Labels are not verified identities and the app does not compare them against voice clones.

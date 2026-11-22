@@ -23,7 +23,7 @@ if [[ "${TELEPATHY_LLM:-}" != "off" && "$(uname -s)" == "Darwin" ]] && command -
 fi
 
 args=()
-for env_path in "${TELEPATHY_ENV_FILE:-.env.local}" "${TELEPATHY_OPENAI_ENV_FILE:-.env.openai.local}" "${TELEPATHY_MARITIME_ENV_FILE:-.env.maritime.local}"; do
+for env_path in "${TELEPATHY_ENV_FILE:-.env.local}" "${TELEPATHY_OPENAI_ENV_FILE:-.env.openai.local}" "${TELEPATHY_MARITIME_ENV_FILE:-.env.maritime.local}" "${TELEPATHY_FIBER_ENV_FILE:-.env.fiber.local}"; do
   if [[ -f "$env_path" ]]; then args+=("--env-file=$env_path"); fi
 done
 runner=(node)

@@ -1,6 +1,6 @@
 # Shao: background and bio
 
-Fictional test persona for the Telepathy interview scenario. Every fact here is made up. Edit freely.
+Fictional test persona for the Telepath interview scenario. Every fact here is made up. Edit freely.
 
 ## Summary
 
@@ -30,7 +30,7 @@ Shao is a third-year computer science student at the University of Waterloo who 
 
 ## Projects
 
-### Telepathy (current)
+### Telepath (current)
 
 A private in-ear channel for two people in the same room. A teammate sends cues through AirPods gestures, and an AI coach whispers answers to questions. Built with Node.js, WebSockets, ElevenLabs, OpenAI and Maritime. Shao built the hub and the question-coaching pipeline.
 

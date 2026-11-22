@@ -8,7 +8,7 @@ const CAPACITY_BACKOFF_MS = 15_000;
 const BILLING_BACKOFF_MS = 60_000;
 const SOURCES = { model: 'maritime', rules: 'maritime-rules', assisted: 'maritime-assisted' };
 const ASSIST_INSTRUCTIONS = [
-  'Suggest one cue for a two-minute Telepathy pitch using only these five telemetry values.',
+  'Suggest one cue for a two-minute Telepath pitch using only these five telemetry values.',
   'Choose reveal-cue in closing or after an acknowledged live demo when no time reminder is needed.',
   'Choose demo-cue if the problem explanation has crossed 60 seconds or the opening is ready to move into the demo.',
   'Choose sound-check if seat readiness or playback is uncertain.',

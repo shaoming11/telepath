@@ -15,7 +15,7 @@ export function PhoneMarkup() {
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 4L6 9l5 5" /></svg>
           </button>
           <span className="wordmark">
-            <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l7.5 4.3v6.4L10 17.5l-7.5-4.3V6.8z" /><path d="M2.5 6.8L10 11l7.5-4.2M10 11v6.5" opacity=".55" /></svg>{"\n        Telepathy\n      "}</span>
+            <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l7.5 4.3v6.4L10 17.5l-7.5-4.3V6.8z" /><path d="M2.5 6.8L10 11l7.5-4.2M10 11v6.5" opacity=".55" /></svg>{"\n        Telepath\n      "}</span>
           <span className="masthead-seat" id="masthead-seat"></span>
           <span className="connection" id="connection" role="status" data-state="off">
             <i className="dot" aria-hidden="true"></i><span id="connection-text">Hub</span>
@@ -305,7 +305,7 @@ export function PhoneMarkup() {
         </main>
       </div>
 
-      <noscript><p className="meta">Telepathy needs JavaScript.</p></noscript>
+      <noscript><p className="meta">Telepath needs JavaScript.</p></noscript>
     </>
   );
 }

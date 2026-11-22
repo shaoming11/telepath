@@ -1,10 +1,10 @@
 # Shao: interview stories and positions
 
-Fictional test persona for the Telepathy interview scenario. Each section is a ready story the coach can point to.
+Fictional test persona for the Telepath interview scenario. Each section is a ready story the coach can point to.
 
 ## Tell me about yourself
 
-Shao builds real-time tools where speed matters. Two co-op terms on latency-sensitive systems, then hackathon projects with real users. The current focus is Telepathy, an in-ear AI coach for live conversations.
+Shao builds real-time tools where speed matters. Two co-op terms on latency-sensitive systems, then hackathon projects with real users. The current focus is Telepath, an in-ear AI coach for live conversations.
 
 ## Why do you want this role
 
@@ -32,7 +32,7 @@ For StudyLoop at Hack the North 2025, Shao split the four-person team by layer, 
 
 ## Hardest technical problem
 
-Keeping AI cues fast enough to be useful in a live conversation. In Telepathy, Shao starts drafting the answer while the question is still being asked, then only plays it once the question is complete.
+Keeping AI cues fast enough to be useful in a live conversation. In Telepath, Shao starts drafting the answer while the question is still being asked, then only plays it once the question is complete.
 
 ## Where do you see yourself in five years
 

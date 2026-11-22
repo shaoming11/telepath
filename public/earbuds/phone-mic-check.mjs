@@ -18,7 +18,7 @@ byId('play').addEventListener('click', async () => {
     return;
   }
   if (!stream) category('playback');
-  if (globalThis.MediaMetadata) navigator.mediaSession.metadata = new MediaMetadata({ title: 'Telepathy mic route check' });
+  if (globalThis.MediaMetadata) navigator.mediaSession.metadata = new MediaMetadata({ title: 'Telepath mic route check' });
   for (const action of ['nexttrack', 'previoustrack', 'pause', 'play']) {
     try {
       navigator.mediaSession.setActionHandler(action, () => {
