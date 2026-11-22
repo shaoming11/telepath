@@ -12,6 +12,18 @@ test('quote validation accepts omitted document emphasis and rejects altered wor
   assert.throws(() => validateAnswer(result, [{ ...passage, text: passage.text.replace('before', 'after') }]), /source does not match/);
 });
 
+test('the pitch text fallback keeps a complete short lead from an overlong draft', async () => {
+  const lead = 'Leave Safari open and wait for Live and Cached before sending more cues.';
+  const codec = createCodec({ env: { OPENAI_API_KEY: 'test-only' }, fetchImpl: async () => Response.json({
+    status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({
+      status: 'answer', question: 'What if the phone disconnects?', answer: lead + ' The phone automatically rejoins the current take and clears any outdated messages that are no longer valid.',
+      sources: [{ id: 'p', quote: lead }],
+    }) }] }],
+  }) });
+  const cue = await codec.pitchHelp({ passages: [{ id: 'p', name: 'Guide', text: lead }] });
+  assert.equal(cue.answer, lead);
+});
+
 function evaluate({ a, b, reply, requestedSeat, preset = 'Pitch' }) {
   const payload = {
     situationA: 'Presenting', situationB: 'Coaching', suggestedPreset: '',
