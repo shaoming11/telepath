@@ -465,14 +465,15 @@ test('AirPods 1 calibration releases mic capture until leaving setup', async () 
   assert.equal(mic_tracks.at(-1).readyState, 'live');
 });
 
-test('keyboard clicker signals can be sent while the phone mic stays open', async () => {
+test('keyboard clicker signals work on focused buttons while the phone mic stays open', async () => {
   socket.receive({ type: 'state', state: seat_state(null, { phase: 'live', sessionId: '2' }) });
   get_element('nav-back').listeners.click[0]();
   await settle();
   const mic = mic_tracks.at(-1);
   assert.equal(mic.readyState, 'live');
   const before = socket.sent.length;
-  document_listeners.get('keydown')({ key: 'PageDown', preventDefault() {}, target: {} });
+  const focusedButton = { closest: selector => selector.includes('button') ? focusedButton : null };
+  document_listeners.get('keydown')({ key: 'PageDown', preventDefault() {}, target: focusedButton });
   assert.ok(socket.sent.slice(before).some(frame => frame.type === 'signal' && frame.signal === 'R1'));
   assert.equal(mic.readyState, 'live');
 });

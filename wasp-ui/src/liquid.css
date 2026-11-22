@@ -20,14 +20,14 @@ body.wasp-liquid {
   background: var(--base);
 }
 
-.wasp-liquid :is(.masthead, .live-nav, .nav, #question-mode) {
+.wasp-liquid :is(.masthead, .live-nav, .nav) {
   background-color: var(--glass-solid);
   border-color: var(--glass-edge);
   box-shadow: var(--glass-shadow);
 }
 
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
-  .wasp-liquid :is(.masthead, .live-nav, .nav, #question-mode) {
+  .wasp-liquid :is(.masthead, .live-nav, .nav) {
     background-color: var(--glass);
     -webkit-backdrop-filter: saturate(145%) blur(19px);
     backdrop-filter: saturate(145%) blur(19px);
@@ -161,32 +161,39 @@ body.wasp-liquid {
   border-radius: 20px 20px 0 0;
 }
 
+.wasp-liquid .pitch-panel { display: grid; min-width: 0; gap: 7px; }
+.wasp-liquid .pitch-panel__controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, .42fr);
+  gap: 8px;
+}
 .wasp-liquid[data-surface="phone"] #question-mode {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: start;
-  min-height: 64px;
-  gap: 4px;
+  min-height: 56px;
+  gap: 3px;
   isolation: isolate;
-  border-radius: 18px;
-  padding: 10px 14px;
+  border-radius: 14px;
+  padding: 8px 23px 8px 11px;
   position: relative;
   text-align: left;
+  background: var(--panel);
 }
-
+.wasp-liquid #question-mode span { color: var(--fg-2); }
+.wasp-liquid #question-mode:disabled { opacity: 1; border-color: var(--line-2); }
 .wasp-liquid #question-mode::after {
   content: '';
   position: absolute;
-  right: 15px;
-  top: 15px;
-  width: 8px;
-  height: 8px;
+  right: 11px;
+  top: 13px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 1px solid var(--muted, #a1aec1);
-  transition: background var(--settle), box-shadow var(--settle), border-color var(--settle);
+  border: 1px solid var(--fg-3);
+  transition: background 180ms ease, border-color 180ms ease;
 }
-
 .wasp-liquid #question-mode::before {
   content: '';
   position: absolute;
@@ -194,22 +201,52 @@ body.wasp-liquid {
   z-index: -1;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(155deg, #ffffff16 0%, transparent 44%);
-  opacity: .5;
-  transition: opacity var(--settle) ease;
+  background: rgba(var(--seat-rgb), .12);
+  transform-origin: right center;
+  transform: scaleX(.08);
+  opacity: 0;
+  transition: opacity 160ms ease, transform 160ms var(--glide);
 }
-.wasp-liquid #question-mode:is(:active, :focus-visible, [aria-pressed=true])::before { opacity: 1; }
-
-.wasp-liquid #question-mode[aria-pressed=true] {
-  background-color: color-mix(in srgb, var(--seat) 15%, var(--glass-solid));
-  border-color: color-mix(in srgb, var(--seat) 62%, var(--glass-edge));
+.wasp-liquid #question-mode[aria-pressed=true] { border-color: rgba(var(--seat-rgb), .46); }
+.wasp-liquid #question-mode[aria-pressed=true]::before {
+  opacity: 1;
+  transform: scaleX(1);
+  transition-duration: 240ms;
 }
-
-.wasp-liquid #question-mode[aria-pressed=true]::after {
-  background-color: var(--seat);
-  border-color: var(--seat);
-  box-shadow: 0 0 0 4px rgba(var(--seat-rgb), .12);
-  animation: liquid-affirm 360ms var(--glide) both;
+.wasp-liquid #question-mode[aria-pressed=true]::after { background: var(--seat); border-color: var(--seat); }
+.wasp-liquid .pitch-panel__request {
+  min-height: 56px;
+  padding: 7px 9px;
+  background: var(--glass-solid);
+  border-color: var(--glass-edge);
+  box-shadow: inset 0 1px 0 #ffffff15;
+}
+.wasp-liquid .pitch-panel__status { color: var(--fg-2); font: 500 11px/1.4 var(--mono); }
+.wasp-liquid .pitch-panel__heading { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.wasp-liquid .pitch-panel .pitch-notes {
+  position: relative;
+  padding: 9px 11px 10px 17px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+}
+.wasp-liquid .pitch-panel .pitch-notes::before {
+  content: '';
+  position: absolute;
+  top: 26px;
+  left: 7px;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--seat);
+  transform-origin: top;
+  transform: scaleY(.25);
+  opacity: .6;
+  transition: transform 150ms var(--glide), opacity 150ms ease;
+}
+.wasp-liquid .pitch-panel .pitch-notes[data-playback=started]::before { transform: scaleY(1); opacity: 1; }
+.wasp-liquid .pitch-panel .pitch-notes__cue { font-size: 16px; line-height: 1.28; }
+@media (max-width: 319px) {
+  .wasp-liquid .pitch-panel__controls { grid-template-columns: minmax(0, 1fr); }
 }
 
 .wasp-liquid .pitch-notes:not([hidden]), .wasp-liquid .draft:not([hidden]) {
@@ -475,11 +512,6 @@ body.wasp-liquid {
   from { opacity: .88; transform: translateY(7px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes liquid-affirm {
-  from { transform: scale(.62); }
-  62% { transform: scale(1.2); }
-  to { transform: scale(1); }
-}
 @keyframes liquid-touch {
   0%, 100% { box-shadow: inset 0 1px 0 #ffffff0b; }
   35% { border-color: var(--seat); box-shadow: inset 0 0 20px rgba(var(--seat-rgb), .16); }
@@ -502,7 +534,7 @@ body.wasp-liquid {
   .wasp-liquid .room-console__actions button { white-space: normal; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .wasp-liquid :is(.masthead, .live-nav, .nav, .op-toggle, #question-mode) {
+  .wasp-liquid :is(.masthead, .live-nav, .nav, .op-toggle) {
     background: var(--glass-solid);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
