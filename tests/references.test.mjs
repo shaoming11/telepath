@@ -53,3 +53,17 @@ test('question model receives references as data and the supplied cancellation s
   assert.equal(payload.text.format.schema.properties.status.enum.includes('resolved'), true);
   assert.equal(createCodec({ env: { TELEPATHY_LLM: 'off' } }).questionAnswering, false);
 });
+
+test('missed-point advice is grounded in both the spoken answer and an unspoken reference fact', () => {
+  const passages = [{ id: 'brief:1', name: 'brief.md', text: 'The pilot lasts six weeks.' }];
+  const turns = [{ text: 'How does the pilot work?' }, { text: 'We run it with one sales team.' }];
+  const advice = { status: 'advice', question: 'How does the pilot work?', answer: 'You forgot to mention the six-week pilot.',
+    responseQuote: 'We run it with one sales team.', sources: [{ id: 'brief:1', quote: 'The pilot lasts six weeks.' }] };
+  const result = validateAnswer(advice, passages, turns);
+  assert.equal(result.suggestionKind, 'advice');
+  assert.equal(result.responseQuote, turns[1].text);
+  assert.throws(() => validateAnswer({ ...advice, responseQuote: 'We already serve ten thousand teams.' }, passages, turns), /spoken answer/);
+  assert.throws(() => validateAnswer({ ...advice, responseQuote: turns[0].text }, passages, turns), /question is not/);
+  assert.throws(() => validateAnswer({ ...advice, sources: [] }, passages, turns), /evidence/);
+  assert.equal(validateAnswer(advice, passages, [...turns, { text: 'The pilot lasts six weeks.' }]).status, 'resolved');
+});

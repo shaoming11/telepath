@@ -185,6 +185,48 @@ test('a timed-out answer does not block fixed cues or a subsequent evaluation', 
   assert.equal(audioFrames('A', 'soft').length, 1);
 });
 
+const missedPoint = request => ({ status: 'advice', question: 'How does the pilot work?',
+  answer: 'You forgot to mention the six-week pilot.', responseQuote: 'We run it with one sales team.',
+  sources: [{ id: request.passages[0].id, quote: 'The pilot lasts six weeks.' }] });
+
+test('missed-point coaching waits for a pause, cites the spoken answer, and whispers only after approval', async t => {
+  const { session, state, act, audioFrames, advance } = await answerFixture(t, { codec: { answer: async request => missedPoint(request) } });
+  session.references = await parseReferences([{ name: 'pilot.md', data: Buffer.from('The pilot lasts six weeks.').toString('base64') }]);
+  session.addTranscript('A', 'How does the pilot work?');
+  session.addTranscript('B', 'We run it with one sales team.');
+  await eventually(() => state().questionState.status === 'waiting');
+  assert.equal(audioFrames('B', 'draft').length, 0);
+  advance(2600);
+  await session.answerQuestion();
+  const pending = state().seats.B.pending;
+  assert.equal(pending.suggestionKind, 'advice');
+  assert.equal(pending.responseQuote, 'We run it with one sales team.');
+  assert.equal(audioFrames('A', 'soft').length, 0);
+  assert.match(state().log.find(entry => entry.kind === 'answer_evidence').text, /Answer heard/);
+  await act('B', { type: 'heard', messageId: pending.id });
+  await act('B', { type: 'signal', signal: 'R1', id: 'approve-reminder', draftId: pending.id });
+  assert.equal(audioFrames('A', 'soft').at(-1).text, 'You forgot to mention the six-week pilot.');
+});
+
+test('covering a missed point cancels its preview and prevents a repeated reminder', async t => {
+  const { session, state, act, audioFrames, advance } = await answerFixture(t, { codec: { answer: async request => missedPoint(request) } });
+  session.references = await parseReferences([{ name: 'pilot.md', data: Buffer.from('The pilot lasts six weeks.').toString('base64') }]);
+  session.addTranscript('A', 'How does the pilot work?');
+  session.addTranscript('A', 'We run it with one sales team.');
+  await session.answerQuestion('B');
+  const pending = state().seats.B.pending;
+  assert.ok(pending);
+  await act('B', { type: 'heard', messageId: pending.id });
+  session.addTranscript('A', 'The pilot lasts six weeks.');
+  assert.equal(state().seats.B.pending, null);
+  advance(2600);
+  await session.answerQuestion();
+  assert.equal(state().questionState.status, 'resolved');
+  await act('B', { type: 'signal', signal: 'R1', id: 'stale-reminder', draftId: pending.id });
+  assert.equal(audioFrames('A', 'soft').length, 0);
+  assert.equal(audioFrames('B', 'draft').length, 1);
+});
+
 async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {}, sim = { A: true, B: true } } = {}) {
   let now = 1000;
   const seatFrames = { A: [], B: [] };

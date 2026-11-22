@@ -735,21 +735,26 @@ export class Session {
         const result = validateAnswer(await withDeadline(deadline => this.codec.answer({
           signal: deadline, passages, turns, activeQuestion, requested: Boolean(requestedSeat),
           quietMs: this.now() - turns.at(-1).at,
-        }), this.settings.questionTimeoutMs, signal), passages);
+        }), this.settings.questionTimeoutMs, signal), passages, turns);
         if (!current()) return;
-        const key = questionKey(result.question);
+        if (result.status === 'advice' && !requestedSeat && this.now() - turns.at(-1).at < 2500) {
+          this.questionState = { status: 'waiting', question: result.question };
+          return;
+        }
+        const key = result.status + ':' + questionKey(result.question);
         this.questionState = result;
-        if (result.status !== 'answer' || this.dismissedQuestions.has(key)) {
+        if (!['answer', 'advice'].includes(result.status) || this.dismissedQuestions.has(key)) {
           if (this.dismissedQuestions.has(key)) this.questionState = { ...result, status: 'already_offered' };
           return;
         }
         if (!this.canDraft(sender)) return;
         await withDeadline(previewSignal => this.previewDraft(sender, { kind: 'draft', text: result.answer, started_at: this.now(), signal: previewSignal,
-          fingerprint: 'answer:' + key, answer: { answerVersion: version, question: result.question, sources: result.sources } }), this.settings.serviceTimeoutMs, signal);
+          fingerprint: key, answer: { answerVersion: version, suggestionKey: key, suggestionKind: result.suggestionKind,
+            question: result.question, sources: result.sources, responseQuote: result.responseQuote } }), this.settings.serviceTimeoutMs, signal);
         if (current() && this.seats[sender].pending?.answerVersion === version) {
           this.questionState = { ...result, status: 'preview' };
-          this.append('answer_evidence', { seat: sender, text: result.question + ' → ' + result.answer,
-            sources: result.sources, question: result.question });
+          this.append('answer_evidence', { seat: sender, text: result.question + (result.responseQuote ? ' · Answer heard: “' + result.responseQuote + '”' : '') + ' → ' + result.answer,
+            sources: result.sources, question: result.question, suggestionKind: result.suggestionKind, responseQuote: result.responseQuote });
         }
       } catch {
         if (version === this.answerVersion && generation === this.generation && !controller.signal.aborted) {
@@ -875,7 +880,7 @@ export class Session {
   async sense(requestedSeat) {
     if (this.references.length && this.codec?.questionAnswering) {
       if (requestedSeat && this.questionTurns.length) return this.answerQuestion(requestedSeat);
-      if (this.answerTask || ['waiting', 'answer', 'preview'].includes(this.questionState.status)) return;
+      if (this.answerTask || ['waiting', 'answer', 'advice', 'preview'].includes(this.questionState.status)) return;
     }
     if (!this.codec?.evaluate || this.sensing || this.phase !== 'live' || this.canned) return;
     if (requestedSeat && !this.canDraft(requestedSeat)) return;
@@ -995,7 +1000,7 @@ export class Session {
     state.pending = null;
     state.pendingTimer = null;
     if (pending.answerVersion != null && ['confirmed', 'discarded', 'expired'].includes(reason)) {
-      this.dismissedQuestions.add(questionKey(pending.question));
+      this.dismissedQuestions.add(pending.suggestionKey ?? 'answer:' + questionKey(pending.question));
       this.questionState = { ...this.questionState, status: reason };
     }
     this.append(reason === 'confirmed' ? 'confirm' : 'discard', {
