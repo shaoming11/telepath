@@ -369,6 +369,7 @@ body.wasp-liquid[data-solid-surfaces] {
   animation: liquid-room-connected 210ms var(--glide) both;
 }
 .wasp-liquid #begin-button:enabled { animation: liquid-stage-ready 220ms var(--glide); }
+.wasp-liquid[data-surface=stage] #begin-button > .begin__label { transition-property: none; }
 
 @keyframes liquid-seat-connected {
   from { stroke-opacity: .55; stroke-dashoffset: 7; }
