@@ -522,11 +522,18 @@ function boot() {
   let roomAccepted = false;
   let roomAttempt = 0;
   let roomMessage = '';
-  const roomBars = Array.from({ length: 24 }, () => node('span'));
-  byId('room-mic-bars').append(...roomBars);
+  const reactRoom = Boolean(document.querySelector('[data-room-owner="react"]'));
+  let roomDevices = [];
+  let roomRenderKey = '';
+  const roomBars = reactRoom ? [] : Array.from({ length: 24 }, () => node('span'));
+  if (!reactRoom) byId('room-mic-bars').append(...roomBars);
 
   function setRoomLevel(level) {
     const normalized = !roomInterrupted && Number.isFinite(level) ? Math.min(1, Math.max(0, level * 5)) : 0;
+    if (reactRoom) {
+      document.dispatchEvent(new CustomEvent('telepathy:room-level', { detail: normalized }));
+      return;
+    }
     const filled = Math.round(normalized * roomBars.length);
     byId('room-mic-level').value = normalized;
     byId('room-mic-readout').textContent = roomWanted ? Math.round(normalized * 100) + '%' : '—';
@@ -575,13 +582,19 @@ function boot() {
   async function refreshMicrophones() {
     try {
       const devices = await navigator.mediaDevices?.enumerateDevices();
+      roomDevices = (devices ?? []).filter(item => item.kind === 'audioinput' && item.deviceId)
+        .map((device, index) => ({ id: device.deviceId, label: device.label || 'Microphone ' + (index + 1) }));
+      if (reactRoom) {
+        schedule();
+        return;
+      }
       const select = byId('room-mic-device');
       const selected = select.value;
       const options = [node('option', null, 'System default')];
       options[0].value = '';
-      for (const [index, device] of (devices ?? []).filter(item => item.kind === 'audioinput' && item.deviceId).entries()) {
-        const option = node('option', null, device.label || 'Microphone ' + (index + 1));
-        option.value = device.deviceId;
+      for (const device of roomDevices) {
+        const option = node('option', null, device.label);
+        option.value = device.id;
         options.push(option);
       }
       select.replaceChildren(...options);
@@ -617,30 +630,50 @@ function boot() {
 
   function renderRoomMicrophone() {
     const otherTab = state.room.listeningRequested && !roomWanted;
-    const start = byId('room-mic-start');
-    const stop = byId('room-mic-stop');
-    const active = document.activeElement;
-    start.disabled = roomWanted || otherTab || linkState !== 'live' || state.phase === 'reveal' || Boolean(state.canned);
-    start.hidden = roomWanted;
-    stop.hidden = !roomWanted;
-    if (start.hidden && active === start) stop.focus({ preventScroll: true });
-    if (stop.hidden && active === stop && !start.disabled) start.focus({ preventScroll: true });
-    byId('room-mic-device').disabled = roomWanted;
+    const canStart = !roomWanted && !otherTab && linkState === 'live' && state.phase !== 'reveal' && !state.canned;
     const status = roomConsoleStatus({
       link: linkState, phase: state.phase, canned: state.canned, ownedElsewhere: otherTab, starting: roomStarting,
       interrupted: roomInterrupted, wanted: roomWanted, transcription: state.room.transcription,
       message: roomMessage, device: roomCapture.deviceLabel,
     });
+    const notice = status.tone === 'live' && roomCapture.deviceLabel ? 'Transcribing · ' + status.detail : status.detail;
+    const turns = asList(state.room.transcript);
+    const canClear = turns.length > 0 && state.phase !== 'reveal' && !state.canned && linkState === 'live';
+    const visible = state.phase === 'reveal' ? turns : turns.slice(-12);
+    const runs = visible.flatMap(turn => turn.speakers?.length ? turn.speakers : [{ label: 'Room', text: turn.text }]);
+    const speakers = new Map(turns.filter(turn => turn.streamId === state.room.speakerStream)
+      .flatMap(turn => turn.speakers ?? []).filter(run => run.speaker).map(run => [run.speaker, run]));
+    if (reactRoom) {
+      const detail = {
+        wanted: roomWanted, canStart, devices: roomDevices, tone: status.tone, label: status.label, notice,
+        waiting: status.tone === 'live', turns: runs,
+        speakers: state.phase === 'reveal' || state.canned ? [] : [...speakers].map(([id, run]) => ({
+          id, label: run.label, seat: run.seat ?? '',
+        })),
+        speakersDisabled: linkState !== 'live', canClear,
+      };
+      const key = JSON.stringify(detail);
+      if (key !== roomRenderKey) {
+        roomRenderKey = key;
+        document.dispatchEvent(new CustomEvent('telepathy:room-state', { detail }));
+      }
+      return;
+    }
+
+    const start = byId('room-mic-start');
+    const stop = byId('room-mic-stop');
+    const active = document.activeElement;
+    start.disabled = !canStart;
+    start.hidden = roomWanted;
+    stop.hidden = !roomWanted;
+    if (start.hidden && active === start) stop.focus({ preventScroll: true });
+    if (stop.hidden && active === stop && !start.disabled) start.focus({ preventScroll: true });
+    byId('room-mic-device').disabled = roomWanted;
     byId('room-microphone-panel').dataset.state = status.tone;
     byId('room-mic-state').textContent = status.label;
     const detail = byId('room-mic-status');
-    const notice = status.tone === 'live' && roomCapture.deviceLabel ? 'Transcribing · ' + status.detail : status.detail;
     if (detail.textContent !== notice) detail.textContent = notice;
-    const turns = asList(state.room.transcript);
-    byId('room-transcript-clear').hidden = !turns.length || state.phase === 'reveal' || Boolean(state.canned) || linkState !== 'live';
-    const visible = state.phase === 'reveal' ? turns : turns.slice(-12);
-    const speakers = new Map(turns.filter(turn => turn.streamId === state.room.speakerStream)
-      .flatMap(turn => turn.speakers ?? []).filter(run => run.speaker).map(run => [run.speaker, run]));
+    byId('room-transcript-clear').hidden = !canClear;
     const panel = byId('room-speakers');
     const key = JSON.stringify([state.room.speakerStream, state.phase, state.canned, linkState, [...speakers].map(([id, run]) => [id, run.label])]);
     byId('room-speaker-controls').hidden = !speakers.size || state.phase === 'reveal' || Boolean(state.canned);
@@ -673,7 +706,7 @@ function boot() {
       const previousTop = transcript.scrollTop;
       const atBottom = transcript.scrollHeight - transcript.clientHeight - previousTop < 24;
       transcript.dataset.key = transcriptKey;
-      fill(transcript, visible.flatMap(turn => turn.speakers?.length ? turn.speakers : [{ label: 'Room', text: turn.text }]).map(run => {
+      fill(transcript, runs.map(run => {
         const row = node('li', 'room-console__turn');
         if (run.seat) row.dataset.seat = run.seat;
         row.append(node('span', 'room-console__speaker', run.label), node('span', null, run.text));
@@ -1397,9 +1430,21 @@ function boot() {
     ui.begin.addEventListener('click', () => send('begin'));
     byId('reference-upload').addEventListener('click', () => void uploadReferences());
     byId('reference-clear').addEventListener('click', () => void uploadReferences(true));
-    byId('room-transcript-clear').addEventListener('click', () => sendRoomFrame({ type: 'operator', action: 'room_transcript_clear' }));
-    byId('room-mic-start').addEventListener('click', () => void startRoomCapture());
-    byId('room-mic-stop').addEventListener('click', () => { roomMessage = ''; stopRoomCapture(); });
+    if (reactRoom) {
+      document.addEventListener('telepathy:room-action', event => {
+        const { action, speaker, seat } = event.detail ?? {};
+        if (action === 'start') void startRoomCapture();
+        else if (action === 'stop') { roomMessage = ''; stopRoomCapture(); }
+        else if (action === 'clear') sendRoomFrame({ type: 'operator', action: 'room_transcript_clear' });
+        else if (action === 'assign' && typeof speaker === 'string' && ['', 'A', 'B'].includes(seat)) {
+          sendRoomFrame({ type: 'operator', action: 'room_speaker_assign', stream: state.room.speakerStream, speaker, seat: seat || null });
+        }
+      });
+    } else {
+      byId('room-transcript-clear').addEventListener('click', () => sendRoomFrame({ type: 'operator', action: 'room_transcript_clear' }));
+      byId('room-mic-start').addEventListener('click', () => void startRoomCapture());
+      byId('room-mic-stop').addEventListener('click', () => { roomMessage = ''; stopRoomCapture(); });
+    }
     ui.reveal.addEventListener('click', () => send('reveal'));
 
     document.addEventListener('keydown', event => {

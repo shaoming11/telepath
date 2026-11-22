@@ -20,7 +20,17 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
       assert.match(pitch, /aria-pressed=\{state\.armed\}/);
-    } else assert.deepEqual(hooks(jsx), hooks(body));
+    } else {
+      const room = await text('wasp-ui/src/StageRoomConsole.tsx');
+      const boundary = room.indexOf('export function StageRoomConsole');
+      const meter = room.slice(room.indexOf('function RoomInputMeter'), boundary);
+      const rendered = room.slice(boundary).replace('<RoomInputMeter wanted={state.wanted} />', meter);
+      const replaced = jsx.replace('<StageRoomConsole />', rendered);
+      const dynamic = new Set(['data-state:off', 'data-room-owner:react']);
+      assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
+        hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
+      assert.match(room, /data-state=\{state\.tone\}/);
+    }
     assert.doesNotMatch(jsx, /<(?:script|iframe)\b|dangerouslySetInnerHTML/);
     assert.doesNotMatch(jsx, /\s(?:class|for|viewbox)=/);
     assert.match(jsx, /<svg[^>]*viewBox=/);
@@ -50,6 +60,18 @@ test('stage preserves inline SVG definitions, joins, and room mic controls', asy
   const jsx = await text('wasp-ui/src/generated/StageMarkup.tsx');
   assert.match(jsx, /<clipPath id="profclip"><use href="#prof" \/><\/clipPath>/);
   assert.match(jsx, /href="\/\?sim=1&amp;seat=A"/);
-  assert.match(jsx, /<label[^>]*htmlFor="room-mic-device"/);
-  assert.match(jsx, /<meter[^>]*id="room-mic-level"[^>]*max="1"/);
+  const room = await text('wasp-ui/src/StageRoomConsole.tsx');
+  assert.match(room, /<label[^>]*htmlFor="room-mic-device"/);
+  assert.match(room, /<meter[^>]*id="room-mic-level"[^>]*max="1"/);
+});
+
+test('the Stage console separates live meter frames from room state and keeps actions on the capture controller', async () => {
+  const controller = await text('public/stage.mjs');
+  const component = await text('wasp-ui/src/StageRoomConsole.tsx');
+  for (const event of ['telepathy:room-state', 'telepathy:room-level', 'telepathy:room-action']) {
+    assert.ok(controller.includes(event));
+    assert.ok(component.includes(event));
+  }
+  assert.match(component, /function RoomInputMeter/);
+  assert.doesNotMatch(component, /getUserMedia|WebSocket/);
 });

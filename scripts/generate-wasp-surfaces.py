@@ -10,6 +10,17 @@ from textwrap import dedent
 
 ROOT = Path(__file__).resolve().parents[1]
 SURFACES = {"PhoneMarkup": "public/index.html", "StageMarkup": "public/stage.html"}
+REACT_REGIONS = {
+    "PhoneMarkup": (
+        "PhonePitchControls",
+        r'<button[^>]* id="question-mode"[^>]*>[\s\S]*?</button>\s*'
+        r'<section[^>]* id="live-pitch-notes"[^>]*>[\s\S]*?</section>',
+    ),
+    "StageMarkup": (
+        "StageRoomConsole",
+        r'<section[^>]* id="room-microphone-panel"[^>]*>[\s\S]*?</section>',
+    ),
+}
 DESTINATION = ROOT / "wasp-ui/src/generated"
 VOID = frozenset("area base br col embed hr img input link meta param source track wbr".split())
 BOOLEAN = frozenset(
@@ -158,16 +169,12 @@ def generated(component, source):
     parser.feed((ROOT / source).read_text())
     markup = parser.markup()
     imports = ""
-    if component == "PhoneMarkup":
-        markup, replacements = re.subn(
-            r'<button[^>]* id="question-mode"[^>]*>[\s\S]*?</button>\s*'
-            r'<section[^>]* id="live-pitch-notes"[^>]*>[\s\S]*?</section>',
-            "<PhonePitchControls />",
-            markup,
-        )
+    if component in REACT_REGIONS:
+        name, pattern = REACT_REGIONS[component]
+        markup, replacements = re.subn(pattern, f"<{name} />", markup)
         if replacements != 1:
-            raise ValueError("Expected exactly one contiguous phone pitch control fragment.")
-        imports = "import { PhonePitchControls } from '../PhonePitchControls';\n\n"
+            raise ValueError(f"Expected exactly one generated {name} region.")
+        imports = f"import {{ {name} }} from '../{name}';\n\n"
     lines = "\n".join("      " + line if line else "" for line in markup.splitlines())
     return (
         f"// Generated from {source}. Run python3 scripts/generate-wasp-surfaces.py after edits.\n"

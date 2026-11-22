@@ -1,4 +1,6 @@
 // Generated from public/stage.html. Run python3 scripts/generate-wasp-surfaces.py after edits.
+import { StageRoomConsole } from '../StageRoomConsole';
+
 export function StageMarkup() {
   return (
     <>
@@ -33,46 +35,7 @@ export function StageMarkup() {
 
         <main id="stage-main">
 
-          <section className="room-console" id="room-microphone-panel" aria-labelledby="room-mic-title" data-state="off">
-            <header className="room-console__head">
-              <div>
-                <h2 id="room-mic-title">Room microphone</h2>
-                <p>One Mac input for both seats. Phones handle whispers and taps.</p>
-              </div>
-              <div className="room-console__actions">
-                <span className="room-console__state" id="room-mic-state" aria-hidden="true">Off</span>
-                <button className="room-console__start" id="room-mic-start" type="button" disabled>Start listening</button>
-                <button id="room-mic-stop" type="button" hidden>Stop listening</button>
-              </div>
-            </header>
-            <div className="room-console__input">
-              <div className="room-console__device">
-                <label className="kicker" htmlFor="room-mic-device">Input device</label>
-                <select id="room-mic-device"><option value="">System default</option></select>
-              </div>
-              <div className="room-console__signal">
-                <div className="room-console__meter-head">
-                  <label className="kicker" htmlFor="room-mic-level">Input level</label>
-                  <span className="mono" id="room-mic-readout" aria-hidden="true">—</span>
-                </div>
-                <meter className="sr-only" id="room-mic-level" min="0" max="1" value="0">0</meter>
-                <div className="room-console__meter" id="room-mic-bars" aria-hidden="true"></div>
-              </div>
-            </div>
-            <p className="room-console__notice" id="room-mic-status" role="status">Start listening and allow microphone access.</p>
-            <div className="room-console__transcript" aria-labelledby="room-transcript-title">
-              <div className="room-console__transcript-head">
-                <h3 className="kicker" id="room-transcript-title">Room transcript</h3>
-                <button id="room-transcript-clear" className="room-console__clear" type="button" hidden>Clear transcript</button>
-              </div>
-              <p className="room-console__empty" id="room-transcript-empty">Speech will appear here as it’s transcribed.</p>
-              <ul className="room-console__turns" id="room-transcript" aria-labelledby="room-transcript-title" tabIndex={0} hidden></ul>
-              <details className="room-console__speakers" id="room-speaker-controls" hidden>
-                <summary>Assign speakers</summary>
-                <div id="room-speakers"></div>
-              </details>
-            </div>
-          </section>
+          <StageRoomConsole />
 
 
           <section className="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>

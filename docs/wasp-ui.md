@@ -6,6 +6,8 @@ The same Mac hub serves Wasp's generated client and handles the WebSocket, micro
 
 Question Mode and the private cue panel are React-owned. The phone controller publishes scoped state to these components and keeps control of the media session and WebSocket. The arm button shows why it is disabled when the hub is offline or the Stage has not started. A cue highlight starts from the existing Web Audio speech-start callback, so queued text alone cannot indicate playback.
 
+The Stage room console is also React-owned. The capture controller handles microphone permission, selected-device constraints, and hub scope. The input meter gets its own audio-level updates, so audio frames do not rebuild the transcript or replace the focused speaker controls.
+
 ## Build, run and verify
 
 Use Node.js 24.22.1 or later for the Wasp compiler. From the repository root:
