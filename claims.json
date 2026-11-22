@@ -1,5 +1,5 @@
 {
-  "revision": 91,
+  "revision": 92,
   "claims": [
     {
       "id": "78bb0377-8a74-4100-a6d3-ecc6fa7844d1",
@@ -24,6 +24,22 @@
         "wasp-ui/src/generated/PhoneMarkup.tsx"
       ],
       "claimedAt": "2026-11-22T06:25:12.353Z"
+    },
+    {
+      "id": "1de997b5-3f95-411d-a390-3dba874864d8",
+      "owner": "sharonbasovich",
+      "agent": "devin-site",
+      "branch": "devin/1795328641-apple-site",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/4",
+      "scopes": [
+        "site",
+        "video"
+      ],
+      "paths": [
+        "site",
+        "video"
+      ],
+      "claimedAt": "2026-11-22T06:27:03.141Z"
     }
   ]
 }
