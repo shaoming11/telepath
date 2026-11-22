@@ -22,6 +22,7 @@ const LOG_KINDS = new Set(['message', 'receipt', 'back', 'draft', 'confirm', 'di
 const ISSUE_ORDER = Object.freeze(['connection', 'secure', 'mic', 'media', 'context', 'cache', 'cues', 'playback', 'voice']);
 const PHASE_LABELS = Object.freeze({ lobby: 'Waiting for stage', live: 'Live', reveal: 'Reveal' });
 const NOTE_MS = 4200;
+const PITCH_PREPARING_NOTE = 'Preparing a private pitch cue…';
 const CLONE_RESPONSE_MS = 65_000;
 const PERSONAL_TIMING_KEY = 'telepathy.airpods1-timing.v2';
 const PROBE_FAILURES_TO_RECONNECT = 2;
@@ -1411,10 +1412,11 @@ function render_message(prefix, entry, key) {
 
 function render_signals() {
   const codebook = ui.state?.codebook ?? {};
-  const order = SIGNAL_ORDER[settings.mode];
+  const inlineCue = reactPitch && !is_sim() && Boolean(ui.state?.questionModeAvailable);
+  const order = SIGNAL_ORDER[settings.mode].filter(signal => !inlineCue || signal !== 'LR');
   const host = $('signals');
   const pitch_help = ui.state?.pitchHelp === true;
-  const key = settings.mode + settings.gesture_model + String(pitch_help) + String(ui.state?.questionModeAvailable) + JSON.stringify(codebook);
+  const key = settings.mode + settings.gesture_model + String(pitch_help) + String(ui.state?.questionModeAvailable) + String(inlineCue) + JSON.stringify(codebook);
   if (ui.signals_key !== key) {
     ui.signals_key = key;
     host.replaceChildren(...order.map(signal => {
@@ -1482,7 +1484,8 @@ function renderPitchControls(state, mine, phase, cue) {
   const available = Boolean(state?.questionModeAvailable) && !is_sim();
   const armed = mine?.questionMode === true;
   if (reactPitch) {
-    const detail = { available, armed, live: phase === 'live' && !state?.canned, connected: is_online(), cue: cue ?? null };
+    const detail = { available, armed, live: phase === 'live' && !state?.canned, connected: is_online(),
+      roomLive: state?.room?.transcription === 'live', preparing: ui.note === PITCH_PREPARING_NOTE, cue: cue ?? null };
     const fingerprint = JSON.stringify(detail);
     if (fingerprint !== lastPitchRender) {
       lastPitchRender = fingerprint;
@@ -1546,7 +1549,7 @@ function render_live() {
   render_message('in', mine?.lastIn, 'last_in_id');
   render_message('out', mine?.lastOut, 'last_out_id');
   $('live-acknowledge').hidden = phase !== 'live' || !gesture_scope().receiptId;
-  set_text($('live-note'), cue?.text === ui.note ? '' : ui.note);
+  set_text($('live-note'), cue?.text === ui.note || reactPitch && ui.note === PITCH_PREPARING_NOTE ? '' : ui.note);
   render_signals();
   render_monitor();
   $('sim-room').hidden = !is_sim();
@@ -1558,7 +1561,10 @@ function render_monitor(output = audio.getOutputActivity()) {
     monitor_seat = ui.seat;
     phone_monitor = mountChannelMonitor($('phone-monitor'), [ui.seat]);
   }
-  phone_monitor?.update(monitor_snapshot, { [ui.seat]: output });
+  const activeCue = reactPitch && ui.state?.phase === 'live' && !ui.state.canned && ui.state.preset === 'Pitch'
+    ? my_state()?.lastPitchCue?.text : null;
+  const displayed = activeCue && output.title === activeCue ? { ...output, title: '' } : output;
+  phone_monitor?.update(monitor_snapshot, { [ui.seat]: displayed });
 }
 
 function sample_output() {
@@ -1680,6 +1686,9 @@ function bind_events() {
   if (reactPitch) {
     document.addEventListener('telepathy:toggle-question-mode', () => {
       if (ui.state?.phase === 'live' && ui.state.questionModeAvailable) on_signal('LR', undefined, { toggle_question_mode: true });
+    });
+    document.addEventListener('telepathy:request-pitch-cue', () => {
+      if (!is_sim() && is_online() && ui.state?.phase === 'live' && !ui.state.canned && ui.state.questionModeAvailable) touch_signal('LR');
     });
   } else $('question-mode').addEventListener('click', () => on_signal('LR', undefined, { toggle_question_mode: true }));
   installDiag({ send, keepalive });
@@ -1843,7 +1852,7 @@ function bind_events() {
   document.addEventListener('keydown', event => {
     if (event.metaKey || event.ctrlKey || event.altKey || event.repeat || !ui.seat) return;
     if (!is_sim() && ui.screen === 'live' && !calibration.active() && Object.hasOwn(CLICKER_KEYS, event.key)) {
-      if (event.target?.closest?.('input, textarea, select, button, [contenteditable]')) return;
+      if (event.target?.closest?.('input, textarea, select, [contenteditable]')) return;
       event.preventDefault();
       on_signal(CLICKER_KEYS[event.key]);
       return;

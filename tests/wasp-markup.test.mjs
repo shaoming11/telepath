@@ -19,8 +19,9 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
     if (filename === 'index') {
       const pitch = await text('wasp-ui/src/PhonePitchControls.tsx');
       const calibration = await text('wasp-ui/src/CalibrationTrial.tsx');
-      const replaced = jsx.replace('<PhonePitchControls />', pitch).replace('<CalibrationTrial />', calibration);
-      const dynamic = new Set(['aria-pressed:false', 'data-pitch-owner:react', 'data-calibration-owner:react']);
+      const replaced = jsx.replace('<PhonePitchControls />', pitch.replaceAll('className="pitch-panel__status" role="status"', 'className="pitch-panel__status"'))
+        .replace('<CalibrationTrial />', calibration);
+      const dynamic = new Set(['aria-pressed:false', 'data-pitch-owner:react', 'data-calibration-owner:react', 'aria-label:Get a private cue now']);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
       assert.match(pitch, /aria-pressed=\{state\.armed\}/);
@@ -45,15 +46,19 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
   });
 }
 
-test('the Wasp question rail delegates actions to the hub controller and animates actual speech start', async () => {
+test('the Wasp cue panel keeps the two actions distinct and exposes actual room and playback status', async () => {
   const controller = await text('public/phone.mjs');
   const component = await text('wasp-ui/src/PhonePitchControls.tsx');
-  for (const event of ['telepathy:pitch-state', 'telepathy:pitch-speech-start', 'telepathy:toggle-question-mode']) {
+  const css = await text('wasp-ui/src/liquid.css');
+  for (const event of ['telepathy:pitch-state', 'telepathy:pitch-speech-start', 'telepathy:toggle-question-mode', 'telepathy:request-pitch-cue']) {
     assert.ok(controller.includes(event));
     assert.ok(component.includes(event));
   }
   assert.match(component, /disabled=\{!state\.live \|\| !state\.connected\}/);
-  assert.match(component, /prefers-reduced-motion: reduce/);
+  assert.match(component, /state\.roomLive \? 'Listening for questions' : 'Armed/);
+  assert.match(component, /started \? 'Voice started'/);
+  assert.match(component, /className="pitch-panel__status" role="status"/);
+  assert.match(css, /prefers-reduced-motion: reduce/);
 });
 
 test('the channel monitor renders supplied state in React and announces phase rather than meter frames', async () => {

@@ -1,21 +1,26 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useState } from 'react';
 
 type PitchState = {
   available: boolean;
   armed: boolean;
   live: boolean;
   connected: boolean;
+  roomLive: boolean;
+  preparing: boolean;
   cue: { text: string; points: string[] } | null;
 };
 
 type PitchPlayback = { id: string; text: string };
 
-const EMPTY_PITCH: PitchState = { available: false, armed: false, live: false, connected: false, cue: null };
+const EMPTY_PITCH: PitchState = {
+  available: false, armed: false, live: false, connected: false, roomLive: false, preparing: false, cue: null,
+};
+
+const normalized = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
 
 export function PhonePitchControls() {
   const [state, setState] = useState(EMPTY_PITCH);
   const [playback, setPlayback] = useState<PitchPlayback>();
-  const notes = useRef<HTMLElement>(null);
 
   useLayoutEffect(() => {
     const receiveState = (event: Event) => {
@@ -34,41 +39,43 @@ export function PhonePitchControls() {
   }, []);
 
   const started = Boolean(playback && state.cue?.text === playback.text);
-  useEffect(() => {
-    if (!started || !notes.current?.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const color = getComputedStyle(notes.current).getPropertyValue('--seat-rgb').trim();
-    if (!color) return;
-    const motion = notes.current.animate([
-      { boxShadow: `inset 0 0 0 1px rgba(${color}, 0.6), 0 0 22px rgba(${color}, 0.18)` },
-      { boxShadow: 'inset 0 0 0 1px transparent, 0 0 22px transparent' },
-    ], { duration: 460, easing: 'cubic-bezier(.22,.68,.24,1)' });
-    return () => motion.cancel();
-  }, [started, playback]);
-
   const hint = !state.connected ? 'Waiting for the hub.'
-    : !state.live ? 'Available when the Stage begins.'
-    : state.armed ? 'Listening for questions. Tap to stop.' : 'Prepare while the judge speaks';
+    : !state.live ? 'After Stage begins'
+    : !state.armed ? 'Tap before a question'
+    : state.roomLive ? 'Listening for questions' : 'Armed · mic not live';
+  const points = state.cue?.points.filter(point => normalized(point) !== normalized(state.cue?.text ?? '')) ?? [];
+  const status = state.preparing ? 'Preparing cue' : started ? 'Voice started' : '';
 
   return (
-    <div data-pitch-owner="react" style={{ display: 'contents' }}>
-      <button
-        className="signal"
-        id="question-mode"
-        type="button"
-        hidden={!state.available}
-        disabled={!state.live || !state.connected}
-        aria-pressed={state.armed}
-        onClick={() => document.dispatchEvent(new Event('telepathy:toggle-question-mode'))}
-      >
-        <b>{state.armed ? 'Question mode on' : 'Question mode'}</b>
-        <span>{hint}</span>
-      </button>
-      <section className="pitch-notes" ref={notes} id="live-pitch-notes" aria-labelledby="live-pitch-notes-label"
+    <div className="pitch-panel" data-pitch-owner="react" hidden={!state.available && !state.cue}>
+      <div className="pitch-panel__controls" hidden={!state.available}>
+        <button
+          className="signal"
+          id="question-mode"
+          type="button"
+          disabled={!state.live || !state.connected}
+          aria-pressed={state.armed}
+          onClick={() => document.dispatchEvent(new Event('telepathy:toggle-question-mode'))}
+        >
+          <b>Question Mode</b>
+          <span>{hint}</span>
+        </button>
+        <button className="pitch-panel__request" type="button" aria-label="Get a private cue now"
+          disabled={!state.live || !state.connected}
+          onClick={() => document.dispatchEvent(new Event('telepathy:request-pitch-cue'))}>
+          Cue now
+        </button>
+      </div>
+      {!state.cue && <p className="pitch-panel__status" role="status" hidden={!status}>{status}</p>}
+      <section className="pitch-notes" id="live-pitch-notes" aria-labelledby="live-pitch-notes-label"
         hidden={!state.cue} data-playback={started ? 'started' : 'waiting'}>
-        <h3 className="kicker" id="live-pitch-notes-label">Private cue</h3>
+        <div className="pitch-panel__heading">
+          <h3 className="kicker" id="live-pitch-notes-label">Private cue</h3>
+          {state.cue && <p className="pitch-panel__status" role="status" hidden={!status}>{status}</p>}
+        </div>
         <p id="live-pitch-cue" className="pitch-notes__cue">{state.cue?.text ?? ''}</p>
-        <ul id="live-pitch-points" className="pitch-notes__points">
-          {state.cue?.points.map((point, index) => <li key={index}>{point}</li>)}
+        <ul id="live-pitch-points" className="pitch-notes__points" hidden={!points.length}>
+          {points.map((point, index) => <li key={index}>{point}</li>)}
         </ul>
       </section>
     </div>
