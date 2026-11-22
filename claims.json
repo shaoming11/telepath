@@ -1,31 +1,4 @@
 {
-  "revision": 27,
-  "claims": [
-    {
-      "id": "c5c7d17e-5893-4804-afb4-5b4158f3c29d",
-      "owner": "fireheartjerry",
-      "agent": "claude-ui",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/2",
-      "scopes": [
-        "@ui",
-        "public/index.html",
-        "public/phone.css",
-        "public/stage.html",
-        "public/stage.css"
-      ],
-      "paths": [
-        "public/announcements.mjs",
-        "public/calibrate.mjs",
-        "public/index.html",
-        "public/phone-data.mjs",
-        "public/phone.css",
-        "public/phone.mjs",
-        "public/stage.css",
-        "public/stage.html",
-        "public/stage.mjs"
-      ],
-      "claimedAt": "2026-11-22T03:35:18.377Z"
-    }
-  ]
+  "revision": 28,
+  "claims": []
 }
