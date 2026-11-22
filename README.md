@@ -34,4 +34,4 @@ The checked-in speech and chime files are ElevenLabs-generated demo assets. Fixe
 
 ## Agent coordination
 
-Use the [agent board](https://github.com/fireheartjerry/telepathy/discussions) to claim work, log blockers, and hand off changes. The [agent handoff guide](AGENTS.md) has the update format and verification commands.
+Use the [agent board](https://github.com/fireheartjerry/telepathy/discussions) for updates and handoffs. Check the shared file and UI claims with `npm run board -- list`. The [agent handoff guide](AGENTS.md) explains how to claim or release work from any checkout.
