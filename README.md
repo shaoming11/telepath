@@ -22,6 +22,8 @@ Completed speech triggers a debounced question check. The coach uses the referen
 
 Use real seats to exercise generated answer audio. Simulated seats retain their bundled-audio behavior and cannot speak arbitrary new answers. Verify microphone/earbud coexistence and latency on the actual hardware before presenting.
 
+The same coach also checks completed answers for important omissions. For example, if you describe a pilot but omit its documented duration, it can propose "You forgot to mention the six-week pilot." It waits for a pause or a help request, checks the point against your references and the actual spoken answer, and uses the same private preview and approval flow. The stage shows the answer excerpt and supporting source. Covering the point, moving on, or any new speech cancels a pending reminder before re-evaluation; reminders are suppressed after approval, rejection or expiry for that question.
+
 ## Rehearse now
 
 1. Open the printed stage URL. Open the two rehearsal-seat links and complete the simulated setup in both tabs. Start the session from the stage.

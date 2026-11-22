@@ -145,7 +145,7 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath } 
     async answer({ signal, passages, ...context }) {
       if (mode !== 'openai' || !env.OPENAI_API_KEY) throw new Error('Document answers require the OpenAI text provider.');
       const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, true);
-      return validateAnswer(raw, passages);
+      return validateAnswer(raw, passages, context.turns);
     },
     reset() { last_request = ''; last_result = undefined; last_request_at = 0; },
     async evaluate(args) {
