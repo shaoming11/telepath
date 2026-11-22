@@ -1,27 +1,4 @@
 {
-  "revision": 19,
-  "claims": [
-    {
-      "id": "071419b2-b865-4894-9942-8da1b3e6d7ba",
-      "owner": "fireheartjerry",
-      "agent": "codex-airpods1-lock",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/earbuds/airpods-1",
-        "public/input.mjs",
-        "public/index.html",
-        "public/phone.mjs",
-        "public/phone.css"
-      ],
-      "paths": [
-        "public/earbuds/airpods-1",
-        "public/index.html",
-        "public/input.mjs",
-        "public/phone.css",
-        "public/phone.mjs"
-      ],
-      "claimedAt": "2026-11-22T03:30:29.829Z"
-    }
-  ]
+  "revision": 20,
+  "claims": []
 }
