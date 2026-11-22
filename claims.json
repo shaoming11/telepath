@@ -1,4 +1,27 @@
 {
-  "revision": 146,
-  "claims": []
+  "revision": 147,
+  "claims": [
+    {
+      "id": "8cb44dc9-4f56-41d7-9cf3-9207a15f5c66",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-operator-sheet",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "public/stage.mjs",
+        "scripts/generate-wasp-surfaces.py",
+        "wasp-ui/src/generated/StageMarkup.tsx",
+        "wasp-ui/src/liquid.css",
+        "tests/wasp-markup.test.mjs"
+      ],
+      "paths": [
+        "public/stage.mjs",
+        "scripts/generate-wasp-surfaces.py",
+        "tests/wasp-markup.test.mjs",
+        "wasp-ui/src/generated/StageMarkup.tsx",
+        "wasp-ui/src/liquid.css"
+      ],
+      "claimedAt": "2026-11-22T10:22:35.260Z"
+    }
+  ]
 }
