@@ -1,19 +1,4 @@
 {
-  "revision": 67,
-  "claims": [
-    {
-      "id": "f3802729-0c38-41c6-ae9e-09888aa7a990",
-      "owner": "fireheartjerry",
-      "agent": "codex-realtime-hardening",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub/codec.mjs"
-      ],
-      "paths": [
-        "hub/codec.mjs"
-      ],
-      "claimedAt": "2026-11-22T05:26:30.604Z"
-    }
-  ]
+  "revision": 68,
+  "claims": []
 }
