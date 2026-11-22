@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 repo="$PWD"
 target="$repo/.runtime/wasp-client"
-build_fingerprint() (
+build_fingerprints() (
   cd "$repo"
   node --input-type=module <<'JS'
 import { createHash } from 'node:crypto';
@@ -20,17 +20,21 @@ const inputs = [
   'scripts/build-wasp-ui', 'scripts/generate-wasp-surfaces.py', 'public/index.html', 'public/stage.html',
   'hub/project-references.mjs',
   'wasp-ui/.wasproot', 'wasp-ui/.waspignore', 'wasp-ui/.npmrc', 'wasp-ui/main.wasp.ts', 'wasp-ui/schema.prisma',
-  'wasp-ui/package.json', 'wasp-ui/package-lock.json', 'wasp-ui/vite.config.ts', 'wasp-ui/tsconfig.json',
+  'wasp-ui/package.json', 'wasp-ui/vite.config.ts', 'wasp-ui/tsconfig.json',
   'wasp-ui/tsconfig.src.json', 'wasp-ui/tsconfig.wasp.json', ...files('wasp-ui/src'),
 ];
 const hash = createHash('sha256');
 for (const path of inputs.sort()) {
   hash.update(path + '\0').update(createHash('sha256').update(readFileSync(path)).digest());
 }
-console.log(hash.digest('hex'));
+const source = hash.copy().digest('hex');
+const lock = 'wasp-ui/package-lock.json';
+hash.update(lock + '\0').update(createHash('sha256').update(readFileSync(lock)).digest());
+console.log(source + ':' + hash.digest('hex'));
 JS
 )
-fingerprint=$(build_fingerprint)
+initial_fingerprints=$(build_fingerprints)
+fingerprint=${initial_fingerprints#*:}
 if [[ "${1:-}" == "--ensure" && -s "$target/index.html" && -s "$target/reference-source.json" && -d "$target/wasp-assets" && -s "$target/source.sha256" ]] \
    && [[ "$fingerprint" == "$(cat "$target/source.sha256")" ]]; then
   exit 0
@@ -40,6 +44,12 @@ cd wasp-ui
 wasp=(npm exec --yes --package=@wasp.sh/wasp-cli@0.26.0 -- wasp)
 if [[ ! -d .wasp/spec ]]; then "${wasp[@]}" install; fi
 "${wasp[@]}" build
+resolved_fingerprints=$(build_fingerprints)
+if [[ "${initial_fingerprints%%:*}" != "${resolved_fingerprints%%:*}" ]]; then
+  printf '%s\n' 'The Wasp build inputs changed during compilation. Run ./scripts/build-wasp-ui again.' >&2
+  exit 1
+fi
+fingerprint=${resolved_fingerprints#*:}
 PATH="$PWD/node_modules/.bin:$PATH" REACT_APP_API_URL=http://127.0.0.1:5780 vite build
 dist="$PWD/.wasp/out/web-app/build"
 test -s "$dist/200.html"
@@ -64,7 +74,7 @@ for (const name of readdirSync(assets)) {
   writeFileSync(asset + '.gz', gzipSync(readFileSync(asset), { level: 9 }));
 }
 JS
-if [[ "$fingerprint" != "$(build_fingerprint)" ]]; then
+if [[ "$resolved_fingerprints" != "$(build_fingerprints)" ]]; then
   printf '%s\n' 'The Wasp build inputs changed during compilation. Run ./scripts/build-wasp-ui again.' >&2
   exit 1
 fi
