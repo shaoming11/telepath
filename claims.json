@@ -1,24 +1,4 @@
 {
-  "revision": 177,
-  "claims": [
-    {
-      "id": "bc6a9eab-617a-4d3f-b9df-29156cded016",
-      "owner": "fireheartjerry",
-      "agent": "codex-wasp-stage",
-      "branch": "jerry/wasp-liquid-glass",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "@stage-ui",
-        "wasp-ui/src/liquid.css"
-      ],
-      "paths": [
-        "public/announcements.mjs",
-        "public/stage.css",
-        "public/stage.html",
-        "public/stage.mjs",
-        "wasp-ui/src/liquid.css"
-      ],
-      "claimedAt": "2026-11-22T13:19:47.115Z"
-    }
-  ]
+  "revision": 178,
+  "claims": []
 }
