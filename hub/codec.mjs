@@ -2,7 +2,7 @@ import { CUE_REVIEW_INSTRUCTIONS } from '../maritime/policy.mjs';
 import { openRealtimePitch } from './realtime-pitch.mjs';
 import { spawn } from 'node:child_process';
 import { QUESTION_INSTRUCTIONS, QUESTION_SCHEMA, validateAnswer } from './questions.mjs';
-import { SCENARIO_INSTRUCTIONS, validateSocialCue } from './coach-scenarios.mjs';
+import { SCENARIO_INSTRUCTIONS, STRANGER_INTERVIEW_INSTRUCTIONS, validateSocialCue } from './coach-scenarios.mjs';
 
 const PRESETS = ['Pitch', 'Party', 'Meeting'];
 const SEATS = ['A', 'B'];
@@ -216,8 +216,11 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath, W
     },
     async pitchHelp({ signal, passages, scenario = 'pitch', roomTranscript, ...context }) {
       if (mode !== 'openai' || !env.OPENAI_API_KEY) return null;
-      const instructions = roomTranscript ? ROOM_QUESTION_INSTRUCTIONS : SCENARIO_INSTRUCTIONS[scenario];
-      const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages, ...(roomTranscript && { roomTranscript }) }),
+      const stranger = scenario === 'social' && roomTranscript != null;
+      const instructions = stranger ? STRANGER_INTERVIEW_INSTRUCTIONS
+        : roomTranscript ? ROOM_QUESTION_INSTRUCTIONS : SCENARIO_INSTRUCTIONS[scenario];
+      const modelInput = stranger ? { roomTranscript } : { ...context, passages, ...(roomTranscript && { roomTranscript }) };
+      const raw = await fromOpenAI(env, fetchImpl, JSON.stringify(modelInput),
         signal, roomTranscript ? 'room_cue' : 'pitch_help', instructions);
       if (roomTranscript) return raw;
       if (scenario === 'social') return validateSocialCue(raw, passages);

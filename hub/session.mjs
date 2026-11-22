@@ -891,7 +891,7 @@ export class Session {
   }
 
   schedulePitchPlanning() {
-    if (!this.coach?.planPitchHelp || this.closed || this.canned || this.phase !== 'live' || this.preset !== 'Pitch'
+    if (this.coachScenario === 'social' || !this.coach?.planPitchHelp || this.closed || this.canned || this.phase !== 'live' || this.preset !== 'Pitch'
         || !this.pitchReferences.length || !this.seats.A.online || this.seats.A.sim) return;
     clearTimeout(this.pitchPlanTimer);
     this.pitchPlanTimer = setTimeout(() => {
@@ -1016,7 +1016,6 @@ export class Session {
   }
 
   roomQuestionContext(seat, began) {
-    const context = this.pitchContext(seat, began);
     const roomTranscript = this.room.transcript.flatMap(turn =>
       turn.speakers?.length ? turn.speakers.map(run => ({ speaker: run.seat === seat ? 'Wearer' : run.label, text: run.text }))
         : [{ speaker: 'Room', text: turn.text }]);
@@ -1024,6 +1023,8 @@ export class Session {
       && questionKey(roomTranscript.at(-1)?.text) !== questionKey(this.room.partial.text)) {
       roomTranscript.push({ speaker: 'Room (live partial)', text: this.room.partial.text });
     }
+    if (this.coachScenario === 'social') return { roomTranscript, recent: roomTranscript.slice(-6), passages: [] };
+    const context = this.pitchContext(seat, began);
     const questionIndex = roomTranscript.findLastIndex(turn => turn.speaker !== 'Wearer' && looksLikeQuestion(turn.text));
     const questionHint = roomTranscript[questionIndex]?.text ?? '';
     const wearerAnswerSoFar = questionIndex < 0 ? '' : roomTranscript.slice(questionIndex + 1)
@@ -1157,7 +1158,7 @@ export class Session {
       const reply = await withDeadline(async signal => {
         if (oneShot) {
           const result = await withDeadline(deadline => this.codec?.pitchHelp?.({
-            signal: deadline, roomTranscript: resolved.roomTranscript, project: resolved.project,
+            signal: deadline, scenario: this.coachScenario, roomTranscript: resolved.roomTranscript, project: resolved.project,
             passages: resolved.passages, questionHint: resolved.questionHint, wearerAnswerSoFar: resolved.wearerAnswerSoFar,
           }), this.settings.pitchRaceMs, signal).catch(() => null);
           signal.throwIfAborted();
@@ -1191,7 +1192,8 @@ export class Session {
             }
           }
           if (!cue) {
-            const answer = resolved.questionHint
+            const answer = this.coachScenario === 'social' ? 'Ask what they’ve been enjoying lately, and what got them into it.'
+              : resolved.questionHint
               ? 'Restate the question briefly. Show how it works in the demo and offer to follow up on the rest.'
               : 'Open with the problem. Show a teammate sending you one private cue.';
             cue = { answer, sources: [], ungrounded: true };
