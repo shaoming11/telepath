@@ -14,5 +14,12 @@ test -s "$dist/200.html"
 test -d "$dist/wasp-assets"
 mkdir -p "$target/wasp-assets"
 cp -R "$dist/wasp-assets/." "$target/wasp-assets/"
-cp "$dist/200.html" "$target/index.html.next"
+node --input-type=module - "$dist/200.html" "$target/index.html.next" <<'JS'
+import { readFileSync, writeFileSync } from 'node:fs';
+const [source, target] = process.argv.slice(2);
+const html = readFileSync(source, 'utf8');
+const viewport = /<meta\b[^>]*\bname=(["'])viewport\1[^>]*>/gi;
+if ([...html.matchAll(viewport)].length !== 1) throw new Error('Expected one Wasp viewport meta tag.');
+writeFileSync(target, html.replace(viewport, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'));
+JS
 mv "$target/index.html.next" "$target/index.html"

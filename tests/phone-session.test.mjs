@@ -172,6 +172,29 @@ test('earbud recovery returns on Live after voice setup without blocking the voi
   assert.equal(banner.hidden, true);
 });
 
+test('the draft clock restarts on playback and disables approval at the hub deadline', async () => {
+  const start = Date.now();
+  const preview = draft({ id: 'clock-test', decisionAt: start, heardAt: null, expiresAt: start + 4500 });
+  socket.receive({ type: 'state', state: seat_state(preview, { serverNow: start }) });
+  await settle();
+  assert.equal(get_element('live-draft-time').textContent, 'Waiting for preview');
+  assert.equal(get_element('draft-send').disabled, true);
+  world.advance(2200);
+  const heard = Date.now();
+  socket.receive({ type: 'state', state: seat_state({ ...preview, heardAt: heard, expiresAt: heard + 6000 }, { serverNow: heard }) });
+  await settle();
+  assert.equal(get_element('live-draft-time').textContent, '6 s');
+  assert.equal(get_element('live-draft-clock').style.transition, 'transform 6000ms linear');
+  assert.equal(get_element('draft-send').disabled, false);
+  world.advance(3001);
+  await settle();
+  assert.equal(get_element('live-draft-time').textContent, '3 s');
+  world.advance(3000);
+  await settle();
+  assert.equal(get_element('live-draft-time').textContent, 'Expired');
+  assert.equal(get_element('draft-send').disabled, true);
+});
+
 test('repeated discard clicks target the same draft and never become a codebook gesture', async () => {
   socket.receive({ type: 'state', state: seat_state(draft({ id: 'current-preview' })) });
   await settle();

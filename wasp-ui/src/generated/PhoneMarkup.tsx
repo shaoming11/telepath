@@ -213,6 +213,7 @@ export function PhoneMarkup() {
             <div className="draft" id="live-draft" hidden>
               <div className="draft-top">
                 <span className="label" id="live-draft-label">Send this?</span>
+                <span className="label draft-time" id="live-draft-time"></span>
               </div>
               <div className="draft-clock" aria-hidden="true"><i id="live-draft-clock"></i></div>
               <p id="live-draft-text"></p>
