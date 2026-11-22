@@ -33,7 +33,7 @@ The docs cover these well, so every one should produce a useful cue.
 - What are the three coaching scenarios?
 - Does the Fiber AI profile lookup work yet?
 
-The last one is a trap. Fiber is planned, not built. A good answer says so.
+A good Fiber answer explains the exact spoken identity requirement, the background lookup, and the use of professional evidence in later cues.
 
 ## Hard follow-ups
 

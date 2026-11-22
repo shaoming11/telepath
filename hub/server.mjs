@@ -218,7 +218,7 @@ export function createHub({
       if (path === '/info') return respond(req, res, 200, TYPES['.json'], JSON.stringify(info));
       if (path === '/room-mic.html' && !LOOPBACK_PEERS.has(req.socket.remoteAddress)
         && !validRoomInvite(request_url.searchParams.get('seat'), request_url.searchParams.get('token'))) {
-        return respond(req, res, 403, 'text/plain', 'Open a room mic invite from Telepathy.');
+        return respond(req, res, 403, 'text/plain', 'Open a room mic invite from Telepath.');
       }
       if (path === '/telepathy-ca.cer' && tls?.publicRoot) {
         return respond(req, res, 200, 'application/x-x509-ca-cert', tls.publicRoot);

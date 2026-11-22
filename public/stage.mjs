@@ -242,6 +242,8 @@ export function normalizeState(raw) {
     announcement: isObject(source.announcement) ? source.announcement : null,
     references: asList(source.references),
     referencesLoading: source.referencesLoading === true,
+    researchEnabled: source.researchEnabled === true,
+    researchSources: asList(source.researchSources),
     questionAnswering: source.questionAnswering === true,
     coachScenario: Object.hasOwn(COACH_SCENARIOS, source.coachScenario) ? source.coachScenario : 'pitch',
     questionState: isObject(source.questionState) ? source.questionState : { status: 'idle' },
@@ -909,7 +911,17 @@ function boot() {
     scenario.disabled = linkState !== 'live' || state.canned || state.phase === 'reveal';
     byId('coach-scenario-note').textContent = COACH_SCENARIOS[state.coachScenario]
       + (state.coachScenario === 'interview' && !state.references.length ? '. Upload the persona documents first, or the coach stays quiet.' : '.');
-    byId('answer-panel').hidden = state.phase === 'lobby' || !state.references.length && !state.answerHistory.length;
+    const researchSetup = byId('research-setup-note');
+    researchSetup.hidden = !state.researchEnabled;
+    researchSetup.textContent = 'Fiber AI researches introduced judges and interviewers in the background.';
+    const researchStatus = byId('research-status');
+    researchStatus.hidden = !state.researchSources.length;
+    researchStatus.textContent = state.researchSources.length ? 'Fiber AI research available for coaching.' : '';
+    const researchList = byId('research-sources');
+    researchList.hidden = researchStatus.hidden;
+    fill(researchList, state.researchSources.map(source => node('li', null, source.name)));
+    byId('answer-panel').hidden = state.phase === 'lobby'
+      || !state.references.length && !state.researchSources.length && !state.answerHistory.length;
     const answer = state.questionState;
     const labels = { idle: 'Listening for questions', researching: 'Checking the conversation and references…', waiting: 'Giving the conversation time to answer',
       answer: 'Answer found', preview: 'Private preview · awaiting approval', confirmed: 'Approved for delivery', discarded: 'Answer discarded', expired: 'Approval expired',

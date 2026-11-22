@@ -1,4 +1,4 @@
-// Coaching scenarios for the private in-ear coach. "pitch" is the original Telepathy pitch coach.
+// Coaching scenarios for the private in-ear coach. "pitch" is the original Telepath pitch coach.
 // "interview" coaches the wearer with facts from their uploaded persona documents only.
 // "social" suggests topics and questions for a shy wearer and needs no documents.
 
@@ -67,4 +67,4 @@ export function validateSocialCue(value, passages) {
   return { status: 'answer', suggestionKind: 'answer', question, answer, sources, responseQuote: '', ungrounded: !sources.length };
 }
 
-export const SCENARIO_QUERY ={ pitch: 'Telepathy live pitch demo', interview: 'background experience projects', social: 'interests hobbies' };
+export const SCENARIO_QUERY ={ pitch: 'Telepath live pitch demo', interview: 'background experience projects', social: 'interests hobbies' };

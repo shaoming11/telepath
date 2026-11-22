@@ -5,16 +5,17 @@ import { createTextReference, warmReferenceIndex } from './references.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 const FRONTEND_DOCS = {
-  classic: ['docs/frontend-classic.md', 'Telepathy classic browser client.md', 0.3, 'frontend'],
-  wasp: ['docs/wasp-ui.md', 'Telepathy Wasp frontend.md', 0.3, 'frontend'],
+  classic: ['docs/frontend-classic.md', 'Telepath classic browser client.md', 0.3, 'frontend'],
+  wasp: ['docs/wasp-ui.md', 'Telepath Wasp frontend.md', 0.3, 'frontend'],
 };
 const CORE_DOCS = [
-  ['docs/technical-reference.md', 'Telepathy technical reference.md', 0.3],
-  ['docs/telepathy-pitch-brief.md', 'Telepathy pitch brief.md', 0],
-  ['README.md', 'Telepathy implementation guide.md', 0],
-  ['docs/protocol.md', 'Telepathy protocol.md', 0],
-  ['docs/spec.md', 'Telepathy original product specification.md', -0.35],
+  ['docs/technical-reference.md', 'Telepath technical reference.md', 0.3],
+  ['docs/telepathy-pitch-brief.md', 'Telepath pitch brief.md', 0],
+  ['README.md', 'Telepath implementation guide.md', 0],
+  ['docs/protocol.md', 'Telepath protocol.md', 0],
+  ['docs/spec.md', 'Telepath original product specification.md', -0.35],
   ['docs/maritime.md', 'docs/maritime.md', 0],
+  ['docs/fiber.md', 'docs/fiber.md', 0],
   ['docs/rehearsal.md', 'docs/rehearsal.md', 0],
   ['docs/pitch.md', 'docs/pitch.md', 0],
 ];

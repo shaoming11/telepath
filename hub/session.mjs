@@ -245,6 +245,8 @@ export class Session {
       canned: this.canned,
       ...(viewer == null && { announcement: this.snapshotAnnouncement(), canReplay: this.canReplay() }),
       ...(viewer == null && { references: this.references.map(({ id, name, characters }) => ({ id, name, characters })),
+        researchEnabled: this.research.enabled === true,
+        researchSources: this.researchReferences.map(({ id, name }) => ({ id, name })),
         referencesLoading: this.referencesLoading, questionAnswering: this.codec?.questionAnswering === true,
         questionState: this.questionState }),
       ...(viewer == null && { coach: { available: Boolean(this.coach), ...this.coachState } }),
@@ -776,7 +778,7 @@ export class Session {
     const voice = state.voiceRef;
     const signal = this.liveScope([seat]);
     try {
-      const text = 'Hi, this is my Telepathy voice. Take a moment to hear how I sound at a normal speaking volume.';
+      const text = 'Hi, this is my Telepath voice. Take a moment to hear how I sound at a normal speaking volume.';
       const url = toUrl(await withDeadline(requestSignal => this.audio.speech(seat, text, {
         voice, role: 'voice-preview', signal: requestSignal,
       }), 8000, signal));
@@ -805,9 +807,9 @@ export class Session {
       at: this.now(), text,
       ...(Number.isInteger(meta?.segment) && { streamId: meta.streamId, segment: meta.segment }),
     });
-    if (this.phase === 'live') this.researchInBackground(state.transcript);
+    if (seat === 'room' && this.phase === 'live') this.researchInBackground(state.transcript);
     if (seat === 'room' && state.transcript.length > 60) state.transcript.splice(0, state.transcript.length - 60);
-    if (this.phase === 'live' && !(seat === 'room' && SEATS.some(person => this.seats[person].questionMode)) && this.references.length && this.codec?.questionAnswering) {
+    if (this.phase === 'live' && !(seat === 'room' && SEATS.some(person => this.seats[person].questionMode)) && this.referenceCorpus().length && this.codec?.questionAnswering) {
       const key = questionKey(text);
       const duplicate = this.questionTurns.slice(-4).some(turn => this.now() - turn.at < 2000 && questionKey(turn.text) === key);
       if (!duplicate) {
@@ -903,10 +905,17 @@ export class Session {
     this.pitchPlanner.clear();
   }
 
+  referenceCorpus() {
+    return [...this.references, ...this.researchReferences];
+  }
+
   researchInBackground(turns) {
+    const scenario = this.coachScenario;
+    if (scenario === 'social' || this.canned) return;
     const generation = this.generation;
     void this.research.observe(turns, { signal: this.lifecycle.signal }).then(document => {
-      if (!document || this.closed || generation !== this.generation || this.phase !== 'live') return;
+      if (!document || this.closed || generation !== this.generation || this.phase !== 'live'
+          || this.canned || scenario !== this.coachScenario) return;
       this.researchReferences = [...this.researchReferences, document].slice(-8);
       this.clearPitchPlanning();
       for (const seat of SEATS) {
@@ -914,6 +923,7 @@ export class Session {
         mode?.candidate?.controller.abort();
         if (mode) mode.candidate = null;
       }
+      this.publish();
     }).catch(() => {});
   }
 
@@ -932,14 +942,14 @@ export class Session {
     const earlier = recallRoomTurns(history.filter(turn => !recent.includes(turn)), latest);
     const pitch = this.coachScenario === 'pitch';
     const query = recent.slice(-3).map(turn => turn.text).join(' ') || SCENARIO_QUERY[this.coachScenario];
-    const corpus = [...this.references, ...this.researchReferences, ...(pitch ? this.pitchReferences : [])];
+    const corpus = [...this.referenceCorpus(), ...(pitch ? this.pitchReferences : [])];
     let passages = corpus.length ? retrieveProjectReferences(corpus, query, 7, latest) : [];
     const frontendStack = pitch ? this.pitchReferences.find(doc => doc.kind === 'frontend')
       ?.chunks.find(chunk => chunk.heading === 'Active frontend stack') : undefined;
     if (frontendStack && isFrontendStackQuestion(latest)) {
       passages = [frontendStack, ...passages.filter(passage => passage.id !== frontendStack.id)].slice(0, 7);
     }
-    const overview = pitch ? this.pitchReferences.find(doc => doc.name === 'Telepathy technical reference.md')
+    const overview = pitch ? this.pitchReferences.find(doc => ['Telepath technical reference.md', 'Telepathy technical reference.md'].includes(doc.name))
       ?.chunks.find(chunk => chunk.heading === 'Project overview')?.text : undefined;
     const project = [overview, frontendStack?.text].filter(Boolean).join('\n\n') || undefined;
     return { passages, recent, earlier, project, frontendStack, context: normalizePitchHelp({
@@ -1351,7 +1361,7 @@ export class Session {
 
   async answerQuestion(requestedSeat) {
     const sender = requestedSeat ?? 'B';
-    if (this.closed || this.phase !== 'live' || this.canned || !this.references.length || !this.codec?.questionAnswering
+    if (this.closed || this.phase !== 'live' || this.canned || !this.referenceCorpus().length || !this.codec?.questionAnswering
         || !this.canDraft(sender) || !this.questionTurns.length || this.questionSpeechPending) return;
     if (this.answerTask) {
       // A manual request supersedes an automatic evaluation; a quiet timer gets one follow-up.
@@ -1371,7 +1381,7 @@ export class Session {
     const current = () => !signal.aborted && version === this.answerVersion && generation === this.generation && this.phase === 'live' && !this.canned;
     const turns = this.questionTurns.filter(turn => this.now() - turn.at < 45_000);
     if (!turns.length) return;
-    const passages = retrieveReferences([...this.references, ...this.researchReferences], [this.questionState.question ?? '', ...turns.slice(-6).map(turn => turn.text)].join(' '));
+    const passages = retrieveReferences(this.referenceCorpus(), [this.questionState.question ?? '', ...turns.slice(-6).map(turn => turn.text)].join(' '));
     const activeQuestion = this.questionState.question ?? '';
     this.questionState = { status: 'researching', question: activeQuestion };
     this.publish();
@@ -1421,7 +1431,7 @@ export class Session {
   transcriptionCallbacks(seat, generation, listenVersion) {
     const current = () => generation === this.generation && (seat === 'room' ? this.room : this.seats[seat]).listenVersion === listenVersion;
     const committed = (text, meta) => { if (current()) this.addTranscript(seat, text, generation, meta); };
-    const track_questions = Boolean(this.references.length && this.codec?.questionAnswering);
+    const track_questions = Boolean(this.referenceCorpus().length && this.codec?.questionAnswering);
     const room = seat === 'room';
     if (!track_questions && !room) return committed;
     return {
@@ -1623,7 +1633,7 @@ export class Session {
   }
 
   async sense(requestedSeat) {
-    if (this.references.length && this.codec?.questionAnswering) {
+    if (this.referenceCorpus().length && this.codec?.questionAnswering) {
       if (requestedSeat && this.questionTurns.length) return this.answerQuestion(requestedSeat);
       if (this.answerTask || ['waiting', 'answer', 'advice', 'preview'].includes(this.questionState.status)) return;
     }
@@ -2020,7 +2030,7 @@ export class Session {
       this.seats[seat].lastIn = null;
       this.seats[seat].lastOut = null;
       this.seats[seat].transcript = [];
-      this.seats[seat].situation = seat === 'A' ? 'Presenting Telepathy' : 'Watching the judges';
+      this.seats[seat].situation = seat === 'A' ? 'Presenting Telepath' : 'Watching the judges';
     }
     this.publish();
 

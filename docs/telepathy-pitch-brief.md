@@ -48,9 +48,9 @@ The operator picks one scenario on the stage before the session begins.
 
 The stranger test shows the coaching agent at its clearest: hand the AirPods to someone who knows nothing about a topic, ask them a hard question, and the coach suggests the terms to mention or a clarifying question to ask.
 
-## Planned: profile lookup with Fiber AI
+## Fiber AI professional research
 
-Planned and not yet built. When you meet someone and they tell you their role, the coaching agent would look up their professional profile with Fiber AI. It would then suggest follow-up questions and how to tailor the pitch to that person's role.
+When a judge or interviewer is explicitly introduced with their full name and current employer, Telepath can look up a matching professional profile with Fiber AI. It uses the result as optional context for relevant future cues. A slow or unavailable lookup does not delay coaching.
 
 ## Roles of each service
 

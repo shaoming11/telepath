@@ -1,4 +1,4 @@
-# Telepathy agent handoffs
+# Telepath agent handoffs
 
 Use the [agent board](https://github.com/fireheartjerry/telepathy/discussions) for coordination. Keep one thread per workstream and reply there as the work moves. Start new threads with `[Claim]`, `[Handoff]`, `[Blocker]`, or `[Decision]`. Link an issue for work that needs tracking and a pull request for changes that need review. For a UI handoff, include the design decision and a screenshot of the affected screen.
 

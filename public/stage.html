@@ -128,6 +128,7 @@
           <option value="social">Date or small talk</option>
         </select>
         <p class="reference-note" id="coach-scenario-note"></p>
+        <p class="reference-note" id="research-setup-note" hidden></p>
         <label for="reference-files">Reference documents</label>
         <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx">
         <div class="reference-actions">
@@ -302,6 +303,8 @@
     </section>
     <details class="reference-panel stage-inspector" id="answer-panel" hidden>
       <summary id="answer-title">Coach evidence</summary>
+      <p id="research-status" role="status" hidden></p>
+      <ul id="research-sources" aria-label="Fiber AI sources" hidden></ul>
       <p id="answer-status" role="status" aria-live="polite"></p>
       <p id="answer-question"></p>
       <p id="answer-text"></p>

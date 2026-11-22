@@ -85,6 +85,7 @@ export function StageMarkup() {
                 <option value="social">Date or small talk</option>
               </select>
               <p className="reference-note" id="coach-scenario-note"></p>
+              <p className="reference-note" id="research-setup-note" hidden></p>
               <label htmlFor="reference-files">Reference documents</label>
               <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx" />
               <div className="reference-actions">
@@ -251,6 +252,8 @@ export function StageMarkup() {
           </section>
           <details className="reference-panel stage-inspector" id="answer-panel" hidden>
             <summary id="answer-title">Coach evidence</summary>
+            <p id="research-status" role="status" hidden></p>
+            <ul id="research-sources" aria-label="Fiber AI sources" hidden></ul>
             <p id="answer-status" role="status" aria-live="polite"></p>
             <p id="answer-question"></p>
             <p id="answer-text"></p>
