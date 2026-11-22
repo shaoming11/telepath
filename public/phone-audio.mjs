@@ -380,7 +380,9 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
     if (voice_audible) {
       speech_at = cursor;
       const rate = Number.isFinite(frame.rate) ? Math.max(0.8, Math.min(1.2, frame.rate)) : 1;
-      speech_source = start_source(speech, meta.pitch_help ? pitch_gain : voice_gain, speech_at, rate, meta);
+      const speech_meta = cue_audible && frame.messageId && !meta.preview && !meta.announcement
+        ? { ...meta, incoming_chime_at: cue_at } : meta;
+      speech_source = start_source(speech, meta.pitch_help ? pitch_gain : voice_gain, speech_at, rate, speech_meta);
       cursor += speech.duration / rate;
     }
     if (serial) playhead = cursor + QUEUE_TAIL_S;
@@ -511,6 +513,11 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
     return { phase, title: (playing ?? queued)?.title ?? '', bars };
   }
 
+  function incomingChimeActive() {
+    const now = context?.currentTime;
+    return now != null && [...sources.values()].some(source => source.incoming_chime_at <= now && now < source.at);
+  }
+
   async function test_side(side) {
     if (!await resume_briefly()) return 'Audio is not running. Tap again.';
     if (levels.voice <= 0) return 'Voice volume is at zero.';
@@ -561,6 +568,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
     play,
     play_cue,
     getOutputActivity,
+    incomingChimeActive,
     test_side,
     configure({ volumes: next_volumes, timing: next_timing }) {
       if (next_timing) app_timing = next_timing;

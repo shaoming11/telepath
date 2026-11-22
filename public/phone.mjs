@@ -326,6 +326,7 @@ function gesture_scope(pressed_at) {
     draftId: drafts.can_approve(pending) && !receipt_first ? pending.id : null,
     visibleDraftId: drafts.visible(pending) ? pending.id : null,
     previewWaiting: drafts.visible(pending) && pending.heardAt == null,
+    incomingChime: pressed_at != null && audio.incomingChimeActive(),
     receiptId: receipt_id,
     receiptPressedAt: receipt && pressed_at != null && receipt_wait >= 0 ? receipt.until - receipt_wait : undefined,
   };
@@ -375,6 +376,10 @@ function on_signal(signal, trace, { toggle_question_mode = false, draft_id, rece
   }
   const first = trace?.[0];
   const scope = (first && gesture_scopes.get(first.action + ':' + first.at)) ?? gesture_scope();
+  if (signal === 'R1' && first && !explicit_signal && scope.incomingChime) {
+    show_note('Wait for the whisper before acknowledging.');
+    return;
+  }
   if (signal === 'R1' && !explicit_signal && scope.previewWaiting && !scope.receiptId) {
     show_note('Wait for the preview before sending.');
     return;
@@ -387,7 +392,7 @@ function on_signal(signal, trace, { toggle_question_mode = false, draft_id, rece
   flash_signal(signal);
   ui.signal_count += 1;
   const id = ui.seat + '-' + Date.now().toString(36) + '-' + ui.signal_count;
-  const { previewWaiting, pitchHelp, visibleDraftId, receiptPressedAt, ...intent } = scope;
+  const { previewWaiting, pitchHelp, visibleDraftId, receiptPressedAt, incomingChime, ...intent } = scope;
   intent.draftId = explicit_signal || receipt_id ? null : draft_id ?? (discard ? visibleDraftId : scope.draftId);
   intent.receiptId = explicit_signal ? null : receipt_id ?? scope.receiptId;
   if (first && signal === 'R1' && intent.draftId) intent.receiptId = null;
