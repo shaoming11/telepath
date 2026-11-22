@@ -52,11 +52,23 @@
           <input type="checkbox" id="voice-consent">
           <span id="voice-consent-text"></span>
         </label>
-        <p class="script" id="voice-script"></p>
-        <div class="progress" aria-hidden="true"><i id="voice-bar"></i></div>
+        <p class="setup-copy">Talk naturally. The recorder gathers usable speech and lets you pause whenever you need to.</p>
+        <details class="setup-details">
+          <summary>Something to read</summary>
+          <p class="script" id="voice-script"></p>
+        </details>
+        <div class="voice-meter" id="voice-meter" hidden>
+          <p class="meta" id="voice-meter-label"></p>
+          <div class="progress" aria-hidden="true"><i id="voice-bar"></i></div>
+        </div>
+        <div class="voice-transcript" id="voice-transcript" hidden>
+          <p class="label">Live transcript</p>
+          <p id="voice-transcript-text"></p>
+        </div>
         <p class="meta" id="voice-status" role="status"></p>
         <div class="actions">
-          <button class="primary" id="voice-record" type="button">Read for 30 seconds</button>
+          <button class="primary" id="voice-record" type="button">Start recording</button>
+          <button class="primary" id="voice-finish" type="button" hidden>Use this sample</button>
           <button id="voice-room" type="button">Room sample only</button>
           <button id="voice-cancel" type="button" hidden>Cancel</button>
           <button id="voice-skip" type="button">Use the premade voice</button>
@@ -66,13 +78,12 @@
       <section class="screen" id="screen-earbuds" data-screen="earbuds" hidden>
         <header class="step-head"><span class="step-index">2 / 4</span><h2>Earbuds</h2></header>
         <fieldset class="choice">
-          <legend>How many are you wearing</legend>
-          <label><input type="radio" name="earbud_mode" value="2"><span><strong>Two earbuds</strong><small>Left and right taps carry different signals</small></span></label>
-          <label><input type="radio" name="earbud_mode" value="1"><span><strong>One earbud</strong><small>Tap count and rhythm carry the signals</small></span></label>
+          <legend>AirPods model</legend>
+          <label><input type="radio" name="earbud_mode" value="next-only"><span><strong>AirPods 1</strong><small>One, two, or three Next Track events</small></span></label>
+          <label><input type="radio" name="earbud_mode" value="pro"><span><strong>AirPods Pro</strong><small>Single, double, or triple squeeze</small></span></label>
         </fieldset>
         <div class="split">
-          <button id="test-left" type="button">Test left</button>
-          <button id="test-right" type="button">Test right</button>
+          <button id="test-audio" type="button">Test audio</button>
         </div>
         <p class="meta" id="earbuds-status" role="status"></p>
         <div class="actions">
@@ -88,6 +99,24 @@
             <button type="button" data-cal-seat="A">Seat A</button>
             <button type="button" data-cal-seat="B">Seat B</button>
           </div>
+          <div class="setup-group" id="cal-quick">
+            <label class="field" for="cal-earbud-model"><span>AirPods model</span>
+              <select id="cal-earbud-model">
+                <option value="next-only">AirPods 1</option>
+                <option value="pro">AirPods Pro</option>
+              </select>
+            </label>
+            <button class="primary" id="cal-quick-start" type="button">Test earbud controls</button>
+            <button id="cal-quick-continue" type="button" hidden>Continue with defaults</button>
+          </div>
+          <ol class="fineprint" id="cal-quick-controls" aria-label="Detected media commands" hidden>
+            <li id="cal-quick-pause"></li>
+            <li id="cal-quick-nexttrack"></li>
+            <li id="cal-quick-previoustrack"></li>
+          </ol>
+          <p class="meta" id="cal-quick-status" role="status"></p>
+          <details class="setup-details" id="cal-full">
+          <summary>Full timing calibration</summary>
           <fieldset class="choice">
             <legend>Length</legend>
             <label><input type="radio" name="cal_scope" value="mode" checked><span><strong>This earbud mode</strong><small>About 2 minutes</small></span></label>
@@ -101,8 +130,9 @@
           <p class="fineprint" id="cal-measure"></p>
           <div class="actions">
             <button class="primary" id="cal-start" type="button">Start</button>
-            <button id="cal-skip" type="button">Skip and use defaults</button>
           </div>
+          </details>
+          <button id="cal-skip" type="button">Skip and use defaults</button>
         </div>
 
         <div class="cal-section cal-run" id="cal-run" hidden>
@@ -115,7 +145,8 @@
           <div class="progress" aria-hidden="true"><i id="cal-bar"></i></div>
           <ol class="ticks" id="cal-ticks"></ol>
           <div class="actions">
-            <button id="cal-stop" type="button">Stop</button>
+            <button id="cal-stop" type="button">Stop calibration</button>
+            <button id="cal-run-skip" type="button" hidden>Skip and use defaults</button>
           </div>
         </div>
 
@@ -208,8 +239,8 @@
 
         <fieldset class="segmented">
           <legend>Earbuds</legend>
-          <label><input type="radio" name="settings_mode" value="2"><span>Two</span></label>
-          <label><input type="radio" name="settings_mode" value="1"><span>One</span></label>
+          <label><input type="radio" name="settings_mode" value="next-only"><span>AirPods 1</span></label>
+          <label><input type="radio" name="settings_mode" value="pro"><span>AirPods Pro</span></label>
         </fieldset>
 
         <label class="row-toggle"><span>AI drafts</span><input type="checkbox" id="settings-drafts"></label>

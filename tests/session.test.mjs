@@ -4,7 +4,7 @@ import { Session } from '../hub/session.mjs';
 
 const EMPTY_CODEC = { evaluate: async () => ({}) };
 
-async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {}, sim = { A: true, B: true } } = {}) {
+async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, settings = {}, sim = { A: true, B: true } } = {}) {
   let now = 1000;
   const seatFrames = { A: [], B: [] };
   const stageFrames = [];
@@ -20,6 +20,7 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {
       ...audio,
     },
     codec,
+    coach,
     settings: { roomSenseMs: 0, ...settings },
     now: () => now,
   });
@@ -68,6 +69,84 @@ test('fixed whisper uses the receiver cache and one receipt, even after retry', 
   assert.equal(audioFrames('B', 'receipt').length, 1);
   assert.equal(state().log.filter(entry => entry.kind === 'message').length, 1);
   assert.equal(state().log.filter(entry => entry.kind === 'receipt').length, 1);
+});
+
+test('coach suggests privately and sends the approved ElevenLabs line only once', async t => {
+  const { session, state, seatFrames, audioFrames, act, advance } = await createLiveSession({
+    coach: { recommend: async input => {
+      assert.deepEqual(input, { beat: 'problem', elapsedSeconds: 73, onlineSeats: 2, readySeats: 2, acknowledgedMessages: 0 });
+      return { cueId: 'demo-cue', reason: 'Start the working demo.', source: 'maritime' };
+    } },
+  });
+  t.after(() => session.close());
+  await act('A', { type: 'sim_transcript', text: 'This stays in Telepathy.' });
+  advance(73_000);
+  await session.handleStage({ action: 'coach_ask', beat: 'problem' });
+  const draft = state().coach;
+  assert.equal(draft.available, true);
+  assert.equal(draft.status, 'ready');
+  assert.equal(draft.source, 'maritime');
+  assert.equal(draft.text, 'Show the working demo now.');
+  for (const seat of ['A', 'B']) {
+    assert.ok(seatFrames[seat].every(frame => frame.state?.coach == null));
+    assert.equal(audioFrames(seat, 'system').length, 0);
+  }
+
+  await session.handleStage({ action: 'coach_send', coachId: 'old' });
+  assert.equal(state().coach.status, 'ready');
+  await session.handleStage({ action: 'coach_send', coachId: draft.id, text: 'A forged message.' });
+  await session.handleStage({ action: 'coach_send', coachId: draft.id });
+  assert.equal(state().coach.status, 'sent');
+  for (const seat of ['A', 'B']) {
+    const [audio] = audioFrames(seat, 'system');
+    assert.equal(audioFrames(seat, 'system').length, 1);
+    assert.equal(audio.text, draft.text);
+    assert.equal(audio.messageId, state().coach.announcementId);
+    await act(seat, { type: 'heard', messageId: audio.messageId });
+  }
+  assert.equal(state().announcement.status, 'played');
+  assert.deepEqual(state().announcement.heard, ['A', 'B']);
+  assert.equal(state().bits, 0);
+});
+
+test('a cloud timeout falls back locally without delaying a fixed tap or sending to one seat', async t => {
+  let request;
+  const { session, state, act, audioFrames } = await createLiveSession({
+    coach: { recommend: (input, { signal }) => { request = signal; return new Promise(() => {}); } },
+    settings: { coachTimeoutMs: 20 },
+  });
+  t.after(() => session.close());
+  const waiting = session.handleStage({ action: 'coach_ask', beat: 'closing' });
+  assert.equal(state().coach.status, 'asking');
+  await act('B', { type: 'signal', signal: 'R1', id: 'while-coaching' });
+  assert.equal(audioFrames('A', 'soft').at(-1).key, 'B:Pitch:R1');
+  await waiting;
+  assert.equal(request.aborted, true);
+  assert.equal(state().coach.source, 'local');
+  assert.equal(state().coach.text, 'Time to bring up the reveal.');
+
+  session.disconnect('B');
+  await session.handleStage({ action: 'coach_send', coachId: state().coach.id });
+  assert.equal(state().coach.status, 'ready');
+  assert.equal(state().announcement, null);
+});
+
+test('reveal, canned and reset discard in-flight coaching', async t => {
+  for (const action of ['reveal', 'canned', 'reset']) {
+    let complete;
+    const { session, state } = await createLiveSession({
+      coach: { recommend: () => new Promise(resolve => { complete = resolve; }) },
+    });
+    t.after(() => session.close());
+    const waiting = session.handleStage({ action: 'coach_ask', beat: 'problem' });
+    await Promise.resolve();
+    await session.handleStage({ action });
+    complete({ cueId: 'demo-cue', reason: 'Late result.', source: 'maritime' });
+    await waiting;
+    assert.equal(state().coach.status, 'idle');
+    assert.equal(state().announcement, null);
+    await session.close();
+  }
 });
 
 test('preset swaps atomically on both cache acknowledgments', async t => {

@@ -149,6 +149,26 @@
     </div>
   </div>
 
+  <section class="operator__group" id="op-coach" aria-labelledby="op-coach-title" hidden>
+    <h3 class="operator__label" id="op-coach-title">Pitch coach</h3>
+    <form class="field-row" id="op-coach-form">
+      <label class="sr-only" for="op-coach-beat">Current pitch beat</label>
+      <select class="control mono" id="op-coach-beat">
+        <option value="opening">Opening</option>
+        <option value="problem">Problem</option>
+        <option value="demo">Working demo</option>
+        <option value="closing">Closing</option>
+      </select>
+      <button class="op-action" id="op-coach-ask" type="submit">Ask coach</button>
+    </form>
+    <p class="operator__note" id="op-coach-status" role="status"></p>
+    <div class="operator__coach-draft" id="op-coach-draft" hidden>
+      <p class="operator__coach-line" id="op-coach-text"></p>
+      <p class="operator__note" id="op-coach-reason"></p>
+      <button class="op-action op-action--accent" id="op-coach-send" type="button">Send to both seats</button>
+    </div>
+  </section>
+
   <form class="operator__group" id="op-announce">
     <h3 class="operator__label">Announce to both seats</h3>
     <label class="sr-only" for="op-announce-preset">Preset announcement</label>

@@ -21,6 +21,8 @@ Phone frames include the most recent `hubId` and `sessionId` once known. The fir
 
 The loopback stage sends `{type:"operator",action}`. Supported actions are `begin`, `preset`, `inject`, `replay`, `canned`, `reset`, `reveal`, and `announce`. An announcement carries up to 140 characters of text. The hub uses one neutral voice clip for both connected seats and tracks which seats started playback. It counts zero tap bits.
 
+During a live Pitch take, the stage can send `coach_ask` with a `beat` of `opening`, `problem`, `demo`, or `closing`. A recommendation appears in the stage-only `coach` state. Its source identifies a Maritime model response, an OpenAI candidate approved by Maritime, Maritime rules, or local rules. `coach_send` takes the current `coachId` and requires both seats online. The hub supplies the audio text from its own cue list and returns the `announcementId` for playback tracking.
+
 ## Hub to clients
 
 - A `state` frame carries the phase, scope, preset, cache IDs and current seat states. The stage receives both transcripts and the operator announcement result. A seat receives its own transcript, pending draft, and active receipt.

@@ -1,5 +1,5 @@
-export const STORAGE_KEY = 'telepathy.phone.v1';
-export const CONSENT_KEY = 'telepathy.phone.consent.v1';
+export const STORAGE_KEY = 'telepathy.phone.v2';
+export const CONSENT_KEY = 'telepathy.phone.consent.v2';
 
 export const APP_TIMING = Object.freeze({
   cueGapMs: 70,
@@ -9,7 +9,7 @@ export const APP_TIMING = Object.freeze({
   hubProbeTimeoutMs: 1800,
   audioRetryMs: 450,
   micFrameMs: 250,
-  voiceSampleMs: 30000,
+  voiceSampleMs: 24000,
   roomSampleMs: 30000,
   calibrationLeadMs: 3000,
   calibrationWindowMs: 5200,
@@ -22,7 +22,7 @@ export const APP_TIMING = Object.freeze({
 
 export const APP_TIMING_LIMITS = Object.freeze({
   micFrameMs: [50, 1000],
-  voiceSampleMs: [5000, 36000],
+  voiceSampleMs: [15000, 30000],
   roomSampleMs: [5000, 120000],
 });
 
@@ -32,16 +32,16 @@ export const SEAT_NAMES = Object.freeze(['A', 'B']);
 export const PRESETS = Object.freeze(['Pitch', 'Party', 'Meeting', 'Custom']);
 
 export const SIGNAL_LABELS = Object.freeze({
-  R1: 'R1', R2: 'R2', L1: 'L1', L2: 'L2', LR: 'L-R', OUT: 'Out', BACK: 'Back',
+  R1: 'Single', R2: 'Double', L1: 'Triple', L2: 'Read codebook', LR: 'Ask assistant', OUT: 'Out', BACK: 'Back',
 });
 
 export const PATTERN_LABELS = Object.freeze({
   2: Object.freeze({
-    R1: 'Right double-tap',
-    R2: 'Two fast right double-taps',
-    L1: 'Left double-tap',
-    L2: 'Two fast left double-taps',
-    LR: 'Left, then right',
+    R1: 'Single gesture',
+    R2: 'Double gesture',
+    L1: 'Triple gesture',
+    L2: 'On-screen control',
+    LR: 'On-screen control',
     OUT: 'Remove an earbud',
     BACK: 'Put the earbud back',
   }),

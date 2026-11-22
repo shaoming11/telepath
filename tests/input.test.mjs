@@ -89,6 +89,51 @@ test('fast, slow and mixed intervals classify across emulator jitter ranges', ()
   }
 });
 
+test('AirPods 1 groups Next Track across the personal timing window without checking side', () => {
+  const timer = clock();
+  const handlers = {};
+  const signals = [];
+  const input = createMediaInput({ ...timer, gestureModel: 'next-only', onSignal: signal => signals.push(signal) });
+  input.register({ setActionHandler(action, callback) { handlers[action] = callback; } });
+  input.configure({ timing: { countWindowMs: 1700 } });
+  handlers.nexttrack();
+  timer.advance(1450);
+  handlers.nexttrack();
+  timer.advance(2400);
+  handlers.nexttrack();
+  timer.advance(4100);
+  assert.deepEqual(signals, ['L1']);
+  handlers.previoustrack();
+  timer.advance(5000);
+  handlers.nexttrack();
+  timer.advance(5800);
+  handlers.nexttrack();
+  timer.advance(7500);
+  assert.deepEqual(signals, ['L1', 'R2']);
+});
+
+test('AirPods Pro maps media commands immediately to squeeze counts', () => {
+  const handlers = {};
+  const seen = [];
+  const input = createMediaInput({ gestureModel: 'pro', onSignal: (signal, trace) => seen.push([signal, trace[0].squeeze]) });
+  input.register({ setActionHandler(action, callback) { handlers[action] = callback; } });
+  handlers.pause();
+  handlers.nexttrack();
+  handlers.previoustrack();
+  assert.deepEqual(seen, [['R1', true], ['R2', true], ['L1', true]]);
+});
+
+test('personal timing uses a median and a margin above the measured gaps', () => {
+  const make = (signal, times) => ({
+    signal, gestureModel: 'next-only', mode: 2, promptAt: 0,
+    events: times.map(at => ({ action: 'nexttrack', at })),
+  });
+  const { timing, metrics } = tuneCalibration([make('R2', [380, 1080]), make('L1', [380, 1180, 2090])]);
+  assert.equal(timing.countMedianMs, 800);
+  assert.equal(timing.countWindowMs, 1130);
+  assert.equal(metrics.missed, 0);
+});
+
 test('calibration estimates duplicate, miss and inter-tap values from timestamps', () => {
   const profile = tuneCalibration([
     { mode: 2, signal: 'R2', promptAt: 0, events: [{ action: 'nexttrack', at: 380 }, { action: 'nexttrack', at: 431 }, { action: 'nexttrack', at: 739 }] },

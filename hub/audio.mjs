@@ -45,9 +45,9 @@ export const DEMO_DRAFTS = Object.freeze(['The judge on the left looks lost', 'S
 export const draftPrompt = (text) => `Send: ${text}?`;
 
 export const STATUS_LINES = Object.freeze({
-  sounds_like_pitch: 'Sounds like a pitch. R1 to switch.',
-  sounds_like_party: 'Sounds like a party. R1 to switch.',
-  sounds_like_meeting: 'Sounds like a meeting. R1 to switch.',
+  sounds_like_pitch: 'Sounds like a pitch. Use one gesture to switch.',
+  sounds_like_party: 'Sounds like a party. Use one gesture to switch.',
+  sounds_like_meeting: 'Sounds like a meeting. Use one gesture to switch.',
   switched: 'Preset switched.',
   test_left: 'This is the left earbud.',
   test_right: 'This is the right earbud.',
@@ -58,13 +58,13 @@ export const STATUS_LINES = Object.freeze({
 export const READOUT_SPEED = 1.2;
 const clause = (label, t) => (/[.?!]$/.test(t) ? `${label}, ${t}` : `${label}, ${t}.`);
 const TWO_EAR_SHORT_READOUT = Object.freeze({
-  Party: "R1, Find me. R2, Rescue me. L1, I'm good. Out, Leave.",
-  Meeting: "R1, Following? R2, Talk later. L1, Back me up. Out, Stepping out.",
+  Party: "Single, Find me. Double, Rescue me. Triple, I'm good. Out, Leave.",
+  Meeting: "Single, Following? Double, Talk later. Triple, Back me up. Out, Stepping out.",
 });
 export function codebookReadout(preset, mode = 2) {
   if (mode === 2 && Object.hasOwn(TWO_EAR_SHORT_READOUT, preset)) return TWO_EAR_SHORT_READOUT[preset];
   const cb = CODEBOOK[BANK_PRESETS.includes(preset) ? preset : 'Pitch'];
-  const parts = mode === 1 ? [['Tap', cb.R1], ['Double tap', cb.R2], ['Out', cb.OUT]] : [['R1', cb.R1], ['R2', cb.R2], ['L1', cb.L1], ['Out', cb.OUT]];
+  const parts = mode === 1 ? [['Tap', cb.R1], ['Double tap', cb.R2], ['Out', cb.OUT]] : [['Single', cb.R1], ['Double', cb.R2], ['Triple', cb.L1], ['Out', cb.OUT]];
   return parts.map(([label, t]) => clause(label, t)).join(' ');
 }
 

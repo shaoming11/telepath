@@ -460,6 +460,13 @@ main { min-height: 0; display: grid; }
 .operator__group { display: grid; gap: 8px; border-top: 1px solid var(--rule); padding-top: 14px; }
 .operator__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.17em; color: var(--dim); font-weight: 700; }
 .operator__note { font-size: 12px; color: var(--dimmer); }
+.operator__coach-draft {
+  display: grid; gap: 8px;
+  padding-inline-start: 10px;
+  border-inline-start: 1px solid var(--accent);
+  overflow-wrap: anywhere;
+}
+.operator__coach-line { font-size: 17px; font-weight: 600; }
 .operator__buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .operator__group--danger { border-top-color: var(--rule-strong); }
 .operator__status { font-size: 11px; color: var(--dim); border-top: 1px solid var(--rule); padding-top: 12px; overflow-wrap: anywhere; }

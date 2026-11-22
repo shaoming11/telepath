@@ -23,7 +23,7 @@ import { buildBank, planBank, silenceWav } from '../scripts/build-bank.mjs';
 
 const KEY = 'sk_test_SECRETKEY1234567890abcdef';
 const baseEnv = (extra = {}) => ({ ELEVENLABS_API_KEY: KEY, ...extra });
-const ANNOUNCEMENT_LINES = ['Sound check. Can you hear me?', 'Thirty seconds left.', 'Time to bring up the reveal.'];
+const ANNOUNCEMENT_LINES = ['Sound check. Can you hear me?', 'Show the working demo now.', 'Thirty seconds left.', 'Time to bring up the reveal.'];
 const noNetwork = async () => {
   throw new Error('network must not be used');
 };
@@ -147,12 +147,12 @@ test('canonical lines match the spec codebook and readouts differ by earbud mode
   assert.equal(CODEBOOK.Pitch.R1, 'Slow down');
   assert.equal(CODEBOOK.Party.OUT, "Let's leave");
   assert.equal(CODEBOOK.Meeting.L1, 'I agree, back it up');
-  assert.match(codebookReadout('Pitch', 2), /L1, Show the demo now/);
+  assert.match(codebookReadout('Pitch', 2), /Triple, Show the demo now/);
   assert.doesNotMatch(codebookReadout('Pitch', 1), /Show the demo now/);
   assert.equal(codebookReadout('Custom', 2), codebookReadout('Pitch', 2));
 });
 
-test('the bank plans exactly the three neutral operator announcement presets', () => {
+test('the bank plans each neutral operator announcement preset', () => {
   const announcements = bankLines().filter(line => line.kind === 'announcement');
   assert.deepEqual(announcements.map(line => line.text), ANNOUNCEMENT_LINES);
   assert.ok(announcements.every(line => line.role === 'assistant'));

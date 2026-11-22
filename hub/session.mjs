@@ -1,7 +1,8 @@
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
-import { announcementText } from '../public/announcements.mjs';
+import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcements.mjs';
+import { normalizePitch, recommendLocally } from '../maritime/policy.mjs';
 
 const DEFAULT_SETTINGS = Object.freeze({
   draftCooldownMs: 30_000,
@@ -11,6 +12,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   roomContextMs: 45_000,
   serviceTimeoutMs: 3_000,
   announcementPlaybackMs: 8_000,
+  coachTimeoutMs: 12_000,
   cacheTimeoutMs: 25_000,
   cacheAckRetryMs: 1_500,
   cacheAckRetries: 3,
@@ -96,11 +98,12 @@ function signalIntent(frame, state, now) {
 }
 
 export class Session {
-  constructor({ emitSeat, emitStage, audio, codec, settings = {}, now = Date.now }) {
+  constructor({ emitSeat, emitStage, audio, codec, coach, settings = {}, now = Date.now }) {
     this.emitSeat = emitSeat;
     this.emitStage = emitStage;
     this.audio = audio;
     this.codec = codec;
+    this.coach = coach;
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.now = now;
     this.generation = 0;
@@ -126,6 +129,7 @@ export class Session {
     this.bits = 0;
     this.lastReplay = null;
     this.announcement = null;
+    this.coachState = { status: 'idle' };
     this.voiceRevision = 0;
     this.activeCache = null;
     this.cacheCandidate = null;
@@ -166,7 +170,10 @@ export class Session {
       canBegin: SEATS.every(seat => this.isReady(seat)),
       startedAt: this.startedAt,
       canned: this.canned,
-      ...(viewer == null && { announcement: this.snapshotAnnouncement() }),
+      ...(viewer == null && {
+        announcement: this.snapshotAnnouncement(),
+        coach: { available: Boolean(this.coach), ...this.coachState },
+      }),
       log: viewer == null
         ? this.log.slice()
         : this.log.filter(entry => entry.seat === viewer || entry.to === viewer),
@@ -255,6 +262,7 @@ export class Session {
   cancelScene(reason) {
     this.scene.abort();
     this.scene = new AbortController();
+    this.coachState = { status: 'idle' };
     for (const seat of SEATS) this.clearPending(seat, reason);
   }
 
@@ -900,7 +908,7 @@ export class Session {
     return { id, text, status, targets: [...targets.keys()], heard: SEATS.filter(seat => heard.has(seat)), ...(reason && { reason }) };
   }
 
-  async announce(value) {
+  async announce(value, approvedCoach) {
     if (this.canned || this.phase === 'reveal' || announcementInFlight(this.announcement)) return;
     const text = announcementText(value);
     if (!text) return;
@@ -911,6 +919,9 @@ export class Session {
       status: 'building', lifecycle: new AbortController(),
     };
     this.announcement = announcement;
+    if (approvedCoach) {
+      this.coachState = { ...approvedCoach, status: 'sent', announcementId: announcement.id };
+    }
     if (targets.size === 0) this.finishAnnouncement('no_seats');
     this.publish();
     if (announcement.status !== 'building') return;
@@ -982,6 +993,46 @@ export class Session {
     if (announcement.status !== 'played') announcement.reason = reason;
   }
 
+  async askCoach(beat) {
+    if (this.phase !== 'live' || this.canned || this.preset !== 'Pitch' || this.coachState.status === 'asking') return;
+    const input = normalizePitch({
+      beat,
+      elapsedSeconds: Math.max(0, Math.floor((this.now() - this.startedAt) / 1_000)),
+      onlineSeats: SEATS.filter(seat => this.seats[seat].online).length,
+      readySeats: SEATS.filter(seat => this.isReady(seat)).length,
+      acknowledgedMessages: this.log.filter(entry => entry.kind === 'receipt').length,
+    });
+    if (!input) return;
+
+    const pending = { status: 'asking', beat: input.beat, id: 'coach-' + ++this.sequence };
+    const scope = this.liveScope();
+    this.coachState = pending;
+    this.emitStage({ type: 'state', state: this.snapshot() });
+
+    let recommendation;
+    if (this.coach) {
+      try {
+        recommendation = await withDeadline(signal => this.coach.recommend(input, { signal }), this.settings.coachTimeoutMs, scope);
+      } catch {}
+    }
+    if (scope.aborted || this.coachState !== pending) return;
+
+    const findCue = id => OPERATOR_ANNOUNCEMENTS.find(line => line.id === id);
+    if (!findCue(recommendation?.cueId)) recommendation = { ...recommendLocally(input), source: 'local' };
+    const cue = findCue(recommendation.cueId);
+    this.coachState = {
+      ...pending, status: 'ready', text: cue.text, reason: recommendation.reason, source: recommendation.source,
+    };
+    this.emitStage({ type: 'state', state: this.snapshot() });
+  }
+
+  approveCoach(id) {
+    const current = this.coachState;
+    if (this.phase !== 'live' || this.canned || this.preset !== 'Pitch' || current.status !== 'ready'
+      || current.id !== id || !SEATS.every(seat => this.seats[seat].online)) return;
+    return this.announce(current.text, current);
+  }
+
   async handleStage(frame) {
     if (this.closed || !frame) return;
     switch (frame.action) {
@@ -993,6 +1044,8 @@ export class Session {
         break;
       case 'preset': return this.selectPreset(frame.preset, frame.context);
       case 'announce': return this.announce(frame.text);
+      case 'coach_ask': return this.askCoach(frame.beat);
+      case 'coach_send': return this.approveCoach(frame.coachId);
       case 'inject':
         if (this.phase !== 'live' || this.canned || !SEATS.includes(frame.seat)) return;
         this.sendFixed(frame.seat, frame.signal, 'operator');

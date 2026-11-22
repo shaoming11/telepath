@@ -5,7 +5,7 @@
  */
 
 import { createAudioEngine } from './phone-audio.mjs';
-import { APP_TIMING } from './phone-data.mjs';
+import { APP_TIMING, SIGNAL_LABELS } from './phone-data.mjs';
 import { announcementText, OPERATOR_ANNOUNCEMENTS } from './announcements.mjs';
 
 export const SEATS = Object.freeze(['A', 'B']);
@@ -14,7 +14,14 @@ export const SIGNALS = Object.freeze(['R1', 'R2', 'L1', 'L2', 'LR', 'OUT', 'BACK
 export const PRESETS = Object.freeze(['Pitch', 'Party', 'Meeting', 'Custom']);
 const FIXED_SIGNALS = new Set(['R1', 'R2', 'L1', 'OUT']);
 const LIVE_TRANSCRIPT_LINES = 12;
-export const OPERATOR_ACTIONS = Object.freeze(['begin', 'preset', 'inject', 'replay', 'canned', 'reset', 'reveal', 'announce']);
+const PITCH_BEATS = Object.freeze(['opening', 'problem', 'demo', 'closing']);
+const COACH_STATUSES = Object.freeze(['idle', 'asking', 'ready', 'sent']);
+const COACH_SOURCES = Object.freeze({
+  maritime: 'Maritime agent', 'maritime-assisted': 'Maritime · OpenAI-assisted', 'maritime-rules': 'Maritime rules fallback', local: 'Local fallback',
+});
+export const OPERATOR_ACTIONS = Object.freeze([
+  'begin', 'preset', 'inject', 'replay', 'canned', 'reset', 'reveal', 'announce', 'coach_ask', 'coach_send',
+]);
 
 const SIGNAL_ROLES = Object.freeze({
   R1: 'fixed 1 · confirms a draft',
@@ -174,6 +181,20 @@ function normalizeSeat(key, value, onlineMap) {
   };
 }
 
+function normalizeCoach(value) {
+  if (!isObject(value)) return null;
+  return {
+    available: value.available === true,
+    status: COACH_STATUSES.includes(value.status) ? value.status : 'idle',
+    beat: PITCH_BEATS.includes(value.beat) ? value.beat : null,
+    id: firstText(value.id),
+    text: firstText(value.text),
+    reason: firstText(value.reason),
+    source: Object.hasOwn(COACH_SOURCES, value.source) ? value.source : null,
+    announcementId: firstText(value.announcementId),
+  };
+}
+
 export function normalizeState(raw) {
   const source = isObject(raw) ? raw : {};
   const onlineMap = isObject(source.online) ? source.online : {};
@@ -199,6 +220,7 @@ export function normalizeState(raw) {
     startedAt: asNumber(source.startedAt),
     canned: normalizeCanned(source.canned),
     announcement: isObject(source.announcement) ? source.announcement : null,
+    coach: normalizeCoach(source.coach),
     codebook: normalizeCodebook(source.codebook, preset),
     seats: { A: normalizeSeat('A', seatsRaw.A, onlineMap), B: normalizeSeat('B', seatsRaw.B, onlineMap) },
     log,
@@ -265,6 +287,15 @@ export function operatorFrame(action, options = {}) {
     const text = announcementText(options.text);
     if (!text) return null;
     frame.text = text;
+  }
+  if (action === 'coach_ask') {
+    if (!PITCH_BEATS.includes(options.beat)) return null;
+    frame.beat = options.beat;
+  }
+  if (action === 'coach_send') {
+    const id = typeof options.coachId === 'string' ? asText(options.coachId) : null;
+    if (!id) return null;
+    frame.coachId = id;
   }
   return frame;
 }
@@ -351,6 +382,37 @@ export function announcementNote(progress) {
   }
 }
 
+export function pitchCoachView(state, connected, beat) {
+  const { coach, announcement } = state;
+  if (!coach || state.phase !== 'live' || state.preset !== 'Pitch' || state.canned) return null;
+
+  const asking = coach.status === 'asking';
+  const sent = coach.status === 'sent';
+  const draft = (coach.status === 'ready' || sent) && Boolean(coach.id && coach.text);
+  const changed = draft && !sent && coach.beat !== beat;
+  const both_online = SEATS.every(seat => state.seats[seat].online);
+  const busy = announcement?.status === 'building' || announcement?.status === 'queued';
+  const source = COACH_SOURCES[coach.source] ?? 'Pitch coach';
+
+  let note = coach.available ? 'Ask Maritime for a cue.' : 'Ask the local coach for a cue.';
+  if (!connected) note = 'Waiting for the hub to reconnect.';
+  else if (asking) note = coach.available ? 'Waiting for Maritime…' : 'Preparing a local cue…';
+  else if (sent && coach.announcementId && coach.announcementId === announcement?.id) {
+    note = announcementNote(announcement) ?? 'Cue sent.';
+  } else if (sent) note = 'Cue sent.';
+  else if (changed) note = 'Ask again for this pitch beat.';
+  else if (draft && !both_online) note = 'Connect both seats to send.';
+  else if (draft && busy) note = 'Wait for the current announcement.';
+  else if (draft) note = 'Ready to send.';
+
+  return {
+    canAsk: connected && !asking,
+    canSend: connected && draft && !sent && !changed && both_online && !busy,
+    draft,
+    note: draft ? source + ' · ' + note : note,
+  };
+}
+
 /* ── DOM ────────────────────────────────────────────── */
 
 function boot() {
@@ -375,6 +437,9 @@ function boot() {
     opPreset: byId('op-preset'), opContext: byId('op-context'), opSeat: byId('op-seat'), opSignal: byId('op-signal'),
     opAnnounce: byId('op-announce'), opAnnouncePreset: byId('op-announce-preset'), opAnnounceText: byId('op-announce-text'),
     opAnnounceSend: byId('op-announce-send'), opAnnounceStatus: byId('op-announce-status'),
+    opCoach: byId('op-coach'), opCoachForm: byId('op-coach-form'), opCoachBeat: byId('op-coach-beat'),
+    opCoachAsk: byId('op-coach-ask'), opCoachSend: byId('op-coach-send'), opCoachStatus: byId('op-coach-status'),
+    opCoachDraft: byId('op-coach-draft'), opCoachText: byId('op-coach-text'), opCoachReason: byId('op-coach-reason'),
     opBegin: byId('op-begin'), opReset: byId('op-reset'), opResetNote: byId('op-reset-note'),
   };
 
@@ -430,7 +495,7 @@ function boot() {
   function describe(event, fallback) {
     if (!event) return fallback;
     const parts = [];
-    if (event.signal) parts.push(event.signal);
+    if (event.signal) parts.push(SIGNAL_LABELS[event.signal] ?? event.signal);
     if (event.text) parts.push(event.text);
     if (!parts.length && event.kind) parts.push(KIND_LABELS[event.kind] ?? event.kind);
     return parts.length ? parts.join(' · ') : fallback;
@@ -508,7 +573,7 @@ function boot() {
     ui.codebookPreset.textContent = state.preset ?? '';
     const entries = Object.entries(state.codebook);
     fill(ui.lobbyCodebook, entries.length
-      ? entries.map(([signal, meaning]) => readoutRow(signal, meaning))
+      ? entries.map(([signal, meaning]) => readoutRow(SIGNAL_LABELS[signal] ?? signal, meaning))
       : [readoutRow('—', 'the hub has not published a codebook yet', 'wait')]);
 
     const blocked = state.canBegin === false;
@@ -620,7 +685,7 @@ function boot() {
     row.append(node('span', 'stream__at', offset === null ? '—' : formatOffset(offset)));
     row.append(node('span', 'stream__seat', entry.seat ?? '·'));
     row.append(node('span', 'stream__kind', KIND_LABELS[entry.kind] ?? entry.kind ?? 'event'));
-    const text = [entry.signal, entry.text, entry.latencyMs == null ? null : entry.latencyMs + ' ms after decision'].filter(Boolean).join(' · ');
+    const text = [SIGNAL_LABELS[entry.signal] ?? entry.signal, entry.text, entry.latencyMs == null ? null : entry.latencyMs + ' ms after decision'].filter(Boolean).join(' · ');
     row.append(node('span', 'stream__text', text || (entry.to ? '→ ' + entry.to : '')));
     row.append(node('span', 'stream__bits', entry.bits === null ? '' : entry.bits + ' b'));
     return row;
@@ -666,8 +731,9 @@ function boot() {
       item.append(track);
       item.append(node('span', 'timeline__seat', row.seat ?? '·'));
       const text = node('span', 'timeline__text');
-      text.append(node('span', null, row.text ?? row.signal ?? (KIND_LABELS[row.kind] ?? 'event')));
-      const meta = [row.signal, row.seat && row.to ? row.seat + ' → ' + row.to : null, row.canned ? 'canned take'
+      const label = SIGNAL_LABELS[row.signal] ?? row.signal;
+      text.append(node('span', null, row.text ?? label ?? (KIND_LABELS[row.kind] ?? 'event')));
+      const meta = [label, row.seat && row.to ? row.seat + ' → ' + row.to : null, row.canned ? 'canned take'
         : row.kind === 'message' && row.playedAt == null ? 'playback unconfirmed' : null]
         .filter(Boolean).join(' · ');
       if (meta) text.append(node('span', 'timeline__meta', meta));
@@ -690,13 +756,30 @@ function boot() {
   function renderOperator() {
     for (const option of ui.opSignal.options) {
       const meaning = state.codebook[option.value];
-      const label = option.value + (meaning ? ' · ' + meaning : ' · ' + (SIGNAL_ROLES[option.value] ?? 'signal'));
+      const label = SIGNAL_LABELS[option.value] + (meaning ? ' · ' + meaning : ' · ' + (SIGNAL_ROLES[option.value] ?? 'signal'));
       if (option.textContent !== label) option.textContent = label;
     }
     const blocked = state.canBegin === false;
     ui.opBegin.disabled = false;
     ui.opBegin.title = blocked ? 'Seats are not all ready. The hub may refuse.' : '';
+    renderPitchCoach();
     renderAnnouncement();
+  }
+
+  function renderPitchCoach() {
+    const view = pitchCoachView(state, linkState === 'live', ui.opCoachBeat.value);
+    ui.opCoach.hidden = !view;
+    if (!view) return;
+    ui.opCoachBeat.disabled = !view.canAsk;
+    ui.opCoachAsk.disabled = !view.canAsk;
+    ui.opCoachDraft.hidden = !view.draft;
+    ui.opCoachSend.disabled = !view.canSend;
+    const text = view.draft ? state.coach.text : '';
+    const reason = view.draft ? state.coach.reason ?? '' : '';
+    if (ui.opCoachText.textContent !== text) ui.opCoachText.textContent = text;
+    if (ui.opCoachReason.textContent !== reason) ui.opCoachReason.textContent = reason;
+    ui.opCoachReason.hidden = !reason;
+    if (ui.opCoachStatus.textContent !== view.note) ui.opCoachStatus.textContent = view.note;
   }
 
   function renderAnnouncement() {
@@ -757,8 +840,9 @@ function boot() {
       status('not sent: ' + (error?.message ?? 'socket error'), 'blocked');
       return false;
     }
-    const detail = frame.preset ? ' ' + frame.preset : frame.signal ? ' ' + frame.seat + ' ' + frame.signal : '';
-    status('Sent ' + frame.action + detail, 'sent');
+    const detail = frame.preset ? ' ' + frame.preset : frame.signal ? ' ' + frame.seat + ' ' + SIGNAL_LABELS[frame.signal] : '';
+    const coach_status = frame.action === 'coach_ask' ? 'Asked the pitch coach.' : frame.action === 'coach_send' ? 'Approved the cue.' : null;
+    status(coach_status ?? 'Sent ' + frame.action + detail, 'sent');
     return true;
   }
 
@@ -786,7 +870,8 @@ function boot() {
     body.toggleAttribute('data-operator-open', open);
     ui.opToggle.setAttribute('aria-expanded', String(open));
     if (open) {
-      (state.phase === 'live' ? ui.opAnnouncePreset : ui.opBegin).focus();
+      const pitch_coach = !ui.opCoach.hidden && !ui.opCoachBeat.disabled;
+      (pitch_coach ? ui.opCoachBeat : state.phase === 'live' ? ui.opAnnouncePreset : ui.opBegin).focus();
       return;
     }
     disarmReset();
@@ -800,7 +885,7 @@ function boot() {
     fill(ui.opSignal, [...FIXED_SIGNALS].map(signal => {
       const option = document.createElement('option');
       option.value = signal;
-      option.textContent = signal + ' · ' + (SIGNAL_ROLES[signal] ?? 'signal');
+      option.textContent = SIGNAL_LABELS[signal] + ' · ' + (SIGNAL_ROLES[signal] ?? 'signal');
       return option;
     }));
     for (const { id, label } of OPERATOR_ANNOUNCEMENTS) {
@@ -817,6 +902,16 @@ function boot() {
       event.preventDefault();
       if (ui.opAnnounceSend.disabled) return;
       send('announce', { text: ui.opAnnounceText.value });
+    });
+    ui.opCoachBeat.addEventListener('change', renderPitchCoach);
+    ui.opCoachForm.addEventListener('submit', event => {
+      event.preventDefault();
+      if (ui.opCoachAsk.disabled) return;
+      send('coach_ask', { beat: ui.opCoachBeat.value });
+    });
+    ui.opCoachSend.addEventListener('click', () => {
+      if (ui.opCoachSend.disabled) return;
+      send('coach_send', { coachId: state.coach.id });
     });
 
     ui.opToggle.addEventListener('click', () => setOperator(ui.operator.hidden));
@@ -918,6 +1013,7 @@ function boot() {
         streamKeys = [];
         ui.stream.replaceChildren();
         seat_fingerprints.clear();
+        ui.opCoachBeat.value = next.coach?.beat ?? PITCH_BEATS[0];
       }
       state = next;
       schedule();
