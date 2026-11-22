@@ -31,6 +31,24 @@ test('operator room status distinguishes a local mic from an accepted ElevenLabs
   assert.equal(stage.roomStatus({ sim: true }), 'Simulated');
 });
 
+test('the lobby signal follows the selected microphone and waits for confirmed transcription', () => {
+  const state = stage.normalizeState({
+    roomInput: 'mac', room: { listening: true, transcription: 'waiting' },
+    seats: { A: { online: true, transcription: 'live' }, B: { online: true, transcription: 'off' } },
+  });
+  assert.equal(stage.lobbyRoomSignal(state, true).mode, 'waiting');
+  state.room.transcription = 'live';
+  assert.deepEqual(stage.lobbyRoomSignal(state, true), {
+    mode: 'live', label: 'ROOM · TRANSCRIBING', notice: 'Mac room transcription is live.',
+  });
+  assert.equal(stage.lobbyRoomSignal(state, false).mode, 'offline');
+  state.room.transcription = 'off';
+  assert.equal(stage.lobbyRoomSignal(state, true).mode, 'off');
+  assert.equal(stage.lobbyRoomSignal({ ...state, roomInput: 'phones' }, true).label, 'SEATS · TRANSCRIBING');
+  state.room.transcription = 'unavailable';
+  assert.equal(stage.lobbyRoomSignal(state, true).mode, 'unavailable');
+});
+
 test('the room console distinguishes permission, provider connection, live input, and errors', () => {
   const base = { link: 'live', phase: 'lobby' };
   assert.equal(stage.roomConsoleStatus({ ...base, starting: true, wanted: true }).label, 'Starting');

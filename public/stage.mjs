@@ -384,6 +384,25 @@ export function roomStatus(seat) {
   return 'Mic off';
 }
 
+export function lobbyRoomSignal(state, connected) {
+  if (!connected) return { mode: 'offline', label: 'HUB · OFFLINE', notice: 'Stage is waiting for the hub.' };
+  const seats = SEATS.map(key => state.seats[key]).filter(seat => seat.online);
+  if (state.roomInput === 'mac') {
+    switch (state.room?.transcription) {
+      case 'live': return { mode: 'live', label: 'ROOM · TRANSCRIBING', notice: 'Mac room transcription is live.' };
+      case 'waiting': return { mode: 'waiting', label: 'ROOM · CONNECTING', notice: 'Mac room transcription is connecting.' };
+      case 'recovering': return { mode: 'waiting', label: 'ROOM · RECONNECTING', notice: 'Mac room transcription is reconnecting.' };
+      case 'unavailable': return { mode: 'unavailable', label: 'ROOM · UNAVAILABLE', notice: 'Mac room transcription is unavailable.' };
+    }
+  } else if (seats.some(seat => seat.transcription === 'live')) {
+    return { mode: 'live', label: 'SEATS · TRANSCRIBING', notice: 'Phone transcription is live.' };
+  }
+  if (seats.length && seats.every(seat => seat.sim)) {
+    return { mode: 'rehearsal', label: 'AGENT · REHEARSAL', notice: 'The seats are in rehearsal mode.' };
+  }
+  return { mode: 'off', label: 'AGENT · STANDING BY', notice: 'Room transcription is off.' };
+}
+
 export function roomConsoleStatus({ link, phase, canned, ownedElsewhere, starting, interrupted, wanted, transcription, message, device }) {
   if (link !== 'live') return { tone: 'off', label: 'Offline', detail: 'Connect to the hub to use the Mac microphone.' };
   if (phase === 'reveal' || canned) return { tone: 'off', label: 'Off', detail: 'Room listening is off for this take.' };
@@ -514,7 +533,7 @@ function boot() {
     liveMessages: byId('live-messages'), liveWords: byId('live-words'),
     readout: { A: byId('readout-a'), B: byId('readout-b'), An: byId('readout-a-name'), Bn: byId('readout-b-name'),
       preset: byId('readout-preset'), cache: byId('readout-cache') },
-    diagram: byId('lobby-diagram'), diaHost: byId('dia-host'), diaAgent: byId('dia-agent'),
+    diagram: byId('lobby-diagram'), diaHost: byId('dia-host'), diaAgent: byId('dia-agent'), diaRoomNotice: byId('lobby-room-notice'),
     timeline: byId('timeline-list'), timelineEmpty: byId('timeline-empty'), transcripts: byId('reveal-transcripts'),
     announce: byId('phase-announce'),
     operator: byId('operator'), opToggle: byId('op-toggle'), opClose: byId('op-close'), opStatus: byId('op-status'),
@@ -918,6 +937,7 @@ function boot() {
       summaries[key] = summary;
       const lower = key.toLowerCase();
       byId('dia-seat-' + lower)?.setAttribute('data-state', summary.state);
+      byId('dia-path-' + lower)?.toggleAttribute('data-ready', summary.state === 'ready');
       const label = byId('dia-' + lower + '-name');
       if (label) label.textContent = (key + ' · ' + seat.name).toUpperCase();
       const text = summary.text.toUpperCase();
@@ -934,14 +954,10 @@ function boot() {
     }
     const both = summaries.A.state === 'ready' && summaries.B.state === 'ready';
     ui.diagram?.setAttribute('data-flow', both || state.phase !== 'lobby' ? 'on' : 'off');
-    const seats = SEATS.map(key => state.seats[key]).filter(seat => seat.online);
-    const listening = seats.some(seat => seat.transcription === 'live');
-    const rehearsal = seats.length > 0 && seats.every(seat => seat.sim);
-    const drafting = seats.some(seat => seat.drafts !== false);
-    if (ui.diaAgent) {
-      ui.diaAgent.textContent = 'AGENT · ' + (listening ? (drafting ? 'LISTENING, DRAFTS ON' : 'LISTENING')
-        : rehearsal ? 'REHEARSAL' : 'STANDING BY');
-    }
+    const room = lobbyRoomSignal(state, linkState === 'live');
+    if (ui.diagram && ui.diagram.dataset.roomState !== room.mode) ui.diagram.dataset.roomState = room.mode;
+    if (ui.diaAgent && ui.diaAgent.textContent !== room.label) ui.diaAgent.textContent = room.label;
+    if (ui.diaRoomNotice && ui.diaRoomNotice.textContent !== room.notice) ui.diaRoomNotice.textContent = room.notice;
     if (ui.readout.preset) ui.readout.preset.textContent = state.preset ?? '—';
     if (ui.readout.cache) {
       const ready = SEATS.every(key => state.seats[key].ready === true);
@@ -976,9 +992,11 @@ function boot() {
       ? entries.map(([signal, meaning]) => readoutRow(SIGNAL_LABELS[signal] ?? signal, meaning))
       : [readoutRow('—', 'the hub has not published a codebook yet', 'wait')]);
 
-    const blocked = state.canBegin === false;
+    const blocked = state.canBegin !== true || linkState !== 'live';
     ui.begin.disabled = blocked || uploadingReferences;
-    ui.beginHint.textContent = blocked
+    ui.beginHint.textContent = linkState !== 'live' ? 'Waiting for the hub.'
+      : uploadingReferences ? 'Finishing reference setup.'
+      : blocked
       ? 'Begin unlocks when both seats have a voice, tested earbuds, calibration and Ready.'
       : state.phase === 'lobby' ? 'Starts the live board on both seats.' : 'The session is already running.';
   }

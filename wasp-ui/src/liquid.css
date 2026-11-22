@@ -263,6 +263,29 @@ body.wasp-liquid {
 
 .wasp-liquid[data-surface="stage"] .hero__copy { padding-block: 28px; }
 .wasp-liquid[data-surface="stage"] .diagram { animation: liquid-hero 520ms var(--glide); }
+.wasp-liquid .diagram .d-pk { display: none; }
+.wasp-liquid .diagram .d-seg[data-ready] {
+  stroke-opacity: .95;
+  animation: liquid-seat-connected 180ms var(--glide) both;
+}
+.wasp-liquid .diagram[data-room-state=live] .d-pill--hub {
+  stroke: #a8e3f4;
+  animation: liquid-room-connected 210ms var(--glide) both;
+}
+.wasp-liquid #begin-button:enabled { animation: liquid-stage-ready 220ms var(--glide); }
+
+@keyframes liquid-seat-connected {
+  from { stroke-opacity: .55; stroke-dashoffset: 7; }
+  to { stroke-opacity: .95; stroke-dashoffset: 0; }
+}
+@keyframes liquid-room-connected {
+  from { fill: #73cfe052; stroke-width: 2.3; }
+  to { fill: #a8e3f420; stroke-width: .95; }
+}
+@keyframes liquid-stage-ready {
+  from { box-shadow: 0 0 0 3px #eef4ffa8; }
+  to { box-shadow: 0 0 0 3px #eef4ff00; }
+}
 .wasp-liquid .op-toggle { background: #ffffff0b; border-color: var(--glass-edge); }
 .wasp-liquid .op-toggle[aria-expanded=true] { background: #ffffff1c; }
 

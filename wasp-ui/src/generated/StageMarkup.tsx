@@ -44,9 +44,9 @@ export function StageMarkup() {
             <div className="hero">
               <div className="hero__copy">
                 <h1 className="display" id="lobby-title"><span className="display__dim">Two seats.</span>{" One silent channel."}</h1>
-                <p className="lede">Your partner hears you in your own voice. A coach listens through the Mac’s microphone, checks your references, and waits for your tap before sending a whisper.</p>
+                <p className="lede">Tap an earbud to cue your teammate. The Mac listens to the room so Question Mode can whisper a private prompt.</p>
                 <div className="cta">
-                  <button className="begin" id="begin-button" type="button">
+                  <button className="begin" id="begin-button" type="button" disabled>
                     <span className="begin__label">Begin session</span>
                     <span className="begin__arrow" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" /></svg></span>
                   </button>
@@ -61,6 +61,7 @@ export function StageMarkup() {
                 </dl>
               </div>
 
+              <p className="sr-only" id="lobby-room-notice" role="status"></p>
               <svg className="diagram" id="lobby-diagram" viewBox="-560 -250 1120 700" role="img" aria-labelledby="diagram-label">
                 <title id="diagram-label">Seat A and Seat B linked through the hub</title>
                 <defs>
@@ -91,9 +92,9 @@ export function StageMarkup() {
                 <polygon className="d-top" points="0,-24 173.2,76 0,176 -173.2,76" />
                 <polygon className="d-wire" points="0,1 129.9,76 0,151 -129.9,76" />
 
-                <path className="d-seg seat-a" d="M274.1,-135.7 Q140,-110 0,76" />
+                <path className="d-seg seat-a" id="dia-path-a" d="M274.1,-135.7 Q140,-110 0,76" />
                 <path className="d-pk seat-a" d="M274.1,-135.7 Q140,-110 0,76" />
-                <path className="d-seg seat-b" d="M0,76 Q-130,190 -274.1,180.9" />
+                <path className="d-seg seat-b" id="dia-path-b" d="M0,76 Q-130,190 -274.1,180.9" />
                 <path className="d-pk seat-b" d="M0,76 Q-130,190 -274.1,180.9" />
                 <circle className="d-pt" cx="0" cy="76" r="3.5" />
 
