@@ -1,5 +1,6 @@
 // Generated from public/index.html. Run python3 scripts/generate-wasp-surfaces.py after edits.
 import { PhonePitchControls } from '../PhonePitchControls';
+import { CalibrationTrial } from '../CalibrationTrial';
 
 export function PhoneMarkup() {
   return (
@@ -148,19 +149,7 @@ export function PhoneMarkup() {
             </div>
 
             <div className="cal-section cal-run" id="cal-run" hidden>
-              <div className="cal-trial" id="cal-trial">
-                <div className="cal-top">
-                  <span id="cal-count"></span>
-                  <span className="cal-phase" id="cal-phase" role="status" aria-live="assertive"></span>
-                </div>
-                <div className="cal-trial__prompt">
-                  <h3 className="cal-pattern" id="cal-pattern"></h3>
-                  <p id="cal-repetition"></p>
-                  <div className="cal-trial__beats" id="cal-beats" aria-hidden="true" hidden></div>
-                </div>
-                <p className="cal-trial__feedback" id="cal-detail"></p>
-                <div className="progress" aria-hidden="true"><i id="cal-bar"></i></div>
-              </div>
+              <CalibrationTrial />
               <ol className="ticks" id="cal-ticks" aria-label="Trial progress"></ol>
               <div className="cal-footer">
                 <button id="cal-stop" type="button">Stop calibration</button>

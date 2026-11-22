@@ -132,6 +132,7 @@ export function createCalibration(services) {
   let applied = false;
   let context = { from: 'settings' };
   let checking = false;
+  let trial_view = {};
   const checked_actions = new Set();
 
   elements.measure.textContent = MEASURE_TEXT;
@@ -172,7 +173,8 @@ export function createCalibration(services) {
   function render_ticks(active_index) {
     const groups = [];
     for (const [index, step] of plan.entries()) {
-      const label = step.kind === 'tap' ? SIGNAL_LABELS[step.signal] : step.kind === 'remove' ? 'Out' : 'Back';
+      const label = step.gestureModel ? step.signal === 'R2' ? 'Two Next Track events' : 'Three Next Track events'
+        : step.kind === 'tap' ? SIGNAL_LABELS[step.signal] : step.kind === 'remove' ? 'Out' : 'Back';
       const key = step.kind === 'tap' ? step.signal + step.mode : step.kind;
       let group = groups.find(item => item.key === key);
       if (!group) {
@@ -201,31 +203,41 @@ export function createCalibration(services) {
     }));
   }
 
-  function render_trial(step, index, phase) {
-    elements.count.textContent = 'Trial ' + (index + 1) + ' / ' + plan.length;
-    elements.phase.textContent = phase;
-    elements.phase.dataset.phase = phase === 'Now' ? 'now' : phase === 'Got it' ? 'hit' : phase === 'Not recognized' ? 'miss' : 'ready';
-    elements.trial.dataset.phase = elements.phase.dataset.phase;
-    elements.pattern.textContent = step.gestureModel ? 'Next Track ' + (step.signal === 'R2' ? 'twice' : 'three times')
-      : step.kind === 'remove' ? 'Remove an earbud'
-      : step.kind === 'insert' ? 'Put the earbud back' : PATTERNS[step.mode][step.signal];
-    const count = step.gestureModel ? plan.filter(trial => trial.signal === step.signal).length : TRIALS_PER_PATTERN;
-    elements.repetition.textContent = 'Repeat ' + (step.trial + 1) + ' of ' + count + ' for this pattern';
-    elements.detail.textContent = phase === 'Get ready' ? 'Wait for the cue.' : phase === 'Now' ? 'Use your normal pace.' : phase === 'Got it' ? 'Pattern detected.' : '';
-    update_beats(step, phase === 'Got it' ? step.signal === 'R2' ? 2 : 3 : 0);
-    elements.bar.style.transform = 'scaleX(' + (index + Number(phase === 'Got it')) / plan.length + ')';
-    render_ticks(index);
+  function render_trial_view(patch) {
+    trial_view = { ...trial_view, ...patch };
+    if (elements.trial.dataset.calibrationOwner === 'react') {
+      elements.trial.dispatchEvent(new CustomEvent('telepathy:calibration-trial', { detail: trial_view }));
+      return;
+    }
+    for (const name of ['count', 'phase', 'pattern', 'repetition', 'detail']) elements[name].textContent = trial_view[name];
+    elements.phase.dataset.phase = trial_view.tone;
+    elements.trial.dataset.phase = trial_view.tone;
+    elements.bar.style.transform = 'scaleX(' + trial_view.progress + ')';
+    elements.beats.hidden = !trial_view.expected;
+    if (elements.beats.children.length !== trial_view.expected) {
+      elements.beats.replaceChildren(...Array.from({ length: trial_view.expected }, () => document.createElement('i')));
+    }
+    Array.from(elements.beats.children).forEach((beat, index) => {
+      beat.dataset.filled = String(index < trial_view.observed);
+    });
   }
 
-  function update_beats(step, observed) {
-    elements.beats.hidden = !step.gestureModel;
-    if (!step.gestureModel) return;
-    const expected = step.signal === 'R2' ? 2 : 3;
-    elements.beats.replaceChildren(...Array.from({ length: expected }, (_, index) => {
-      const beat = document.createElement('i');
-      beat.dataset.filled = String(index < observed);
-      return beat;
-    }));
+  function render_trial(record, index, tone, detail) {
+    const { gestureModel, kind, mode, signal, trial } = record;
+    const count = gestureModel ? plan.filter(step => step.signal === signal).length : TRIALS_PER_PATTERN;
+    render_trial_view({
+      count: 'Trial ' + (index + 1) + ' / ' + plan.length,
+      tone,
+      phase: { ready: 'Get ready', now: 'Now', hit: 'Got it', miss: 'Not recognized' }[tone],
+      pattern: gestureModel ? 'Next Track ' + (signal === 'R2' ? 'twice' : 'three times')
+        : kind === 'remove' ? 'Remove an earbud' : kind === 'insert' ? 'Put the earbud back' : PATTERNS[mode][signal],
+      repetition: 'Repeat ' + (trial + 1) + ' of ' + count + ' for this pattern',
+      detail,
+      expected: gestureModel ? signal === 'R2' ? 2 : 3 : 0,
+      observed: record.events.filter(event => event.action === 'nexttrack').length,
+      progress: (index + Number(tone === 'hit')) / plan.length,
+    });
+    render_ticks(tone === 'hit' || tone === 'miss' ? -1 : index);
   }
 
   function wait_for_response(window_ms, settle_ms) {
@@ -261,7 +273,7 @@ export function createCalibration(services) {
     const is_tap = step.kind === 'tap';
     if (is_tap) {
       lead = record;
-      render_trial(step, index, 'Get ready');
+      render_trial(record, index, 'ready', 'Wait for the cue.');
       await sleep(app.calibrationLeadMs);
       if (!alive()) return;
     }
@@ -270,7 +282,7 @@ export function createCalibration(services) {
     record.promptAt = services.audio.play_cue('system') ?? performance.now();
     lead = null;
     current = record;
-    render_trial(step, index, 'Now');
+    render_trial(record, index, 'now', 'Use your normal pace.');
     if (services.is_sim() && elements.emulate.checked) {
       for (const { action, offsetMs } of patternFor(step.signal, step.mode, settings.emulator)) {
         services.emulator.gesture(action, app.emulatedReactionMs + offsetMs);
@@ -288,14 +300,10 @@ export function createCalibration(services) {
     const matched = record.recognized.includes(step.signal);
     const leads_to_reinsertion = step.kind === 'remove';
     if (!matched || !leads_to_reinsertion) services.audio.play_cue(matched ? 'sent' : 'error');
-    render_trial(step, index, matched ? 'Got it' : 'Not recognized');
-    if (!matched) {
-      const detail = record.events.length
-        ? 'Received ' + record.events.map(event => ACTION_LABELS[event.action]).join(', ') + '.'
-        : record.early.length ? 'Received an event early. Wait for Now.' : 'Safari received no media event.';
-      elements.detail.textContent = detail + (step.gestureModel ? ' Retrying this step.' : '');
-    }
-    render_ticks(-1);
+    const detail = matched ? 'Pattern detected.' : record.events.length
+      ? 'Received ' + record.events.map(event => ACTION_LABELS[event.action]).join(', ') + '.'
+      : record.early.length ? 'Received an event early. Wait for Now.' : 'Safari received no media event.';
+    render_trial(record, index, matched ? 'hit' : 'miss', detail + (!matched && step.gestureModel ? ' Retrying this step.' : ''));
     await sleep(leads_to_reinsertion ? 0 : app.calibrationRestMs);
     return matched;
   }
@@ -487,17 +495,17 @@ export function createCalibration(services) {
     }
     $('cal-quick-pause').hidden = false;
     $('cal-quick-previoustrack').hidden = false;
-    elements.quick_continue.textContent = 'Continue with defaults';
     for (const [action, { label, hint }] of Object.entries(PRO_CHECKS)) {
       const item = $('cal-quick-' + action);
       item.textContent = label + (checked_actions.has(action) ? ' · received' : ' · ' + hint);
       item.dataset.received = String(checked_actions.has(action));
     }
     const next = Object.keys(PRO_CHECKS).find(action => !checked_actions.has(action));
+    elements.quick_continue.textContent = next ? 'Continue with defaults' : 'Continue';
     elements.quick_status.textContent = !received
       ? 'Pause Spotify or other audio first. Start with a single squeeze.'
       : !next ? 'All three squeezes reached Telepathy.'
-        : 'Received ' + PRO_CHECKS[received].label.toLowerCase() + '. Try ' + PRO_CHECKS[next].label.toLowerCase() + ' next.';
+        : 'Controls checked: ' + checked_actions.size + ' of 3. Try ' + PRO_CHECKS[next].label.toLowerCase() + ' next.';
     elements.quick_continue.hidden = !checked_actions.size;
   }
 
@@ -579,10 +587,10 @@ export function createCalibration(services) {
       if (!running) return;
       if (current) {
         current.events.push({ action: event.action, at: event.at });
-        if (current.gestureModel) update_beats(current, current.events.filter(entry => entry.action === 'nexttrack').length);
-        if (!services.is_sim() && ACTION_LABELS[event.action]) {
-          elements.detail.textContent = 'Received ' + current.events.map(entry => ACTION_LABELS[entry.action]).join(', ') + '.';
-        }
+        const observed = current.events.filter(entry => entry.action === 'nexttrack').length;
+        const detail = !services.is_sim() && ACTION_LABELS[event.action]
+          ? 'Received ' + current.events.map(entry => ACTION_LABELS[entry.action]).join(', ') + '.' : trial_view.detail;
+        render_trial_view({ observed, detail });
         waiter?.poke();
       } else if (lead) {
         lead.early.push({ action: event.action, at: event.at });
