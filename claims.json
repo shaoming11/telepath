@@ -1,28 +1,4 @@
 {
-  "revision": 57,
-  "claims": [
-    {
-      "id": "af4557bd-fdb9-45c3-8eef-026e65576e3d",
-      "owner": "fireheartjerry",
-      "agent": "codex-calibration-ui",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "@phone-ui",
-        "public/index.html",
-        "public/phone.css",
-        "public/calibrate.mjs",
-        "tests/phone-calibrate.test.mjs"
-      ],
-      "paths": [
-        "public/calibrate.mjs",
-        "public/index.html",
-        "public/phone-data.mjs",
-        "public/phone.css",
-        "public/phone.mjs",
-        "tests/phone-calibrate.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T05:06:07.682Z"
-    }
-  ]
+  "revision": 58,
+  "claims": []
 }
