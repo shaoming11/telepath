@@ -433,12 +433,13 @@ function sceneLockup(t) {
 }
 
 function titles(t) {
-  type("Some things can\u2019t be said out loud.", W / 2, 470, { size: 40, weight: 500, color: C.ink2, alpha: window_(t, 1.4, 4.5, 0.9, 0.5), track: -0.015 });
-  headline(t, 5.0, 7.95, "Say it without saying it.");
-  headline(t, 13.2, 17.7, "One tap. Your voice, in their ear.");
-  headline(t, 23.2, 27.75, "Four messages, ready before you begin.");
-  headline(t, 35.6, 37.9, "The AI drafts. You decide.", { y: 930 });
-  headline(t, 41.6, 45.75, "It was on the whole time.", { y: 930 });
+  const low = useFilm ? { y: 910 } : {};
+  type("Some things can\u2019t be said out loud.", W / 2, useFilm ? 910 : 470, { size: 40, weight: 500, color: C.ink2, alpha: window_(t, 1.4, 4.5, 0.9, 0.5), track: -0.015 });
+  headline(t, 5.2, 7.95, "Say it without saying it.", low);
+  headline(t, cues.arrive + 0.8, 17.75, "One tap. Your voice, in their ear.", low);
+  headline(t, 23.6, 27.75, "Four messages, ready before you begin.", low);
+  headline(t, cues.approveTap + 0.5, 37.9, "The AI drafts. You decide.", { y: useFilm ? 910 : 930 });
+  headline(t, 42.6, 45.8, "It was on the whole time.", { y: useFilm ? 910 : 930 });
   headline(t, 46.3, 53.75, "Then the room sees all of it.", { y: 958, size: 64 });
   type("Stage captured from the working hub with two simulated seats.", W / 2, 1030, { size: 22, weight: 500, color: C.ink3, alpha: window_(t, 47.0, 53.75), track: 0 });
   if (t >= cues.wordmark - 0.2) {
@@ -452,6 +453,18 @@ function titles(t) {
   }
 }
 
+// The 3D film may be captured at a lower rate than the cut. A missing frame is the average of its nearest captured neighbours.
+const plate = frame => frame < 0 ? null : image(`/out/film/f${String(frame).padStart(5, "0")}.jpg`);
+async function filmPlates(frame) {
+  const exact = await plate(frame);
+  if (exact) return [exact];
+  for (let reach = 1; reach <= 3; reach++) {
+    const near = (await Promise.all([plate(frame - reach), plate(frame + reach)])).filter(Boolean);
+    if (near.length) return near;
+  }
+  return [];
+}
+
 const SCENES = [
   ["silence", sceneSilence], ["tap", sceneTap], ["meanings", sceneMeanings], ["asks", sceneAsks],
   ["reveal", sceneReveal], ["stage", sceneStage], ["lockup", sceneLockup],
@@ -462,10 +475,12 @@ async function draw(t) {
   ctx.globalAlpha = 1;
   ctx.filter = "none";
   const [id, scene] = SCENES.find(([name]) => t < beats[name][1]) ?? SCENES[SCENES.length - 1];
-  const filmFrame = useFilm && t < filmSeconds ? await image(`/out/film/f${String(Math.round(t * timeline.fps)).padStart(5, "0")}.jpg`) : null;
-  if (filmFrame) ctx.drawImage(filmFrame, 0, 0, W, H);
-  else await scene(t);
-  if (!filmFrame || query.get("titles") !== "0") titles(t);
+  const plates = useFilm && t < filmSeconds ? await filmPlates(Math.round(t * timeline.fps)) : [];
+  if (plates.length) {
+    ctx.drawImage(plates[0], 0, 0, W, H);
+    if (plates[1]) { ctx.globalAlpha = 0.5; ctx.drawImage(plates[1], 0, 0, W, H); ctx.globalAlpha = 1; }
+  } else await scene(t);
+  titles(t);
   const open = inOut(span(t, 0, 0.8)), close = inOut(span(t, timeline.seconds - 1.2, timeline.seconds - 0.2));
   const veil = Math.max(1 - open, close);
   if (veil > 0) { ctx.fillStyle = `rgba(0,0,0,${veil})`; ctx.fillRect(0, 0, W, H); }

@@ -234,12 +234,12 @@ place(voice, cues["draftPreview"], asset(bank["Send: The judge on the left looks
 place(sfx, cues["approveTap"], tap(), 0.85, B_PAN)
 place(sfx, cues["approveTap"] + 0.12, asset("cue-sent.mp3"), 0.36, B_PAN)
 travel(cues["approveTap"] + 0.25, cues["draftArrive"] - cues["approveTap"], B_PAN, A_PAN)
-place(sfx, cues["draftArrive"], asset("cue-soft.mp3"), 0.36, A_PAN)
+place(sfx, cues["draftVoice"] - 0.3, asset("cue-soft.mp3"), 0.36, A_PAN)
 place(voice, cues["draftVoice"], asset(bank["The judge on the left looks lost|B"]), 0.58, A_PAN * 0.6)
 
 for index, at in enumerate(cues["dots"]):
-    place(wet, at, pluck((74, 78, 81, 86)[index], 2.0, 0.6), 0.2, -0.5 + index / 3)
-    place(sfx, at, tap(), 0.25, -0.5 + index / 3)
+    place(wet, at, pluck((74, 78, 81, 86, 90)[index], 2.0, 0.6), 0.2, -0.5 + index / 4)
+    place(sfx, at, tap(), 0.25, -0.5 + index / 4)
 for at in (cues["stageLive"], cues["stageReveal"]):
     place(sfx, at, kick(0.6, 80, 36), 0.4)
 travel(cues["lockupPulse"], 2.6, B_PAN, A_PAN, 0.4)

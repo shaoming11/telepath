@@ -1,6 +1,6 @@
 // Seeks a time-addressable page frame by frame and saves each frame. Works for the composition and for the 3D film.
 import { createServer } from "node:http";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { launch } from "./chrome.mjs";
@@ -51,6 +51,7 @@ async function open() {
   page.on("pageerror", error => console.error(`[page] ${error.message}`));
   await page.goto(url, { waitUntil: "load", timeout: 120_000 });
   await page.waitForFunction(() => window.__film && Number.isFinite(window.__film.seconds), null, { timeout: 120_000 });
+  if (film && !flag("copy")) await page.addStyleTag({ content: ".film-copy,.film-title{display:none!important}" });
   return page;
 }
 
@@ -61,14 +62,21 @@ const to = Math.round(Number(option("to", seconds)) * fps);
 if (!flag("keep")) await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 
-let next = from, done = 0;
+const step = Number(option("step", 1));
+const phase = Number(option("phase", 0));
+const queue = [];
+if (option("frames")) queue.push(...option("frames").split(",").map(Number));
+else for (let frame = from; frame < to; frame++) if (frame % step === phase) queue.push(frame);
+let done = 0;
 const started = Date.now();
 async function worker(page) {
-  while (next < to) {
-    const frame = next++;
+  while (queue.length) {
+    const frame = queue.shift();
+    const file = path.join(outDir, `f${String(frame).padStart(5, "0")}.jpg`);
+    if (flag("keep") && await access(file).then(() => true, () => false)) continue;
     await page.evaluate(t => window.__film.seek(t), frame / fps);
-    await page.screenshot({ path: path.join(outDir, `f${String(frame).padStart(5, "0")}.jpg`), type: "jpeg", quality: 96, animations: "allow", timeout: 120_000 });
-    if (++done % 150 === 0) console.log(`${done}/${to - from} frames, ${((Date.now() - started) / 1000).toFixed(0)}s`);
+    await page.screenshot({ path: file, type: "jpeg", quality: 96, animations: "allow", timeout: 120_000 });
+    if (++done % 150 === 0) console.log(`${done} frames, ${((Date.now() - started) / 1000).toFixed(0)}s`);
   }
 }
 const rest = await Promise.all(Array.from({ length: pages - 1 }, open));

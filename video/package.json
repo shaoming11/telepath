@@ -4,11 +4,12 @@
   "type": "module",
   "scripts": {
     "stage": "node scripts/capture-stage.mjs",
-    "film": "node scripts/capture.mjs --film",
-    "frames": "node scripts/capture.mjs",
+    "film": "node scripts/capture.mjs --film --keep",
+    "frames": "node scripts/capture.mjs --query=?film=1",
     "audio": "python3 audio/make_audio.py",
     "encode": "bash scripts/encode.sh",
-    "render": "npm run stage && npm run frames && npm run audio && npm run encode"
+    "render": "npm run stage && npm run film && npm run frames && npm run audio && npm run encode",
+    "render:standalone": "node scripts/capture-stage.mjs --hub-stage && node scripts/capture.mjs && npm run audio && npm run encode"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",

@@ -1,4 +1,6 @@
-// Runs a private hub, drives two simulated seats through the pitch flow and photographs the real stage.
+// Runs a hub, drives two simulated seats through the pitch flow and photographs the real stage.
+// Default: the Wasp stage at localhost:3000/stage, which reaches the hub through its /hub proxy, so the hub takes port 5780.
+// --hub-stage photographs the hub-served stage on a private port instead and needs no Wasp server.
 import { mkdir, writeFile } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 import path from "node:path";
@@ -10,8 +12,11 @@ import { launch } from "./chrome.mjs";
 const out = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "out", "stage");
 await mkdir(out, { recursive: true });
 
+const site = !process.argv.includes("--hub-stage");
 const hub = createHub({ env: {}, settings: { roomSenseMs: 15_000 } });
-const { stageUrl } = await hub.start({ port: 0, host: "127.0.0.1" });
+const { stageUrl } = await hub.start({ port: site ? 5780 : 0, host: "127.0.0.1" });
+const pageUrl = site ? "http://localhost:3000/stage" : stageUrl;
+const socketPath = site ? "/hub/ws?role=stage" : "/ws?role=stage";
 
 function seat(name) {
   const socket = new WebSocket(new URL(`/ws?role=seat&sim=1&seat=${name}`, stageUrl).href.replace(/^http/, "ws"));
@@ -33,16 +38,16 @@ function seat(name) {
 
 const browser = await launch();
 const page = await (await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 })).newPage();
-await page.goto(stageUrl, { waitUntil: "load" });
-const stage = { state: () => page.evaluate(() => document.body.dataset.phase) };
+await page.goto(pageUrl, { waitUntil: "load" });
+const stage = { state: () => page.evaluate(() => (document.querySelector("[data-stage]") ?? document.body).dataset.phase) };
 const shot = name => page.screenshot({ path: path.join(out, `${name}.png`), animations: "allow" });
-const operator = action => page.evaluate(async act => {
-  const socket = new WebSocket(`${location.origin.replace(/^http/, "ws")}/ws?role=stage`);
+const operator = action => page.evaluate(async ([act, socketPath]) => {
+  const socket = new WebSocket(location.origin.replace(/^http/, "ws") + socketPath);
   await new Promise(resolve => { socket.onopen = resolve; });
   socket.send(JSON.stringify({ type: "operator", action: act }));
   await new Promise(resolve => setTimeout(resolve, 150));
   socket.close();
-}, action);
+}, [action, socketPath]);
 async function until(test, label, timeout = 20_000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) { if (await test()) return; await delay(50); }
@@ -55,7 +60,7 @@ const b = seat("B");
 await Promise.all([a.ready, b.ready]);
 await until(() => a.state?.canBegin, "both seats ready");
 await delay(1200);
-await page.addStyleTag({ content: "#room-microphone-panel{display:none!important}" });
+await page.addStyleTag({ content: "#room-microphone-panel,.st-below,.st-optoggle{display:none!important}" });
 await shot("lobby");
 await operator("begin");
 await until(async () => await stage.state() === "live", "live");
