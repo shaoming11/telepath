@@ -29,6 +29,12 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
       const draft_hooks = expected.splice(draft_start, draft_end - draft_start + 1);
       const receipt_hook = expected.splice(expected.findIndex(([, value]) => value === 'live-acknowledge'), 1);
       expected.splice(expected.findIndex(([, value]) => value === 'phone-monitor'), 0, ...draft_hooks, ...receipt_hook);
+      const signals_start = expected.findIndex(([, value]) => value === 'live-note');
+      const signals_end = expected.findIndex(([, value]) => value === 'Send a signal');
+      const signals_hooks = expected.splice(signals_start, signals_end - signals_start + 1);
+      const monitor_hooks = expected.splice(expected.findIndex(([, value]) => value === 'phone-monitor'), 2);
+      expected.splice(expected.findIndex(([, value]) => value === 'lock-controls'), 0, ...signals_hooks);
+      expected.splice(expected.findIndex(([, value]) => value === 'sim-room'), 0, ...monitor_hooks);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         expected);
       assert.match(pitch, /aria-pressed=\{state\.armed\}/);
@@ -66,7 +72,7 @@ test('the Wasp cue panel keeps the two actions distinct and exposes actual room 
     assert.ok(component.includes(event));
   }
   assert.match(component, /disabled=\{!state\.live \|\| !state\.connected\}/);
-  assert.match(component, /state\.roomLive \? 'Listening for questions' : 'Armed/);
+  assert.match(component, /state\.roomLive \? 'Listening for questions' : 'Waiting for room mic'/);
   assert.match(component, /started \? 'Voice started'/);
   assert.match(component, /className="pitch-panel__status" role="status"/);
   assert.match(css, /prefers-reduced-motion: reduce/);
@@ -114,6 +120,7 @@ test('timed actions precede passive context and the Live nav has its own row', a
   const phone = await text('wasp-ui/src/generated/PhoneMarkup.tsx');
   const css = await text('wasp-ui/src/liquid.css');
   assert.match(phone, /<PhonePitchControls \/>[\s\S]*id="live-draft"[\s\S]*id="draft-send"[\s\S]*id="live-acknowledge"[\s\S]*<ChannelMonitor id="phone-monitor"/);
+  assert.match(phone, /id="live-acknowledge"[\s\S]*id="signals"[\s\S]*<details className="live-diagnostics">[\s\S]*<ChannelMonitor id="phone-monitor"/);
   assert.match(phone, /id="screen-live"[^>]*>\s*<div className="live-content">[\s\S]*<\/div>\s*<nav className="live-nav"/);
   assert.match(css, /#screen-live > \.live-content \{[^}]*overflow-y: auto/);
   assert.match(css, /#screen-live > \.live-nav \{[^}]*position: static/);

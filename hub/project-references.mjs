@@ -13,14 +13,13 @@ const CORE_DOCS = [
   ['docs/telepathy-pitch-brief.md', 'Telepath pitch brief.md', 0],
   ['README.md', 'Telepath implementation guide.md', 0],
   ['docs/protocol.md', 'Telepath protocol.md', 0],
-  ['docs/spec.md', 'Telepath original product specification.md', -0.35],
   ['docs/maritime.md', 'docs/maritime.md', 0],
   ['docs/fiber.md', 'docs/fiber.md', 0],
   ['docs/rehearsal.md', 'docs/rehearsal.md', 0],
   ['docs/pitch.md', 'docs/pitch.md', 0],
 ];
 const SOURCE_FILES = [
-  'hub/server.mjs', 'hub/session.mjs', 'hub/audio.mjs', 'hub/codec.mjs', 'hub/realtime-pitch.mjs',
+  'hub/server.mjs', 'hub/session.mjs', 'hub/audio.mjs', 'hub/codec.mjs', 'hub/realtime-pitch.mjs', 'hub/research.mjs',
   'public/capture.mjs', 'public/pcm-worklet.mjs', 'public/input.mjs', 'public/network.mjs',
   'public/earbuds/airpods-1/input.mjs', 'public/earbuds/airpods-pro/input.mjs',
 ];
@@ -123,7 +122,7 @@ export async function buildProjectReferences({ previous, root = ROOT, frontend =
   let bytes = 0;
   const version = createHash('sha256');
   const documents = [];
-  for (const [path, name, priority, kind = path === 'docs/spec.md' ? 'historical' : 'document'] of entries) {
+  for (const [path, name, priority, kind = 'document'] of entries) {
     const built = snapshot?.files[path];
     const data = typeof built === 'string' ? Buffer.from(built) : await readFile(new URL(path, root));
     const text = data.toString('utf8');
