@@ -9,6 +9,7 @@ const restore = world.install();
 const elements = new Map();
 const sockets = [];
 const media_actions = new Map();
+const document_listeners = new Map();
 const mic_tracks = [];
 const mic_nodes = [];
 const fake_microphone = {
@@ -81,7 +82,7 @@ const globals = {
     querySelectorAll: selector => (selector === '.seat' ? seat_buttons : []),
     querySelector: () => null,
     createElement: () => make_element('created'),
-    addEventListener() {},
+    addEventListener(name, handler) { document_listeners.set(name, handler); },
     body: make_element('body'),
   },
   window: { isSecureContext: true, scrollTo() {} },
@@ -290,6 +291,7 @@ test('a rejected clone stays on the voice screen with the provider reason and a 
   assert.ok(upload?.requestId);
   assert.match(get_element('voice-status').textContent, /uploading/i);
   assert.equal(get_element('voice-record').disabled, true);
+  assert.equal(mic_tracks.at(-1).readyState, 'ended', 're-recording releases the phone mic');
   socket.receive({
     type: 'voice_status', status: 'fallback', requestId: upload.requestId,
     detail: 'ElevenLabs requires voice verification.',
@@ -302,6 +304,7 @@ test('a rejected clone stays on the voice screen with the provider reason and a 
 
 test('AirPods 1 calibration releases mic capture until leaving setup', async () => {
   socket.receive({ type: 'state', state: seat_state(null, { phase: 'lobby', sessionId: '2' }) });
+  get_element('settings-listen').listeners.change[0]({ target: { checked: true } });
   await settle();
   const before = mic_tracks.at(-1);
   assert.equal(before.readyState, 'live');
@@ -315,6 +318,18 @@ test('AirPods 1 calibration releases mic capture until leaving setup', async () 
   await settle();
   assert.notEqual(mic_tracks.at(-1), before);
   assert.equal(mic_tracks.at(-1).readyState, 'live');
+});
+
+test('keyboard clicker signals can be sent while the phone mic stays open', async () => {
+  socket.receive({ type: 'state', state: seat_state(null, { phase: 'live', sessionId: '2' }) });
+  get_element('nav-back').listeners.click[0]();
+  await settle();
+  const mic = mic_tracks.at(-1);
+  assert.equal(mic.readyState, 'live');
+  const before = socket.sent.length;
+  document_listeners.get('keydown')({ key: 'PageDown', preventDefault() {}, target: {} });
+  assert.ok(socket.sent.slice(before).some(frame => frame.type === 'signal' && frame.signal === 'R1'));
+  assert.equal(mic.readyState, 'live');
 });
 
 test('a full hub reset clears previously ready setup and returns the seat to Voice', async () => {

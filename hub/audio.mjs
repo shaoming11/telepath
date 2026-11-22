@@ -613,7 +613,7 @@ export function createAudio({
     asset_holds.add(held);
     try {
       const r = await speakLine(voiceId, text, {
-        whisper: !assistant, whisperTimeoutMs: 2100, timeoutMs, speed: can_speed ? READOUT_SPEED : undefined, signal, held,
+        whisper: !assistant && role !== 'voice-preview', whisperTimeoutMs: 2100, timeoutMs, speed: can_speed ? READOUT_SPEED : undefined, signal, held,
       });
       if (epoch !== epochBox.n || signal?.aborted) return null;
       ephemeral.push(r.id);

@@ -78,6 +78,8 @@ export function createHub({
 } = {}) {
   const assets = new Map();
   const seats = new Map();
+  const roomMics = new Map();
+  const roomInvites = new Map();
   const stage = new Set();
   const ipv6_peer = hotspotIPv6Peers(lan);
   const hub_id = randomUUID();
@@ -92,6 +94,19 @@ export function createHub({
   const scope = frame => frame.type === 'state'
     ? { ...frame, state: { ...frame.state, hubId: hub_id, serverNow: Date.now() } }
     : { sessionId: session.sessionId, ...frame, hubId: hub_id };
+  function validRoomInvite(seat, token) {
+    const invite = roomInvites.get(seat);
+    return Boolean(invite && invite.token === token && invite.sessionId === session.sessionId && invite.expiresAt > Date.now());
+  }
+  function sendRoomMicState(ws, seat, state) {
+    const target = state.seats[seat];
+    send(ws, scope({
+      type: 'room_mic_state', setupReset: state.setupReset,
+      available: target.online && !target.sim && !state.canned && state.phase !== 'reveal',
+      active: target.roomMicSource === 'companion' && target.listening,
+      transcription: target.transcription,
+    }));
+  }
   session = new Session({
     emitSeat: (seat, frame) => send(seats.get(seat), scope(frame)),
     emitStage: frame => {
@@ -101,6 +116,7 @@ export function createHub({
         : frame;
       const tagged = scope(voiced);
       stage.forEach(socket => send(socket, tagged));
+      if (frame.type === 'state') roomMics.forEach((socket, seat) => sendRoomMicState(socket, seat, frame.state));
     },
     audio: speech,
     codec: language,
@@ -119,8 +135,13 @@ export function createHub({
   async function routes(req, res) {
     if (req.method !== 'GET' && req.method !== 'HEAD') return respond(req, res, 405, 'text/plain', 'Use GET.');
     try {
-      let path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
+      const request_url = new URL(req.url, 'http://localhost');
+      let path = decodeURIComponent(request_url.pathname);
       if (path === '/info') return respond(req, res, 200, TYPES['.json'], JSON.stringify(info));
+      if (path === '/room-mic.html' && !LOOPBACK_PEERS.has(req.socket.remoteAddress)
+        && !validRoomInvite(request_url.searchParams.get('seat'), request_url.searchParams.get('token'))) {
+        return respond(req, res, 403, 'text/plain', 'Open a room mic invite from Telepathy.');
+      }
       if (path === '/telepathy-ca.cer' && tls?.publicRoot) {
         return respond(req, res, 200, 'application/x-x509-ca-cert', tls.publicRoot);
       }
@@ -181,7 +202,10 @@ export function createHub({
         const seat = url.searchParams.get('seat');
         const trusted = !req.headers.origin || new URL(req.headers.origin).host === req.headers.host;
         const local = LOOPBACK_PEERS.has(req.socket.remoteAddress);
-        if (url.pathname !== '/ws' || !trusted || !(role === 'stage' && local || role === 'seat' && ['A', 'B'].includes(seat))) {
+        const valid_seat = ['A', 'B'].includes(seat);
+        const allowed_role = role === 'stage' && local || role === 'seat' && valid_seat
+          || role === 'room-mic' && valid_seat && (local || validRoomInvite(seat, url.searchParams.get('token')));
+        if (url.pathname !== '/ws' || !trusted || !allowed_role) {
           socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
           return;
         }
@@ -192,6 +216,11 @@ export function createHub({
           if (role === 'stage') {
             stage.add(ws);
             send(ws, scope({ type: 'state', state: session.snapshot() }));
+          } else if (role === 'room-mic') {
+            roomMics.get(seat)?.close(4001, 'Room mic moved to another tab');
+            roomMics.set(seat, ws);
+            void session.setListening(seat, false, 'companion');
+            sendRoomMicState(ws, seat, session.snapshot());
           } else {
             const old = seats.get(seat);
             if (old) session.disconnect(seat);
@@ -201,6 +230,7 @@ export function createHub({
           }
           ws.on('message', raw => {
             if (role === 'seat' && seats.get(seat) !== ws) return;
+            if (role === 'room-mic' && roomMics.get(seat) !== ws) return;
             let frame;
             try { frame = JSON.parse(String(raw)); } catch { return; }
             if (!frame || typeof frame.type !== 'string') return;
@@ -215,12 +245,31 @@ export function createHub({
               send(ws, scope({ type: 'signal_ack', id: frame.id, accepted: current, ...reason }));
             }
             if (!current) return;
-            const operation = role === 'stage' ? session.handleStage(frame) : session.handleSeat(seat, frame);
+            if (role === 'seat' && frame.type === 'room_mic_invite') {
+              if (!info.secure || !info.lanAvailable) {
+                send(ws, scope({ type: 'room_mic_invite', error: 'Connect the hub to the hotspot to share a room mic link.' }));
+                return;
+              }
+              const token = randomUUID();
+              roomInvites.set(seat, { token, sessionId: session.sessionId, expiresAt: Date.now() + 600_000 });
+              const join = new URL('/room-mic.html', info.joinUrl);
+              join.search = new URLSearchParams({ seat, token }).toString();
+              send(ws, scope({ type: 'room_mic_invite', url: join.href }));
+              return;
+            }
+            let operation;
+            if (role === 'room-mic') {
+              if (frame.type === 'listen') operation = session.setListening(seat, frame.enabled === true, 'companion');
+              else if (frame.type === 'mic') operation = session.receiveMic(seat, frame, 'companion');
+            } else operation = role === 'stage' ? session.handleStage(frame) : session.handleSeat(seat, frame);
             Promise.resolve(operation).catch(() => {});
           });
           ws.once('close', () => {
             if (role === 'stage') stage.delete(ws);
-            else if (seats.get(seat) === ws) {
+            else if (role === 'room-mic' && roomMics.get(seat) === ws) {
+              roomMics.delete(seat);
+              void session.setListening(seat, false, 'companion');
+            } else if (seats.get(seat) === ws) {
               seats.delete(seat);
               session.disconnect(seat);
             }
@@ -262,6 +311,8 @@ export function createHub({
         localPort: http_address.port,
         tlsPort: https_address?.port ?? null,
         codec: language.mode ?? 'injected',
+        voicePreview: true,
+        roomMic: true,
       };
       return info;
     },

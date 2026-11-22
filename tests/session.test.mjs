@@ -47,6 +47,45 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, setti
   return { session, state, seatFrames, audioFrames, ack, act, advance: ms => { now += ms; } };
 }
 
+test('the Mac room mic stays active while the phone sends signals and ignores phone PCM', async t => {
+  const chunks = [];
+  const { session, state, act, audioFrames } = await createLiveSession({
+    sim: { A: false, B: false },
+    audio: { listen: async () => true, mic: async (_, audio) => chunks.push(audio) },
+  });
+  t.after(() => session.close());
+  await act('A', { type: 'listen', enabled: true });
+  await session.setListening('A', true, 'companion');
+  await act('A', { type: 'listen', enabled: false });
+  await act('A', { type: 'mic', audio: 'phone' });
+  await session.receiveMic('A', { audio: 'companion', level: 0.1 }, 'companion');
+  assert.equal(state().seats.A.roomMicSource, 'companion');
+  assert.deepEqual(chunks, ['companion']);
+  await act('A', { type: 'signal', signal: 'R1', id: 'while-mac-listens' });
+  assert.equal(audioFrames('B', 'soft').length, 1);
+  assert.equal(state().seats.A.listening, true);
+});
+
+test('a verified voice preview goes only to its owner as speaking audio', async t => {
+  const roles = [];
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false },
+    audio: {
+      makeVoice: async () => ({ id: 'my-clone', status: 'ready' }),
+      speech: async (_, text, options) => {
+        roles.push([text, options.role]);
+        return '/assets/voice-preview.mp3';
+      },
+    },
+  });
+  t.after(() => session.close());
+  await act('A', { type: 'voice', wav: 'A'.repeat(144), requestId: 'sample' });
+  await act('A', { type: 'voice_preview' });
+  assert.equal(roles.at(-1)?.[1], 'voice-preview');
+  assert.ok(seatFrames.A.some(frame => frame.kind === 'voice_preview'));
+  assert.ok(!seatFrames.B.some(frame => frame.kind === 'voice_preview'));
+});
+
 test('fixed whisper uses the receiver cache and one receipt, even after retry', async t => {
   const { session, state, audioFrames, act, advance } = await createLiveSession();
   t.after(() => session.close());
