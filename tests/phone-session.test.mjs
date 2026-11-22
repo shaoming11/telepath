@@ -314,9 +314,9 @@ test('a receipt binds its press time to the first media event before recognition
   assert.equal(get_element('live-acknowledge').hidden, true);
 });
 
-test('Single begun during a teammate chime does not toggle Question Mode when recognition finishes', async () => {
+test('Single begun during a teammate chime does not send a signal when recognition finishes', async () => {
   const serverNow = Date.now();
-  const settings = { pitchHelp: true, questionModeAvailable: true, roomInput: 'mac', sessionId: 'chime', serverNow };
+  const settings = { pitchHelp: true, roomQuestionAvailable: true, roomInput: 'mac', sessionId: 'chime', serverNow };
   const base = seat_state(null, settings);
   socket.receive({ type: 'state', state: base });
   await settle();
@@ -522,8 +522,8 @@ test('keyboard clicker signals work on focused buttons while the phone mic stays
   assert.equal(mic.readyState, 'live');
 });
 
-test('both AirPods profiles toggle question mode with one press and retain receipt and approval priority', async () => {
-  const settings = { pitchHelp: true, questionModeAvailable: true, roomInput: 'mac', sessionId: '2' };
+test('both AirPods profiles request a one-shot answer with a double gesture and retain Single approval', async () => {
+  const settings = { pitchHelp: true, roomQuestionAvailable: true, roomInput: 'mac', sessionId: '2' };
   const base = seat_state(null, settings);
   const sent = () => socket.sent.filter(frame => frame.type === 'signal');
   socket.receive({ type: 'state', state: base });
@@ -533,12 +533,21 @@ test('both AirPods profiles toggle question mode with one press and retain recei
   world.advance(1200);
   await settle();
   assert.equal(sent().length, 1);
-  assert.equal(sent()[0].purpose, 'question_mode');
+  assert.equal(sent()[0].signal, 'R1');
+  assert.equal(sent()[0].purpose, undefined);
+  socket.sent.length = 0;
+  media_actions.get('nexttrack')();
+  world.advance(260);
+  media_actions.get('nexttrack')();
+  world.advance(1200);
+  await settle();
+  assert.equal(sent().length, 1);
+  assert.equal(sent()[0].purpose, 'answer_room_question');
 
   pro_radio.change();
   socket.sent.length = 0;
-  media_actions.get('pause')();
-  assert.equal(sent()[0]?.purpose, 'question_mode');
+  media_actions.get('nexttrack')();
+  assert.equal(sent()[0]?.purpose, 'answer_room_question');
   media_actions.get('previoustrack')();
   assert.equal(sent().at(-1)?.signal, 'L1');
   assert.equal(sent().at(-1)?.purpose, undefined);
@@ -559,7 +568,7 @@ test('both AirPods profiles toggle question mode with one press and retain recei
 test('Single follows the newest playback while the explicit draft action stays independent', async () => {
   const serverNow = Date.now();
   const receipt = { messageId: 'incoming-whisper', openedAt: serverNow - 300, until: serverNow + 3700 };
-  const settings = { pitchHelp: true, questionModeAvailable: true, roomInput: 'mac', sessionId: '2', serverNow };
+  const settings = { pitchHelp: true, roomQuestionAvailable: true, roomInput: 'mac', sessionId: '2', serverNow };
   const sample = heardAt => {
     const state = seat_state(draft({ id: 'overlapping-draft', heardAt, expiresAt: serverNow + 5500 }), settings);
     state.seats.A.receipt = receipt;

@@ -302,7 +302,7 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, setti
     },
     codec,
     coach,
-    settings: { roomSenseMs: 0, automaticQuietMs: 0, armedQuestionQuietMs: 0, automaticCooldownMs: 0, automaticPlaybackGuard: false, ...settings },
+    settings: { roomSenseMs: 0, automaticQuietMs: 0, automaticCooldownMs: 0, automaticPlaybackGuard: false, ...settings },
     now: () => now,
   });
 
@@ -1549,187 +1549,41 @@ test('a voice change while the partner is offline still rebuilds the cache on re
   assert.notEqual(state().cacheId, oldCache);
 });
 
-test('armed question mode prepares during speech and only plays after the matching question commits', async t => {
-  let room, calls = 0, scope;
-  const speechOptions = [];
+test('a single room-answer gesture sends the full transcript and hybrid evidence only once', async t => {
+  const calls = [];
+  const whispers = [];
   const { session, act, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5 },
-    audio: {
-      listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
-      speech: async (_seat, _text, options) => {
-        speechOptions.push(options);
-        return { url: '/assets/normal-cue.mp3' };
-      },
-    },
-    codec: {
-      pitchHelp: async () => assert.fail('expected the warm Realtime session'),
-      openPitchRealtime: signal => {
-        scope = signal;
-        return { generate: async input => { calls++; return supportedAnswer(input); } };
-      },
-    },
+    sim: { A: false, B: false }, settings: { roomInput: 'mac' },
+    audio: { listen: async () => ({ listening: true }), speech: async (seat, text, options) => {
+      whispers.push({ seat, text, whisper: options.whisper }); return '/cue.mp3';
+    } },
+    codec: { pitchHelp: async input => {
+      calls.push(input);
+      return supportedAnswer(input);
+    } },
   });
   t.after(() => session.close());
   session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
   await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
-  room.partial('Who is the target customer');
-  await eventually(() => calls === 1);
-  assert.ok(!seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  room.committed('Who is the target customer?');
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  assert.equal(speechOptions.at(-1).role, 'assistant');
-  assert.equal(speechOptions.at(-1).whisper, true);
-  assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
-  assert.equal(calls, 1);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'off' });
-  assert.equal(scope.aborted, true);
-  room.partial('How does your microphone work?');
-  room.committed('How does your microphone work?');
-  await delay(12);
-  assert.equal(calls, 1);
-});
-
-test('an armed direct question retries a failed warm draft and bypasses unsolicited-cue policy', async t => {
-  let room, warmCalls = 0, reviewCalls = 0, finalCalls = 0;
-  const { session, act, advance, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false },
-    settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, pitchComposeMs: 20, pitchRaceMs: 300,
-      automaticQuietMs: 2500, automaticCooldownMs: 30_000, armedQuestionQuietMs: 500 },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; } },
-    codec: {
-      openPitchRealtime: () => ({ generate: async () => { warmCalls++; return null; } }),
-      pitchHelp: async input => {
-        if (++finalCalls === 1) return null;
-        await delay(40);
-        return supportedAnswer(input);
-      },
-      assessWhisper: async () => { reviewCalls++; return false; },
-    },
-  });
-  t.after(() => session.close());
-  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
-  session.rememberAutomaticCue('Previous unsolicited cue.');
-  room.partial('Who is the target customer');
-  await eventually(() => finalCalls === 1);
-  room.committed('Who is the target customer?');
-  advance(550);
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  assert.equal(warmCalls, 2);
-  assert.equal(finalCalls, 2);
-  assert.equal(reviewCalls, 0);
-});
-
-test('a changed question drops speculative content and provider failures stay silent unless help is explicitly requested', async t => {
-  let room, calls = 0;
-  const { session, act, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5 },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; } },
-    codec: { pitchHelp: async input => { if (calls++ === 0) return supportedAnswer(input); throw new Error('synthetic provider outage'); } },
-  });
-  t.after(() => session.close());
-  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
-  room.partial('Who is the target buyer');
-  await eventually(() => calls === 1);
-  room.committed('How does your microphone work?');
-  await eventually(() => calls >= 2);
-  await eventually(() => !session.seats.A.pitchHelp);
-  assert.equal(seatFrames.A.some(frame => frame.kind === 'pitch_help'), false);
-  assert.ok(seatFrames.A.some(frame => frame.type === 'pitch_help_status' && frame.text === 'No supported cue for that question.'));
-  session.pitchReferences = [];
-  await act('B', { type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'empty' });
-  assert.equal(seatFrames.B.find(frame => frame.kind === 'pitch_help')?.text, 'Mac listens. Phones keep earbud controls.');
-});
-
-test('Question Mode reconnects for a fresh turn and skips duplicate completed questions', async t => {
-  let room, opened = 0, generated = 0;
-  const { session, act, advance, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false },
-    settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, pitchRealtimeReconnectMs: 100 },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; } },
-    codec: {
-      pitchHelp: async input => supportedAnswer(input),
-      openPitchRealtime: () => {
-        const closed = ++opened === 1;
-        return { closed, generate: async input => { generated++; return supportedAnswer(input); } };
-      },
-    },
-  });
-  t.after(() => session.close());
-  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
-  advance(101);
-  room.partial('Who is your target buyer');
-  await eventually(() => generated === 1);
-  room.committed('Who is your target buyer?');
-  room.committed('Who is your target buyer?');
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  room.committed('Who is your target buyer?');
-  await delay(20);
-  assert.equal(opened, 2);
-  assert.equal(generated, 1);
+  session.addTranscript('room', 'Our first introduction starts here.');
+  for (let turn = 1; turn <= 64; turn++) session.addTranscript('room', 'Setup detail ' + turn);
+  session.addTranscript('room', 'Who is the target buyer?');
+  session.addTranscript('room', 'Let me pull up the previous slide.');
+  assert.equal(calls.length, 0);
+  assert.equal(session.snapshot().room.transcript.length, 60);
+  const gesture = { type: 'signal', signal: 'LR', purpose: 'answer_room_question', id: 'ask' };
+  await act('A', gesture);
+  await act('A', gesture);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].roomTranscript.length, 67);
+  assert.equal(calls[0].roomTranscript[0].text, 'Our first introduction starts here.');
+  assert.ok(calls[0].roomTranscript.some(turn => turn.text === 'Who is the target buyer?'));
+  assert.ok(calls[0].passages.some(passage => passage.text.includes('sales team lead')));
+  assert.deepEqual(whispers, [{ seat: 'A', text: 'The buyer is a sales team lead.', whisper: true }]);
   assert.equal(seatFrames.A.filter(frame => frame.kind === 'pitch_help').length, 1);
-});
-
-test('a slow synthesis retains the sourced text and a newer automatic question cancels older audio', async t => {
-  let room, releaseFirst, audioCalls = 0;
-  const { session, act, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false },
-    settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, pitchSpeechMs: 60 },
-    audio: {
-      listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
-      speech: async () => {
-        if (++audioCalls === 1) return new Promise(resolve => { releaseFirst = resolve; });
-        return new Promise(() => {});
-      },
-    },
-    codec: { pitchHelp: async input => ({
-      ...supportedAnswer(input), answer: /microphone/i.test(input.turns.at(-1).text) ? 'Mac listens. Phones keep controls.' : 'Sales team lead.',
-    }) },
-  });
-  t.after(() => session.close());
-  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead. The Mac listens while phones keep controls.').toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
-  room.committed('Who is your target buyer?');
-  await eventually(() => releaseFirst);
-  room.committed('Why use the Mac microphone?');
-  await eventually(() => audioCalls === 2);
-  releaseFirst('/old.mp3');
-  await eventually(() => session.log.some(entry => entry.kind === 'pitch_help' && entry.text === 'Mac listens. Phones keep controls.'));
-  assert.equal(seatFrames.A.findLast(frame => frame.type === 'pitch_help_status').text, 'Mac listens. Phones keep controls.');
-  assert.ok(!seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  assert.ok(!session.log.some(entry => entry.kind === 'pitch_help' && entry.text === 'Sales team lead.'));
-});
-
-test('the rehearsed build question plays a source-backed walkthrough cue in Question Mode', async t => {
-  let room;
-  const { session, act, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5 },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; } },
-    codec: { pitchHelp: async () => assert.fail('the rehearsed question has a ready cue') },
-  });
-  t.after(() => session.close());
-  const { readFile } = await import('node:fs/promises');
-  const text = await readFile(new URL('../docs/technical-reference.md', import.meta.url));
-  session.pitchReferences = await parseReferences([{ name: 'Telepathy technical reference.md', data: text.toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'build-story' });
-  room.partial('Can you explain how you developed the project');
-  assert.ok(!seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  room.committed('Can you explain how you developed the project?');
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').text,
-    'Safari catches the AirPods gesture. The Mac routes messages and listens to the room. ElevenLabs transcribes, OpenAI drafts, and ElevenLabs whispers back.');
-  assert.equal(session.snapshot('A').seats.A.lastPitchCue.points.length, 3);
-  assert.equal(session.snapshot('B').seats.A.lastPitchCue, null);
-  assert.equal(session.log.find(frame => frame.kind === 'pitch_help').source, 'project-reference');
-  assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
+  assert.equal(seatFrames.B.some(frame => frame.kind === 'pitch_help'), false);
+  session.addTranscript('room', 'Who are your competitors?');
+  assert.equal(calls.length, 1);
 });
 
 test('a sourced but generic grounding line is replaced with a concrete cue', async t => {
@@ -1745,59 +1599,6 @@ test('a sourced but generic grounding line is replaced with a concrete cue', asy
   room.committed('Why use the Mac microphone?');
   await act('A', { type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'manual' });
   assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help')?.text, 'Mac listens. Phones keep earbud controls.');
-});
-
-test('Question Mode interrupts an overlapping cue and gives only the missing build detail', async t => {
-  let room;
-  const { session, act, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5 },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
-      speech: async (_, text, options) => { assert.equal(options.whisper, true); return '/cue.mp3'; } },
-  });
-  t.after(() => session.close());
-  const { readFile } = await import('node:fs/promises');
-  const text = await readFile(new URL('../docs/technical-reference.md', import.meta.url));
-  session.pitchReferences = await parseReferences([{ name: 'Telepathy technical reference.md', data: text.toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'build-quiet' });
-  room.committed('Can you explain how you developed the project?');
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  const original = seatFrames.A.find(frame => frame.kind === 'pitch_help');
-  room.partial('Safari catches the gesture and the Mac routes signals. OpenAI drafts the cue.');
-  assert.ok(seatFrames.A.some(frame => frame.type === 'pitch_help_hold' && frame.messageId === original.messageId));
-  assert.equal(seatFrames.A.filter(frame => frame.kind === 'pitch_help').length, 1);
-  room.committed('Safari catches the gesture and the Mac routes signals. OpenAI drafts the cue.');
-  await eventually(() => seatFrames.A.filter(frame => frame.kind === 'pitch_help').length === 2);
-  assert.equal(seatFrames.A.findLast(frame => frame.kind === 'pitch_help').text, 'Mention that ElevenLabs transcribes and whispers.');
-  assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help' || frame.type === 'pitch_help_hold'));
-});
-
-test('a corpus swap discards a prewarmed cue and retrieves relevant older speech', async t => {
-  let room;
-  const observed = [];
-  const { session, act, advance } = await createLiveSession({
-    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5 },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; } },
-    codec: { pitchHelp: async input => {
-      observed.push(input);
-      return { status: 'answer', question: 'How long?', answer: 'Pilot timing is listed.',
-        sources: [{ id: input.passages[0].id, quote: input.passages[0].text }] };
-    } },
-  });
-  t.after(() => session.close());
-  const docs = async text => parseReferences([{ name: 'brief.md', data: Buffer.from(text).toString('base64') }]);
-  session.pitchReferences = await docs('The lighthouse pilot lasts six weeks.');
-  await session.setRoomListening(true);
-  room.committed('The lighthouse pilot is our test deployment.');
-  advance(50_000);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'refresh' });
-  room.partial('How long is the lighthouse pilot');
-  await eventually(() => observed.length === 1);
-  assert.match(observed[0].earlierRoomContext[0].text, /test deployment/);
-  session.pitchReferences = await docs('The lighthouse pilot lasts eight weeks.');
-  room.committed('How long is the lighthouse pilot?');
-  await eventually(() => observed.length === 2);
-  assert.match(observed[1].passages[0].text, /eight weeks/);
 });
 
 function scenarioCodec(onRequest, answer) {
@@ -1875,102 +1676,6 @@ test('interview scenario stays quiet with a fallback when no persona documents a
   assert.equal(called, false);
   assert.ok(seatFrames.A.some(frame => frame.type === 'pitch_help_status' && frame.text === 'Ask what success looks like in this role.'));
 });
-
-test('social Question Mode whispers after a spoken question and keeps the cue when chatter follows', async t => {
-  let room;
-  const spoken = 'Answer briefly. Then ask where they grew up.';
-  const { session, act, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, coachScenario: 'social' },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
-      speech: async () => '/assets/social.mp3' },
-    codec: {
-      openPitchRealtime: () => assert.fail('social mode must not open the pitch Realtime session'),
-      pitchHelp: async input => {
-        assert.equal(input.scenario, 'social');
-        assert.deepEqual(input.passages, []);
-        return { status: 'answer', suggestionKind: 'answer', question: '', answer: spoken, sources: [], responseQuote: '', ungrounded: true };
-      },
-    },
-  });
-  t.after(() => session.close());
-  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('Telepathy brief.').toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
-  room.committed('So what do you do for fun?');
-  room.committed('Um, I mostly just play bass in a little jazz group.');
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').text, spoken);
-});
-
-test('interview Question Mode redrafts while the question grows and plays the latest draft without a new call', async t => {
-  let room;
-  const drafts = [];
-  const quote = 'Cut end-to-end audio latency from 220 ms to 90 ms.';
-  const { session, act, seatFrames } = await createLiveSession({
-    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, pitchRevisionMinMs: 0, coachScenario: 'interview' },
-    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
-      speech: async () => '/assets/interview.mp3' },
-    codec: {
-      openPitchRealtime: () => assert.fail('interview mode must not open the pitch Realtime session'),
-      pitchHelp: async input => {
-        const latest = input.turns.at(-1).text;
-        drafts.push(latest);
-        return { status: 'answer', question: latest, answer: 'Draft ' + drafts.length + '. Lead with the latency win.',
-          sources: [{ id: input.passages[0].id, quote }], responseQuote: '' };
-      },
-    },
-  });
-  t.after(() => session.close());
-  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('Telepathy brief.').toString('base64') }]);
-  session.references = await parseReferences([{ name: 'persona.md', data: Buffer.from(quote).toString('base64') }]);
-  await session.setRoomListening(true);
-  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
-  room.partial('What is the hardest');
-  await eventually(() => drafts.length === 1);
-  room.partial('What is the hardest latency problem you');
-  await eventually(() => drafts.length === 2);
-  room.committed('What is the hardest latency problem you solved?');
-  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
-  assert.equal(drafts.length, 2);
-  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').text, 'Draft 2. Lead with the latency win.');
-});
-
-for (const fastest of ['openai', 'maritime']) {
-  test(fastest + ' can win the private cue race and the slower provider verifies it', async t => {
-    let releaseSlow, review;
-    const makeDraft = name => async input => {
-      const answer = supportedAnswer(input);
-      if (name === fastest) return answer;
-      return new Promise(resolve => { releaseSlow = () => resolve(answer); });
-    };
-    const verify = name => async input => {
-      review = { name, input };
-      return { status: 'resolved' };
-    };
-    const { session, act, seatFrames } = await createLiveSession({
-      sim: { A: false, B: false },
-      coach: { draftPitchCue: makeDraft('maritime'), verifyPitchCue: verify('Maritime') },
-      codec: { pitchHelp: makeDraft('openai'), verifyPitchCue: verify('OpenAI') },
-    });
-    t.after(() => session.close());
-    session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
-    await act('A', { type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'race-' + fastest });
-    assert.ok(releaseSlow, 'both drafts started');
-    assert.equal(review, undefined, 'the whisper does not await the verifier');
-    assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help')?.text, 'The buyer is a sales team lead.');
-    assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').expiresAfterMs, 8000);
-    assert.equal(session.log.find(entry => entry.kind === 'pitch_help').source, fastest);
-    assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
-    releaseSlow();
-    const reviewer = fastest === 'openai' ? 'Maritime' : 'OpenAI';
-    await eventually(() => session.seats.A.lastPitchCue.points.includes('Verified by ' + reviewer));
-    const evidence = session.log.find(entry => entry.kind === 'pitch_help');
-    assert.equal(evidence.draftedBy, fastest === 'openai' ? 'OpenAI' : 'Maritime');
-    assert.equal(evidence.verifiedBy, reviewer);
-    assert.equal(review.name, reviewer);
-    assert.equal(review.input.firstCue, 'The buyer is a sales team lead.');
-  });
-}
 
 test('a material verified correction is spoken only to the original seat', async t => {
   let releaseReview;

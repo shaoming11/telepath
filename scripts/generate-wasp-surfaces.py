@@ -14,7 +14,7 @@ REACT_REGIONS = {
     "PhoneMarkup": (
         (
             "PhonePitchControls",
-            r'<button[^>]* id="question-mode"[^>]*>[\s\S]*?</button>\s*'
+            r'<button[^>]* id="cue-now"[^>]*>[\s\S]*?</button>\s*'
             r'<section[^>]* id="live-pitch-notes"[^>]*>[\s\S]*?</section>',
         ),
         (

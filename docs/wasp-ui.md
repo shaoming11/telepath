@@ -10,7 +10,7 @@ Wasp 0.26 defines the phone route at `/` and the Mac Stage at `/stage`. Their Re
 
 The same Mac hub serves Wasp's generated client and handles the WebSocket, microphone ownership, provider calls, and audio delivery. This allows the phones to stay on the current trusted HTTPS origin and preserves the Stage's loopback controls. No Wasp service or database needs to run to serve this client. The minimal Wasp project declares PostgreSQL because the compiler rejects SQLite in a production config. The deployed surface uses static Wasp-generated client files.
 
-Question Mode and the private cue panel are React-owned. The phone controller publishes scoped state to these components and keeps control of the media session and WebSocket. The arm button shows why it is disabled when the hub is offline or the Stage has not started. A cue highlight starts from the existing Web Audio speech-start callback, so queued text alone cannot indicate playback.
+The private cue panel is React-owned. The phone controller publishes scoped state to these components and keeps control of the media session and WebSocket. The Cue now button shows why it is disabled when the hub is offline or the Stage has not started. A cue highlight starts from the existing Web Audio speech-start callback, so queued text alone cannot indicate playback.
 
 The Stage room console is also React-owned. The capture controller handles microphone permission, selected-device constraints, and hub scope. The input meter gets its own audio-level updates, so audio frames do not rebuild the transcript or replace the focused speaker controls.
 
@@ -52,7 +52,7 @@ npm run rehearse:faults -- --tls --fast --cycles=5
 2. Pair each set of AirPods with its own phone. Join as Seat A for the presenter and Seat B for the coach. Choose **Use the premade voice**, select the earbud model, and tap **Test audio**. Each person should hear the test in their own earbuds.
 3. For AirPods 1, map double-tap to **Next Track** in Bluetooth settings. Run two double-event trials and two triple-event trials after the initial check. For AirPods Pro, check single, double, and triple squeezes. Choose **Pitch** and tap **Ready** on both phones.
 4. On Stage, select the MacBook microphone under **Device and transcript**. Click **Start listening** and confirm that speech appears. Begin the session once both seats are ready.
-5. Have the coach send **Slow down**. On the presenter’s phone, tap **Acknowledge whisper** after it plays. Arm **Question Mode** and have a third person ask about the project. Verify that only the presenter gets the answer cue. Use the coach’s private **Send** action to approve a draft.
+5. Have the coach send **Slow down**. On the presenter’s phone, tap **Acknowledge whisper** after it plays. Have a third person ask about the project and tap **Cue now**. Verify that only the presenter gets the answer cue. Use the coach’s private **Send** action to approve a draft.
 6. Open **Operator**, send **Thirty seconds left**, and confirm playback from both seats before clicking **Reveal**. Test **Canned take** with both phone tabs closed.
 
 If the Stage loses its hub connection mid-take, keep both phone tabs open. Wait for **Hub online** and confirm the seat cards have caught up. Click **Start listening** again to resume Mac transcription.
@@ -63,6 +63,6 @@ The branch passed a local two-seat rehearsal using the iPhone SE and iPhone 17 P
 
 ## Visual direction
 
-Telepath uses a glass treatment for the control layer, with solid text panels beneath it. Press and release are timed separately. Realtime status changes use the actual local recognition, calibration, speech, and acknowledgement events. Each phone’s Question Mode control sits above the monitor, so the presenter can see the armed state without scrolling. The stylesheet respects reduced motion and the contrast and transparency preferences the browser exposes. Choose **Solid surfaces** under **Appearance** in Phone Settings or Operator to remove navigation blur. The choice stays in that browser.
+Telepath uses a glass treatment for the control layer, with solid text panels beneath it. Press and release are timed separately. Realtime status changes use the actual local recognition, calibration, speech, and acknowledgement events. Each phone’s Cue now control sits above the monitor. The stylesheet respects reduced motion and the contrast and transparency preferences the browser exposes. Choose **Solid surfaces** under **Appearance** in Phone Settings or Operator to remove navigation blur. The choice stays in that browser.
 
 The direction draws on the touch-origin menu, rounded nesting, and specular edges in Apple's official [Meet Liquid Glass demo](https://developer.apple.com/videos/play/wwdc2025/219/?time=302), plus Apple's [materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials). The [Wasp spec and routing guide](https://wasp.sh/docs/features/pages-and-routes) explains route generation.

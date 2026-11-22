@@ -37,7 +37,7 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
       expected.splice(expected.findIndex(([, value]) => value === 'sim-room'), 0, ...monitor_hooks);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         expected);
-      assert.match(pitch, /aria-pressed=\{state\.armed\}/);
+      assert.doesNotMatch(pitch, /aria-pressed/);
     } else {
       const room = await text('wasp-ui/src/StageRoomConsole.tsx');
       const boundary = room.indexOf('export function StageRoomConsole');
@@ -63,16 +63,16 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
   });
 }
 
-test('the Wasp cue panel keeps the two actions distinct and exposes actual room and playback status', async () => {
+test('the Wasp cue panel offers one cue action with actual room and playback status', async () => {
   const controller = await text('public/phone.mjs');
   const component = await text('wasp-ui/src/PhonePitchControls.tsx');
   const css = await text('wasp-ui/src/liquid.css');
-  for (const event of ['telepathy:pitch-state', 'telepathy:pitch-speech-start', 'telepathy:toggle-question-mode', 'telepathy:request-pitch-cue']) {
+  for (const event of ['telepathy:pitch-state', 'telepathy:pitch-speech-start', 'telepathy:request-pitch-cue']) {
     assert.ok(controller.includes(event));
     assert.ok(component.includes(event));
   }
-  assert.match(component, /disabled=\{!state\.live \|\| !state\.connected\}/);
-  assert.match(component, /state\.roomLive \? 'Listening for questions' : 'Waiting for room mic'/);
+  assert.match(component, /disabled=\{!state\.live \|\| !state\.connected \|\| state\.preparing\}/);
+  assert.match(component, /state\.roomLive \? state\.gestureHint : 'Waiting for room mic'/);
   assert.match(component, /started \? 'Voice started'/);
   assert.match(component, /className="pitch-panel__status" role="status"/);
   assert.match(css, /prefers-reduced-motion: reduce/);
