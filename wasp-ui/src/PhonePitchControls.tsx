@@ -41,8 +41,8 @@ export function PhonePitchControls() {
   const started = Boolean(playback && state.cue?.text === playback.text);
   const hint = !state.connected ? 'Waiting for the hub.'
     : !state.live ? 'After Stage begins'
-    : !state.armed ? 'Tap before a question'
-    : state.roomLive ? 'Listening for questions' : 'Armed · mic not live';
+    : !state.armed ? 'Tap to listen'
+    : state.roomLive ? 'Listening for questions' : 'Waiting for room mic';
   const points = state.cue?.points.filter(point => normalized(point) !== normalized(state.cue?.text ?? '')) ?? [];
   const status = state.preparing ? 'Preparing cue' : started ? 'Voice started' : '';
 

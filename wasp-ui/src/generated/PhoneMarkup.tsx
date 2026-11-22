@@ -220,7 +220,9 @@ export function PhoneMarkup() {
               </div>
 
               <button id="live-acknowledge" className="quiet" type="button" hidden>Acknowledge whisper</button>
-              <ChannelMonitor id="phone-monitor" className="channel-monitor channel-monitor--phone" />
+              <p className="live-note" id="live-note" role="status"></p>
+
+              <div className="signals" id="signals" role="group" aria-label="Send a signal"></div>
 
               <div className="lock-controls" id="lock-controls" hidden>
                 <button id="lock-controls-toggle" type="button" aria-pressed="false">Enable lock-screen controls</button>
@@ -238,9 +240,10 @@ export function PhoneMarkup() {
                 </article>
               </div>
 
-              <p className="live-note" id="live-note" role="status"></p>
-
-              <div className="signals" id="signals" role="group" aria-label="Send a signal"></div>
+              <details className="live-diagnostics">
+                <summary>Audio and connection</summary>
+                <ChannelMonitor id="phone-monitor" className="channel-monitor channel-monitor--phone" />
+              </details>
 
               <form className="room-input" id="sim-room" hidden>
                 <label htmlFor="sim-text">Room</label>

@@ -1,11 +1,21 @@
-# Autonomous Fiber research
+# Autonomous research and quiet coaching
 
-Set `FIBER_API_KEY` in the ignored `.env.fiber.local` file and `OPENAI_API_KEY` in `.env.openai.local` on the hub. Set `TELEPATHY_RESEARCH=off` to disable research. Research also stays off in local text and fixed-message modes.
+Set `FIBER_API_KEY` in the ignored `.env.fiber.local` and `OPENAI_API_KEY` in `.env.openai.local`. Set `TELEPATHY_RESEARCH=off` to disable research. Local text and fixed-message modes also disable it. `TELEPATHY_RESEARCH_MODEL` overrides the OpenAI research model.
 
-Telepath uses a separate OpenAI tool-selection request on completed speech to decide whether to research an explicitly introduced interviewer or judge. research_person accepts a full name and current employer copied from the conversation. Fiber receives those identifiers only. The documented /v1/kitchen-sink/person operation uses exact name matching, forceCompanyMatch, two maximum results and no liveFetch. A result must match the full name and include a current position at the stated employer. Ambiguous or mismatched identities are discarded.
+## Data flow
 
-Professional background becomes in-memory session references for relevant future pitch/interview answers and document-based missing-point cues. It never triggers a whisper by itself. Reset cancels pending research and clears results. Nothing is persisted. Research runs outside the cue deadline, with a 60-second timeout, 15-second decision interval, one task at a time, eight decisions per session, and target deduplication. Provider failures leave coaching running. Live lookups consume Fiber credits. No contact reveal is performed.
+Only committed Mac room speech during a live pitch or interview triggers research. OpenAI examines recent room turns and compact reference excerpts to decide whether external facts could help. There are three tools.
 
-This first integration researches explicitly named people, not unnamed panels or arbitrary web topics. Introductions during an active lookup may need to remain in recent speech on a subsequent completed turn. Live provider and physical-earbud checks require configured credentials and hardware.
+- **Person.** Fiber Kitchen Sink receives the spoken full name and employer. Telepath requires a single exact identity with a matching current position, including concurrent jobs. It ignores former employers.
+- **Company.** Fiber Kitchen Sink receives a company name spoken in the room. Telepath accepts one exact result by organization name or alias.
+- **Topic.** OpenAI web search receives a topic phrase and research goal. Results require a completed search and citations. Topic research can run without a Fiber key.
 
-API: https://api.fiber.ai/ai-docs/KitchenSinkProfile.md
+A separate OpenAI review keeps only findings likely to help future coaching. Up to 12 results are held in session memory and retrieved for relevant cues alongside project and uploaded documents. Stage shows the source labels. Reset clears the findings. Fiber never receives raw transcripts or a contact reveal request.
+
+Research runs off the whisper path, with one task at a time, 15 seconds between decisions, up to 24 decisions and eight lookups per session, and a 60-second task deadline. Results do not trigger whispers on their own. Reset, Reveal and close invalidate pending work.
+
+## When coaching speaks
+
+Automatic grounded cues require at least 2.5 seconds of quiet. Playback, pending approvals, receipts and announcements can defer them. An OpenAI value check requires evidence and a consequential correction, question or omission. A 30-second cooldown and repeated-text check reduce interruptions. Explicit requests and approved teammate messages still use their existing controls.
+
+API contracts: [Fiber person lookup](https://api.fiber.ai/ai-docs/KitchenSinkProfile.md), [Fiber company lookup](https://api.fiber.ai/ai-docs/kitchenSinkCompany.md), [OpenAI web search](https://developers.openai.com/api/docs/guides/tools-web-search).

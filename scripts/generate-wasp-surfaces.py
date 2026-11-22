@@ -209,6 +209,20 @@ def generated(component, source):
         if replacements != 1:
             raise ValueError("Expected one Live acknowledgement below the context controls.")
 
+        markup, replacements = re.subn(
+            r'(^[ \t]*)(<section[^>]* id="phone-monitor"[^>]*></section>\s*)'
+            r'([\s\S]*?)(^[ \t]*<p[^>]* id="live-note"[^>]*></p>\s*'
+            r'^[ \t]*<div[^>]* id="signals"[^>]*></div>[^\S\n]*\n\n?)',
+            lambda match: match[4].rstrip() + "\n\n" + match[1] + match[3].rstrip()
+            + "\n\n" + match[1] + '<details className="live-diagnostics">\n'
+            + match[1] + '  <summary>Audio and connection</summary>\n'
+            + match[1] + '  ' + match[2].strip() + "\n" + match[1] + "</details>\n\n",
+            markup,
+            flags=re.M,
+        )
+        if replacements != 1:
+            raise ValueError("Expected one Live signal group and audio monitor.")
+
         def isolate_live_navigation(match):
             opening, content, navigation = match.groups()
             padding = re.match(r"[ \t]*", navigation)[0]
