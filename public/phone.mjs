@@ -123,6 +123,7 @@ const touch_emulator = createEmulator({ input, settings: touch_profile() });
 const audio = createAudioEngine({
   volumes: settings.volumes,
   timing: settings.app,
+  wait_for_heard_ack: true,
   on_status: ({ key, text }) => set_issue(key, text),
   on_heard: message_id => {
     const text = privateCueAudio.get(message_id);
@@ -136,7 +137,7 @@ const audio = createAudioEngine({
         notes.classList.add('cue-started');
       }
     }
-    return send({ type: 'heard', messageId: message_id });
+    return connection?.synced && send({ type: 'heard', messageId: message_id });
   },
 });
 
@@ -522,7 +523,6 @@ function connect() {
     set_issue('connection', '');
     audio.cancel_previews();
     audio.cancel_announcements();
-    audio.flush_heard();
     void audio.preload_cues();
     schedule_render();
   });
@@ -623,6 +623,11 @@ function handle_frame(frame, source) {
       }
       return;
     }
+    case 'heard_ack':
+      if (source.synced && frame.hubId === ui.state?.hubId && frame.sessionId === ui.state?.sessionId) {
+        audio.confirm_heard(frame.messageId);
+      }
+      return;
     case 'pitch_help_status':
       if (!is_stale_frame(frame)) show_note(frame.text);
       return;
@@ -683,6 +688,7 @@ function on_state(next, source) {
   }
   const first_state = !source.synced;
   if (first_state || new_session || previous?.sessionId !== next.sessionId) reconcile(next, source);
+  if (first_state) audio.flush_heard();
   if (first_state && uses_phone_room() && !is_sim() && has_consent('room') && !capture.open) void start_mic();
   for (const frame of source.early_cache.splice(0)) {
     if (!is_stale_frame(frame)) void on_cache(frame, source);
