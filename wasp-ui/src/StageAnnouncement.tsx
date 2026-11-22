@@ -10,7 +10,8 @@ type Announcement = {
     id: string;
     text: string;
     summary: string;
-    seats: { seat: string; tone: string; label: string }[];
+    showSummary: boolean;
+    seats: { seat: string; tone: string; outcome?: string; label: string }[];
   } | null;
 };
 
@@ -51,11 +52,11 @@ export function StageAnnouncement() {
             {receipt.seats.map(row => (
               <div key={row.seat}>
                 <dt>Seat {row.seat}</dt>
-                <dd><span key={receipt.id + ':' + row.label} data-tone={row.tone}>{row.label}</span></dd>
+                <dd><span key={receipt.id + ':' + row.label} data-tone={row.tone} data-outcome={row.outcome}>{row.label}</span></dd>
               </div>
             ))}
           </dl>
-          <p className="operator__note announcement-receipt__summary">{receipt.summary}</p>
+          {receipt.showSummary && <p className="operator__note announcement-receipt__summary">{receipt.summary}</p>}
         </section>
       )}
     </form>

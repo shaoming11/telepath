@@ -435,11 +435,12 @@ body.wasp-liquid {
   border-top: 1px solid var(--line);
   font-size: .8125rem;
 }
-.wasp-liquid .announcement-receipt__seats dd { margin: 0; text-align: end; }
+.wasp-liquid .announcement-receipt__seats dd { min-inline-size: 0; margin: 0; padding-block: 8px; }
 .wasp-liquid .announcement-receipt__seats dd span {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  line-height: 1.35;
   color: var(--fg-2);
   animation: liquid-receipt 175ms ease-out both;
 }
@@ -450,9 +451,12 @@ body.wasp-liquid {
   border: 1px solid currentColor;
   border-radius: 50%;
 }
-.wasp-liquid .announcement-receipt__seats dd span[data-tone=started] { color: #9ce4cc; }
+.wasp-liquid .announcement-receipt__seats dd span[data-tone=started] { color: #9ce4cc; font-weight: 600; }
 .wasp-liquid .announcement-receipt__seats dd span[data-tone=started]::before { background: currentColor; }
 .wasp-liquid .announcement-receipt__seats dd span[data-tone=failed] { color: var(--danger); }
+.wasp-liquid .announcement-receipt__seats dd span[data-tone=off]::before { border-radius: 1px; border-style: dashed; }
+.wasp-liquid .announcement-receipt__seats dd span[data-tone=failed]::before { border-radius: 1px; }
+.wasp-liquid .announcement-receipt__seats dd span[data-outcome=disconnected]::before { transform: rotate(45deg); }
 .wasp-liquid .announcement-receipt__summary { padding-block-start: 7px; border-top: 1px solid var(--line); }
 
 @keyframes liquid-receipt {

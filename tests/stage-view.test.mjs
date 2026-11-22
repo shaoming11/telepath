@@ -86,11 +86,23 @@ test('the last announcement has stable per-seat status while the next draft chan
   assert.deepEqual(second.receipt, first.receipt);
   assert.deepEqual(second.receipt.seats, [
     { seat: 'A', tone: 'started', label: 'Playback started' },
-    { seat: 'B', tone: 'failed', label: 'No playback confirmation' },
+    { seat: 'B', tone: 'failed', outcome: 'disconnected', label: 'Disconnected before confirming' },
   ]);
   assert.equal(second.canSend, true);
   assert.equal(stage.announcementView(state, false, 'New text').canSend, false);
   assert.equal(stage.announcementView(state, false, 'New text').note, 'Waiting for the hub.');
+});
+
+test('announcement receipts keep a disconnect distinct from a timeout even after the seat reconnects', () => {
+  const state = stage.normalizeState({ seats: { A: { online: true }, B: { online: true } },
+    announcement: {
+      id: 'cue-mixed', text: 'Thirty seconds left.', status: 'failed', targets: ['A', 'B'],
+      heard: [], disconnected: ['B'], reason: 'playback_timeout',
+    },
+  });
+  const { receipt } = stage.announcementView(state, true, '');
+  assert.deepEqual(receipt.seats.map(row => row.label), ['No playback confirmation', 'Disconnected before confirming']);
+  assert.equal(receipt.showSummary, true);
 });
 
 test('announcement targets distinguish synthesis failures, a pending playback and an offline seat', () => {

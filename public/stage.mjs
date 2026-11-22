@@ -429,14 +429,15 @@ export function announcementNote(progress) {
   const targets = asList(progress.targets).filter(seat => SEATS.includes(seat));
   switch (progress.status) {
     case 'building': return 'Generating the system voice.';
-    case 'queued': return 'Waiting for playback on ' + targets.filter(seat => !heard.includes(seat)).join(' and ') + '.';
+    case 'queued': return 'Waiting for playback on '
+      + targets.filter(seat => !heard.includes(seat) && !asList(progress.disconnected).includes(seat)).join(' and ') + '.';
     case 'played': return 'Playback confirmed on both seats.';
     case 'partial': return 'Playback confirmed on Seat ' + heard.join(' and ') + '.';
     case 'failed':
       if (progress.reason === 'playback_timeout') return 'Neither seat confirmed playback. Check the two phones.';
       if (progress.reason === 'no_seats') return 'Connect a seat first.';
       if (progress.reason === 'seat_left' || progress.reason === 'seat_offline') {
-        return 'The seat disconnected before playback. Reconnect it, then send again.';
+        return 'The seat disconnected before confirming. Reconnect it, then send again.';
       }
       return 'The announcement voice was unavailable. Try a preset line.';
     default: return null;
@@ -462,15 +463,19 @@ export function announcementView(state, online, raw) {
   if (progress?.id && typeof progress.text === 'string') {
     const heard = asList(progress.heard);
     const targets = asList(progress.targets);
+    const disconnected = asList(progress.disconnected);
     const seats = SEATS.map(seat => {
       if (!targets.includes(seat)) return { seat, tone: 'off', label: 'Offline at send' };
       if (heard.includes(seat)) return { seat, tone: 'started', label: 'Playback started' };
+      if (disconnected.includes(seat) || progress.disconnected == null && progress.reason === 'seat_left') {
+        return { seat, tone: 'failed', outcome: 'disconnected', label: 'Disconnected before confirming' };
+      }
       if (progress.status === 'building') return { seat, tone: 'waiting', label: 'Preparing audio' };
       if (progress.status === 'queued') return { seat, tone: 'waiting', label: 'Waiting for playback' };
       if (['voice_unavailable', 'speech_timeout'].includes(progress.reason)) return { seat, tone: 'failed', label: 'Audio unavailable' };
       return { seat, tone: 'failed', label: 'No playback confirmation' };
     });
-    receipt = { id: progress.id, text: progress.text, seats, summary: announcementNote(progress) };
+    receipt = { id: progress.id, text: progress.text, seats, summary: announcementNote(progress), showSummary: progress.status === 'failed' };
   }
   return { canSend, rehearsal, busy, note, action: target ? 'Send to ' + target : 'Send announcement', receipt };
 }

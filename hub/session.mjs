@@ -334,6 +334,7 @@ export class Session {
     this.clearPending(seat, 'disconnect');
     const announcement = this.announcement;
     if (announcementInFlight(announcement) && announcement.targets.has(seat)) {
+      if (!announcement.heard.has(seat)) announcement.disconnected.add(seat);
       this.checkAnnouncementTargets(announcement);
     }
   }
@@ -1671,8 +1672,9 @@ export class Session {
   snapshotAnnouncement() {
     const announcement = this.announcement;
     if (!announcement) return null;
-    const { id, text, status, targets, heard, reason } = announcement;
-    return { id, text, status, targets: [...targets.keys()], heard: SEATS.filter(seat => heard.has(seat)), ...(reason && { reason }) };
+    const { id, text, status, targets, heard, disconnected, reason } = announcement;
+    return { id, text, status, targets: [...targets.keys()], heard: SEATS.filter(seat => heard.has(seat)),
+      disconnected: SEATS.filter(seat => disconnected.has(seat)), ...(reason && { reason }) };
   }
 
   async announce(value, approvedCoach) {
@@ -1682,7 +1684,7 @@ export class Session {
     const targets = new Map(SEATS.filter(seat => this.seats[seat].online)
       .map(seat => [seat, this.seats[seat].connection]));
     const announcement = {
-      id: 'announcement-' + ++this.sequence, text, targets, heard: new Set(),
+      id: 'announcement-' + ++this.sequence, text, targets, heard: new Set(), disconnected: new Set(),
       status: 'building', lifecycle: new AbortController(),
     };
     this.announcement = announcement;
