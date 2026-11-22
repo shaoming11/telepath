@@ -1,4 +1,39 @@
 {
-  "revision": 28,
-  "claims": []
+  "revision": 29,
+  "claims": [
+    {
+      "id": "240ea9f9-f978-431a-a123-21da7b999dd2",
+      "owner": "fireheartjerry",
+      "agent": "codex-room-mic",
+      "branch": "jerry/airpods-1",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "hub/server.mjs",
+        "hub/session.mjs",
+        "hub/audio.mjs",
+        "public/phone.mjs",
+        "public/index.html",
+        "public/stage.html",
+        "public/room-mic.html",
+        "public/room-mic.mjs",
+        "tests/transport.test.mjs",
+        "tests/session.test.mjs",
+        "tests/phone-session.test.mjs"
+      ],
+      "paths": [
+        "hub/audio.mjs",
+        "hub/server.mjs",
+        "hub/session.mjs",
+        "public/index.html",
+        "public/phone.mjs",
+        "public/room-mic.html",
+        "public/room-mic.mjs",
+        "public/stage.html",
+        "tests/phone-session.test.mjs",
+        "tests/session.test.mjs",
+        "tests/transport.test.mjs"
+      ],
+      "claimedAt": "2026-11-22T04:02:10.211Z"
+    }
+  ]
 }
