@@ -68,8 +68,16 @@ export function LiveStage({ embedded = false }: { embedded?: boolean }) {
     setOperator(false);
     const target = lastFocus.current;
     const restorable = target && target !== document.body && document.contains(target) && !target.closest("#st-operator");
-    (restorable ? target : root.current?.querySelector<HTMLElement>("[data-operator-toggle]"))?.focus({ preventScroll: true });
+    if (restorable) target.focus({ preventScroll: true });
+    else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, [setOperator]);
+
+  useEffect(() => {
+    const element = root.current;
+    if (!element) return;
+    const box = element.getBoundingClientRect();
+    if (box.top < 0 && box.bottom > 0) element.scrollIntoView({ block: "start" });
+  }, [state.phase]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

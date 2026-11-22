@@ -552,7 +552,8 @@ export function seatSteps(seat: SeatState): SetupStep[] {
   return [
     {
       label: "Voice",
-      value: seat.voice === "ready" ? "Cloned voice" : seat.voice === "fallback" ? "Premade voice" : seat.voice ?? "Not started",
+      value: seat.voice === "ready" ? "Cloned voice" : seat.voice === "fallback" ? "Premade voice"
+        : seat.voice === "building" ? "Building" : seat.voice === "error" ? "Failed" : "Not started",
       done: voiceDone, flag: seat.voice === "error",
     },
     {
@@ -649,14 +650,17 @@ export interface LaneMark {
   seat?: SeatKey;
   urgent?: boolean;
 }
+export interface LaneLink { key: string; from: SeatKey; to: SeatKey; sent: number; heard: number; urgent: boolean }
 export interface LaneView {
   marks: (LaneMark & { left: number; width?: number })[];
+  links: LaneLink[];
   ticks: { label: string; left: number }[];
 }
 
 export function revealLanes(state: HubState): LaneView | null {
   const base = timelineBase(state);
   const marks: LaneMark[] = [];
+  const crossings: { key: string; from: SeatKey; to: SeatKey; at: number; heardAt: number; urgent: boolean }[] = [];
   for (const key of SEATS) {
     for (const line of state.seats[key].transcript) {
       if (line.at !== null) marks.push({ lane: key, type: "speech", at: line.at, end: line.at + speechSpanMs(line.text) });
@@ -666,7 +670,11 @@ export function revealLanes(state: HubState): LaneView | null {
     if (entry.at === null || !isSeat(entry.seat)) continue;
     if (entry.kind === "message") {
       marks.push({ lane: entry.seat, type: "tap", at: entry.at, label: entry.signal, seat: entry.seat, urgent: entry.urgent });
-      if (isSeat(entry.to)) marks.push({ lane: entry.to, type: "heard", at: entry.playedAt ?? entry.at, seat: entry.seat, urgent: entry.urgent });
+      if (isSeat(entry.to)) {
+        const heardAt = entry.playedAt ?? entry.at;
+        marks.push({ lane: entry.to, type: "heard", at: heardAt, seat: entry.seat, urgent: entry.urgent });
+        crossings.push({ key: entry.key, from: entry.seat, to: entry.to, at: entry.at, heardAt, urgent: entry.urgent });
+      }
     } else if (entry.kind === "receipt") marks.push({ lane: entry.seat, type: "receipt", at: entry.at, seat: entry.seat });
     else if (entry.kind === "draft") marks.push({ lane: entry.seat, type: "draft", at: entry.at, seat: entry.seat });
   }
@@ -682,6 +690,7 @@ export function revealLanes(state: HubState): LaneView | null {
   }
   return {
     ticks,
+    links: crossings.map(({ key, from, to, at, heardAt, urgent }) => ({ key, from, to, urgent, sent: ratio(at), heard: ratio(heardAt) })),
     marks: marks.map(mark => ({
       ...mark, left: ratio(mark.at),
       width: mark.end === undefined ? undefined : Math.max(0.4, ratio(mark.end) - ratio(mark.at)),

@@ -74,8 +74,8 @@ export function Lobby({ hub }: { hub: Hub }) {
       <div className="st-lobby__head">
         <h1 className="st-headline"><span>Two seats.</span> One silent channel.</h1>
         <p className="st-lede">
-          Your partner hears you in your own voice. A coach listens through the Mac’s microphone, checks your references,
-          and waits for your tap before sending a whisper.
+          A tap becomes a whisper in your partner’s ear. A coach listens through the Mac’s microphone, checks your references,
+          and waits for a tap before anything is sent.
         </p>
       </div>
 
