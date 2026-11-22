@@ -190,6 +190,11 @@ def generated(component, source):
         if replacements != 1:
             raise ValueError(f"Expected exactly one generated {name} region.")
         imports += f"import {{ {name} }} from '../{name}';\n"
+    monitor = r'<section className="(channel-monitor(?: channel-monitor--phone)?)" id="((?:phone|lobby|stage)-monitor)" aria-label="Live audio and context"></section>'
+    markup, replacements = re.subn(monitor, r'<ChannelMonitor id="\2" className="\1" />', markup)
+    if replacements != (1 if component == "PhoneMarkup" else 2):
+        raise ValueError("Unexpected number of channel monitors.")
+    imports += "import { ChannelMonitor } from '../ChannelMonitor';\n"
     if imports:
         imports += "\n"
     lines = "\n".join("      " + line if line else "" for line in markup.splitlines())
