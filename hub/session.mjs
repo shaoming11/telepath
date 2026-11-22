@@ -107,6 +107,7 @@ export class Session {
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.now = now;
     this.generation = 0;
+    this.setupReset = null;
     this.sequence = 0;
     this.senseTimer = null;
     this.cannedTimers = new Set();
@@ -143,6 +144,7 @@ export class Session {
   snapshot(viewer) {
     return {
       sessionId: this.sessionId,
+      ...(this.setupReset && { setupReset: this.setupReset }),
       phase: this.phase,
       preset: this.preset,
       presetPending: this.cacheCandidate?.preset ?? (this.targetPreset.preset !== this.preset ? this.targetPreset.preset : null),
@@ -1164,6 +1166,7 @@ export class Session {
       seat, { online: previous[seat].online, sim: previous[seat].sim, connected: previous[seat].connected },
     ]));
     this.initialize(connections);
+    this.setupReset = this.sessionId;
     const cleanup = this.disposeAudio(previous);
     this.publish();
     await cleanup;

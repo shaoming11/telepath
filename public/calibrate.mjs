@@ -540,6 +540,7 @@ export function createCalibration(services) {
     },
     refresh() { if (!running) render_intro(); },
     stop,
+    reset() { stop(); stop_check(); },
     active: () => running || checking,
     note_media_event(action) {
       if (checking && elements.quick_model.value !== AIRPODS_PRO_ID) {

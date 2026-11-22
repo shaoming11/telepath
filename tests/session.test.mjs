@@ -288,6 +288,8 @@ test('transcripts and the calibrated profile reach only intended viewers and res
   assert.deepEqual(state().calibration, profile);
   assert.deepEqual(seatFrames.B.findLast(frame => frame.type === 'calibration')?.profile, profile);
   await session.reset();
+  assert.equal(session.snapshot('A').setupReset, session.sessionId);
+  assert.equal(session.snapshot('B').setupReset, session.sessionId);
   realtime('Old connection callback');
   assert.equal(state().seats.A.transcript.length, 0);
   assert.equal(state().phase, 'lobby');
