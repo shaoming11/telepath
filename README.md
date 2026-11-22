@@ -1,6 +1,6 @@
 # Telepath
 
-Two fixed seats, one MacBook hub. Earbud gestures let a teammate send a cached private cue during a presentation. In Question Mode, the presenter can hear how to respond to a judge. A suggested message to the other seat plays privately for the sender first and requires approval before it is delivered.
+Two fixed seats, one MacBook hub. Earbud gestures let a teammate send a cached private cue during a presentation. A double gesture requests one private answer to the latest judge question. A suggested message to the other seat plays privately for the sender first and requires approval before it is delivered.
 
 ## Feature and skill tree
 
@@ -11,7 +11,7 @@ Two fixed seats, one MacBook hub. Earbud gestures let a teammate send a cached p
   - AirPods 1 calibration classifies repeated next-track events. AirPods Pro setup verifies stem actions delivered to the browser.
   - Trace how a signal reaches the partner in the [signal and audio path](docs/handbook/architecture/signal-and-audio-path.md).
 - **Get a private answer to a judge**
-  - Arm Question Mode. ElevenLabs streams the room transcript, OpenAI drafts from the current context, and ElevenLabs speaks the cue when the question commits.
+  - Double-tap after the judge asks. OpenAI reads the current room transcript and retrieved project evidence, then ElevenLabs whispers a short answer.
   - Understand interruption handling, speaker labels, retrieval and provider fallback in the [question coaching handbook](docs/handbook/architecture/question-coaching.md).
   - See the [technical reference](docs/technical-reference.md) for supported architecture facts and module locations.
 - **Maintain and verify the hub**
@@ -35,7 +35,7 @@ Open the local Stage URL and choose **Start listening**. Allow browser access an
 
 ## Ask what to say during the Telepath pitch
 
-In a live Pitch session, tap **Question mode**, use one next-track event on AirPods 1, or squeeze an AirPods Pro stem once to turn automatic question coaching on or off. Arming opens a text-only OpenAI Realtime session. The hub sends ElevenLabs transcript snapshots as the question develops and can play a sourced cue after the question is complete and the room is quiet. Automated cues pass an evidence and usefulness check. Realtime errors fall back to the OpenAI text request. Set `TELEPATHY_REALTIME=off` to use the text request directly. **What should I say?** still asks for an immediate cue. A pending approval or receipt takes priority over the earbud toggle. Use the Live **Single** button to send the fixed single cue.
+In a live Pitch session, double squeeze on AirPods Pro, send two Next Track events on AirPods 1, or tap **Cue now**. Each request sends the room transcript so far and ranked project, uploaded, and research passages to OpenAI. A local SQLite vector store ranks hashed token vectors by cosine similarity alongside lexical and code retrieval. The model infers the latest genuine question and speaks one sourced cue through ElevenLabs.
 
 The project index is rebuilt on hub start from the core docs, the recursive Markdown handbook, and a curated list of source files in [hub/project-references.mjs](hub/project-references.mjs). The hub checks for edits every 2.5 seconds. It swaps in a validated index when the corpus changes and retains the last working index if a refresh fails. A speculative cue from the old corpus is rebuilt if its question commits after the update. Code lookup uses file and line ranges in source citations. Stage uploads extend the session corpus separately. Credentials, local runtime artifacts, and arbitrary repository paths are outside the built-in allowlist. The hub reports index version, size, and refresh status at `/info`.
 

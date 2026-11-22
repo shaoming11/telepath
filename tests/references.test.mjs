@@ -43,7 +43,7 @@ test('technical RAG finds evidence for paraphrased judge questions', async () =>
     ['What happens during a cold start?', /latency, failures/i],
     ['How do the iPhones connect wirelessly?', /WebSockets and private routing/i],
     ['How do you avoid hallucinations?', /retrieval, grounding/i],
-    ['Which OpenAI model is used for the voice agent?', /streaming inference/i],
+    ['Which OpenAI model is used for the voice agent?', /on-demand coaching/i],
     ['How many squeezes does the older hardware learn?', /AirPods and control routing/i],
   ];
   for (const [question, heading] of prompts) {
@@ -98,7 +98,7 @@ test('missed-point advice is grounded in both the spoken answer and an unspoken 
   assert.equal(validateAnswer(advice, passages, [...turns, { text: 'The pilot lasts six weeks.' }]).status, 'resolved');
 });
 
-test('Realtime evidence packing preserves judge-answer facts inside a smaller grounding payload', async t => {
+test('Evidence packing preserves judge-answer facts inside a smaller grounding payload', async t => {
   const sources = [
     ['Telepathy technical reference.md', '../docs/technical-reference.md', 0.3],
     ['Telepathy pitch brief.md', '../docs/telepathy-pitch-brief.md', 0],
@@ -115,13 +115,13 @@ test('Realtime evidence packing preserves judge-answer facts inside a smaller gr
     ['Why won’t an old socket message change a new session?', /scope frames and prevent stale commands/i],
     ['Does OpenAI receive the raw mic recording?', /ElevenLabs alone receives raw mic audio/i],
     ['How do you verify the citation?', /cited IDs (?:were supplied )?and supporting quotes appear/i],
-    ['What does the first squeeze before a judge question do?', /arms Question Mode|toggles Question Mode|Question Mode is armed[^.]+single earbud action/i],
-    ['Which model is behind the persistent socket?', /gpt-realtime-mini/i],
+    ['What does a double gesture do after a judge question?', /a double gesture asks for an answer/i],
+    ['What is the default OpenAI answer model?', /gpt-4\.1-mini/i],
     ['How do iPhones connect wirelessly?', /hotspot using HTTPS and WebSockets/i],
     ['How is AirPods 1 timing trained?', /two successful doubles and two successful triples/i],
     ['Who receives the generated voice?', /only to the (?:requesting seat|seat that asked)|to the requesting seat only/i],
     ['Can a second Stage tab capture the room?', /(?:only one stage tab owns the capture|only the mac stage owns)/i],
-    ['Does the cue play while the judge is still speaking?', /waits for a committed transcript|after the question commits/i],
+    ['Does the OpenAI Responses request contain the entire room transcript?', /entire room transcript so far/i],
   ];
   let baselineBytes = 0;
   let packedBytes = 0;
@@ -168,7 +168,7 @@ test('the rebuilt project index includes recursive docs and selects exact source
   assert.ok(documents.some(doc => doc.name.startsWith('docs/handbook/operations/')));
   assert.ok(documents.every(doc => !doc.name.includes('.env') && !doc.name.includes('.runtime')));
   for (const [question, file, literal] of [
-    ['Which handler implements stopQuestionMode in hub/session.mjs?', /^hub\/session\.mjs:\d+/, 'stopQuestionMode(seat) {'],
+    ['Which handler implements roomQuestionContext in hub/session.mjs?', /^hub\/session\.mjs:\d+/, 'roomQuestionContext(seat, began) {'],
     ['Which source file sends Realtime response.create?', /^hub\/realtime-pitch\.mjs:\d+/, "type: 'response.create'"],
   ]) {
     const evidence = packReferenceEvidence(retrieveProjectReferences(documents, question), question);
@@ -212,16 +212,11 @@ test('a running Wasp hub refreshes notes and only cites component code from the 
   const utterance = 'Where does the StageAnnouncement component render per-seat receipts?';
   const at = Date.now();
   hub.session.room.transcript.push({ text: utterance, at });
-  const cue = await hub.session.composePitchCue(hub.session.pitchContext('A', at), AbortSignal.timeout(1000), performance.now(), {
-    async generate(input) {
-      const source = input.passages.find(item => item.kind === 'code');
-      assert.match(source?.name ?? '', /^wasp-ui\/src\/StageAnnouncement\.tsx:/);
-      return { status: 'answer', question: utterance, answer: 'StageAnnouncement maps the receipt to one row per seat.',
-        sources: [{ id: source.id, quote: 'receipt.seats.map(row => (' }] };
-    },
-  });
-  assert.equal(cue?.source, 'openai-realtime');
-  assert.match(cue.sources[0].name, /^wasp-ui\/src\/StageAnnouncement\.tsx:/);
+  const context = hub.session.roomQuestionContext('A', at);
+  const source = context.passages.find(item => item.kind === 'code');
+  assert.match(source?.name ?? '', /^wasp-ui\/src\/StageAnnouncement\.tsx:/);
+  assert.ok(source.text.includes('receipt.seats.map(row => ('));
+  assert.equal(context.roomTranscript[0].text, utterance);
   hub.session.room.transcript.length = 0;
   const infoURL = new URL('/info', info.stageUrl);
   assert.equal((await fetch(new URL('/' + WASP_SOURCE_SNAPSHOT, info.stageUrl))).status, 404);

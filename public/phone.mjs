@@ -362,7 +362,7 @@ function on_media_play() {
   void audio.resume();
 }
 
-function on_signal(signal, trace, { toggle_question_mode = false, draft_id, receipt_id, explicit_signal = false } = {}) {
+function on_signal(signal, trace, { draft_id, receipt_id, explicit_signal = false } = {}) {
   diag('signal', { signal, calibrating: calibration.active() });
   if (calibration.active()) {
     calibration.note_signal(signal);
@@ -387,9 +387,8 @@ function on_signal(signal, trace, { toggle_question_mode = false, draft_id, rece
     return;
   }
   const pitch_help = scope.pitchHelp && ui.state?.phase === 'live' && ui.state.pitchHelp
-    && (signal === 'LR' || signal === 'R1' && first && !scope.draftId && !scope.receiptId);
+    && (signal === 'LR' || signal === 'R2' && first && !explicit_signal && ui.state.roomQuestionAvailable);
   const discard = signal === 'L1' || settings.mode === 1 && signal === 'R2';
-  const question_mode = pitch_help && ui.state.questionModeAvailable && (toggle_question_mode || signal === 'R1');
   if (pitch_help) signal = 'LR';
   flash_signal(signal);
   ui.signal_count += 1;
@@ -401,7 +400,7 @@ function on_signal(signal, trace, { toggle_question_mode = false, draft_id, rece
   if (signal === 'R1' && !intent.draftId && intent.receiptId === scope.receiptId && Number.isFinite(receiptPressedAt)) {
     intent.receiptPressedAt = receiptPressedAt;
   }
-  if (!send({ type: 'signal', signal, id, ...intent, ...(pitch_help && { purpose: question_mode ? 'question_mode' : 'pitch_help' }) })) {
+  if (!send({ type: 'signal', signal, id, ...intent, ...(pitch_help && { purpose: ui.state.roomQuestionAvailable ? 'answer_room_question' : 'pitch_help' }) })) {
     audio.play_cue('error');
     show_note('Signal did not reach the hub.');
     return;
@@ -1443,11 +1442,11 @@ function render_message(prefix, entry, key) {
 
 function render_signals() {
   const codebook = ui.state?.codebook ?? {};
-  const inlineCue = reactPitch && !is_sim() && Boolean(ui.state?.questionModeAvailable);
+  const inlineCue = reactPitch && !is_sim() && Boolean(ui.state?.roomQuestionAvailable);
   const order = SIGNAL_ORDER[settings.mode].filter(signal => !inlineCue || signal !== 'LR');
   const host = $('signals');
   const pitch_help = ui.state?.pitchHelp === true;
-  const key = settings.mode + settings.gesture_model + String(pitch_help) + String(ui.state?.questionModeAvailable) + String(inlineCue) + JSON.stringify(codebook);
+  const key = settings.mode + settings.gesture_model + String(pitch_help) + String(ui.state?.roomQuestionAvailable) + String(inlineCue) + JSON.stringify(codebook);
   if (ui.signals_key !== key) {
     ui.signals_key = key;
     host.replaceChildren(...order.map(signal => {
@@ -1460,7 +1459,7 @@ function render_signals() {
       name.textContent = signal === 'LR' && pitch_help ? 'What should I say?' : SIGNAL_LABELS[signal];
       const meaning = document.createElement('span');
       meaning.textContent = signal === 'LR' && pitch_help
-        ? ui.state?.questionModeAvailable ? 'Get a private cue now'
+        ? ui.state?.roomQuestionAvailable ? 'Get a private cue now'
           : settings.gesture_model === 'pro' ? 'Single stem squeeze' : 'One next-track event'
         : codebook[signal] ?? SYSTEM_MEANINGS[signal] ?? '';
       button.append(name, meaning);
@@ -1514,11 +1513,11 @@ function render_draft(shown) {
   if (left) ui.draft_timer = setTimeout(schedule_render, (left % 1000 || 1000) + 1);
 }
 
-function renderPitchControls(state, mine, phase, cue) {
-  const available = Boolean(state?.questionModeAvailable) && !is_sim();
-  const armed = mine?.questionMode === true;
+function renderPitchControls(state, phase, cue) {
+  const available = Boolean(state?.roomQuestionAvailable) && !is_sim();
   if (reactPitch) {
-    const detail = { available, armed, live: phase === 'live' && !state?.canned, connected: is_online(),
+    const detail = { available, live: phase === 'live' && !state?.canned, connected: is_online(),
+      gestureHint: settings.gesture_model === 'pro' ? 'Double squeeze to answer' : 'Two Next Track events',
       roomLive: state?.room?.transcription === 'live', preparing: ui.note === PITCH_PREPARING_NOTE, cue: cue ?? null };
     const fingerprint = JSON.stringify(detail);
     if (fingerprint !== lastPitchRender) {
@@ -1528,11 +1527,9 @@ function renderPitchControls(state, mine, phase, cue) {
     return;
   }
 
-  const mode_button = $('question-mode');
-  mode_button.hidden = !available;
-  mode_button.setAttribute('aria-pressed', String(armed));
-  set_text(mode_button.querySelector('b'), armed ? 'Question mode on' : 'Question mode');
-  set_text(mode_button.querySelector('span'), armed ? 'Listening for questions. Tap to stop.' : 'Prepare while the judge speaks');
+  const cue_button = $('cue-now');
+  cue_button.hidden = !available;
+  cue_button.disabled = phase !== 'live' || !is_online() || Boolean(state?.canned);
 
   $('live-pitch-notes').hidden = !cue?.text;
   set_text($('live-pitch-cue'), cue?.text ?? '');
@@ -1557,7 +1554,7 @@ function render_live() {
   set_text($('live-preset'), state?.presetPending && state.presetPending !== preset ? preset + ' to ' + state.presetPending : preset);
   const phase = state?.phase ?? 'lobby';
   const cue = phase === 'live' && !state?.canned && preset === 'Pitch' ? mine?.lastPitchCue : null;
-  renderPitchControls(state, mine, phase, cue);
+  renderPitchControls(state, phase, cue);
   $('live-phase').dataset.phase = phase;
   set_text($('live-phase'), state?.canned ? 'Canned take' : PHASE_LABELS[phase] ?? '');
   set_text($('live-partner'), partner?.online ? (partner.ready ? 'Ready' : 'Connected') : 'Offline');
@@ -1629,8 +1626,8 @@ function render_codebook() {
     pattern.textContent = is_sim() ? PATTERN_LABELS[settings.mode][signal]
       : !count ? 'On-screen control'
         : settings.gesture_model === 'pro' ? SIGNAL_LABELS[signal] + ' squeeze' : 'Next Track × ' + count;
-    if (ui.state?.questionModeAvailable && signal === 'R1') pattern.textContent = 'On-screen fixed cue. Earbud press confirms, acknowledges, or toggles question mode.';
-    if (ui.state?.questionModeAvailable && signal === 'LR') pattern.textContent = 'On-screen cue. One earbud press toggles question mode.';
+    if (ui.state?.roomQuestionAvailable && signal === 'R2') pattern.textContent = 'On-screen fixed cue. The earbud double gesture requests an AI answer.';
+    if (ui.state?.roomQuestionAvailable && signal === 'LR') pattern.textContent = 'Cue now or use the earbud double gesture.';
     row.append(name, meaning, pattern);
     return row;
   }));
@@ -1718,13 +1715,10 @@ function set_earbud_model(model) {
 
 function bind_events() {
   if (reactPitch) {
-    document.addEventListener('telepathy:toggle-question-mode', () => {
-      if (ui.state?.phase === 'live' && ui.state.questionModeAvailable) on_signal('LR', undefined, { toggle_question_mode: true });
-    });
     document.addEventListener('telepathy:request-pitch-cue', () => {
-      if (!is_sim() && is_online() && ui.state?.phase === 'live' && !ui.state.canned && ui.state.questionModeAvailable) touch_signal('LR');
+      if (!is_sim() && is_online() && ui.state?.phase === 'live' && !ui.state.canned && ui.state.roomQuestionAvailable) touch_signal('LR');
     });
-  } else $('question-mode').addEventListener('click', () => on_signal('LR', undefined, { toggle_question_mode: true }));
+  } else $('cue-now').addEventListener('click', () => touch_signal('LR'));
   installDiag({ send, keepalive });
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);

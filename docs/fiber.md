@@ -16,6 +16,6 @@ Research runs off the whisper path, with one task at a time, 15 seconds between 
 
 ## When coaching speaks
 
-Once armed, Question Mode answers a completed question after a short pause when it has supporting evidence. It can retry after an empty partial draft. Unsolicited cues and missing-point reminders require 2.5 seconds of quiet, a value check, and a 30-second cooldown. Playback, pending approvals, receipts and announcements can block either path.
+A double gesture or **Cue now** sends one OpenAI request with the full room transcript and retrieved evidence. Research stays in the background and cannot trigger a private answer. Separately, automatic teammate draft previews retain their quiet-period and approval rules.
 
 API contracts: [Fiber person lookup](https://api.fiber.ai/ai-docs/KitchenSinkProfile.md), [Fiber company lookup](https://api.fiber.ai/ai-docs/kitchenSinkCompany.md), [OpenAI web search](https://developers.openai.com/api/docs/guides/tools-web-search).

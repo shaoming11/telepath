@@ -1,9 +1,10 @@
 import { createResearch } from './research.mjs';
-import { BUILD_STORY_EVIDENCE, BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, missingBuildPoint, nearlySameQuestion, sameQuestion, sourcedProjectCue } from './pitch-question.mjs';
+import { BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, sourcedProjectCue } from './pitch-question.mjs';
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
-import { exactExcerptQuotes, packReferenceEvidence, recallRoomTurns, retrieveProjectReferences, retrieveReferences } from './references.mjs';
+import { recallRoomTurns, retrieveProjectReferences, retrieveReferences } from './references.mjs';
+import { retrieveVectorReferences } from './context-vectors.mjs';
 import { questionKey, validateAnswer } from './questions.mjs';
 import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcements.mjs';
 import { COUNT_CALIBRATION_WINDOW_MS } from '../public/earbuds/airpods-1/input.mjs';
@@ -31,24 +32,13 @@ const DEFAULT_SETTINGS = Object.freeze({
   questionDebounceMs: 350,
   questionQuietMs: 2700,
   automaticQuietMs: 2500,
-  armedQuestionQuietMs: 650,
   automaticCooldownMs: 30000,
   automaticPlaybackGuard: true,
   questionTimeoutMs: 8000,
-  pitchHelpTimeoutMs: 4800,
-  pitchComposeMs: 1850,
   pitchRaceMs: 6000,
   pitchVerifyMs: 15_000,
   pitchSpeechMs: 4600,
   pitchPlaybackMs: 8000,
-  pitchPauseBudgetMs: 12_000,
-  pitchReviewMs: 1200,
-  pitchQuestionSettleMs: 120,
-  pitchRevisionMinMs: 350,
-  scenarioRevisionLimit: 3,
-  pitchRealtimeReconnectMs: 3000,
-  pitchRealtimeReplyMs: 1550,
-  pitchQuestionRepeatMs: 2500,
   pitchPlanWaitMs: 120,
   pitchPlanDebounceMs: 220,
   pitchHelpRepeatMs: 1500,
@@ -72,7 +62,7 @@ function createSeat(name) {
     earbuds: false, calibrated: false, wantsReady: false,
     situation: '', transcript: [], level: 0, pending: null,
     audioBusyUntil: -Infinity, lastIn: null, lastOut: null, lastDraftAt: -Infinity, lastSuggestionAt: -Infinity,
-    pitchHelp: null, questionMode: null, pitchPlayback: null, lastPitchCue: null, lastPitchHelpAt: -Infinity,
+    pitchHelp: null, lastPitchCue: null, lastPitchHelpAt: -Infinity,
     pendingTimer: null, lastDraftFingerprint: null, receipt: null, awaitingHeard: new Map(),
     cacheId: null, out: false, seenSignals: new Set(), listenVersion: 0,
   };
@@ -219,14 +209,14 @@ export class Session {
       preset: this.preset,
       pitchHelp: this.preset === 'Pitch',
       coachScenario: this.coachScenario,
-      questionModeAvailable: this.preset === 'Pitch' && this.roomInput === 'mac',
+      roomQuestionAvailable: this.preset === 'Pitch' && this.roomInput === 'mac',
       presetPending: this.cacheCandidate?.preset ?? (this.targetPreset.preset !== this.preset ? this.targetPreset.preset : null),
       cacheId: this.activeCache?.id ?? null,
       context: this.context,
       roomInput: this.roomInput,
       room: { listening: this.room.listening, listeningRequested: this.room.listeningRequested,
         transcription: this.room.transcription, level: this.room.level,
-        ...(viewer == null && { transcript: this.room.transcript.slice(), speakerStream: this.room.speakerStream }) },
+        ...(viewer == null && { transcript: this.room.transcript.slice(-60), speakerStream: this.room.speakerStream }) },
       codebook: BOOKS[this.preset],
       calibration: this.calibration,
       online: Object.fromEntries(SEATS.map(seat => [seat, this.seats[seat].online])),
@@ -241,7 +231,6 @@ export class Session {
           situation: visible ? state.situation : '',
           transcript: visible ? state.transcript.slice() : [],
           pending: visible ? state.pending : null,
-          questionMode: visible && Boolean(state.questionMode),
           lastPitchCue: visible ? state.lastPitchCue : null,
           receipt: visible && state.receipt?.until >= this.now()
             ? { messageId: state.receipt.messageId, openedAt: state.receipt.openedAt, until: state.receipt.until }
@@ -347,7 +336,6 @@ export class Session {
   }
 
   endConnection(seat) {
-    this.stopQuestionMode(seat);
     this.cancelAnswers('disconnect');
     this.questionPartialSeats.delete(seat);
     this.questionSpeechPending = this.questionPartialSeats.size > 0;
@@ -377,7 +365,6 @@ export class Session {
 
   cancelScene(reason) {
     this.clearPitchPlanning();
-    for (const seat of SEATS) this.stopQuestionMode(seat);
     this.cancelAnswers(reason);
     this.questionTurns = [];
     this.questionSpeechPending = false;
@@ -388,7 +375,6 @@ export class Session {
     this.coachState = { status: 'idle' };
     for (const seat of SEATS) {
       this.seats[seat].lastPitchCue = null;
-      this.seats[seat].pitchPlayback = null;
       this.clearPending(seat, reason);
     }
   }
@@ -647,8 +633,9 @@ export class Session {
       }
     } else if (signal === 'LR') {
       this.publish();
-      if (frame.purpose === 'question_mode' && this.preset === 'Pitch') this.toggleQuestionMode(seat);
-      else if (frame.purpose === 'pitch_help' && this.preset === 'Pitch') await this.requestPitchHelp(seat);
+      if (['answer_room_question', 'question_mode'].includes(frame.purpose) && this.preset === 'Pitch' && this.roomInput === 'mac') {
+        await this.requestPitchHelp(seat, { oneShot: true });
+      } else if (frame.purpose === 'pitch_help' && this.preset === 'Pitch') await this.requestPitchHelp(seat);
       else await this.sense(seat);
     } else if (signal === 'L2') {
       this.publish();
@@ -823,8 +810,7 @@ export class Session {
       ...(Number.isInteger(meta?.segment) && { streamId: meta.streamId, segment: meta.segment }),
     });
     if (seat === 'room' && this.phase === 'live') this.researchInBackground(state.transcript);
-    if (seat === 'room' && state.transcript.length > 60) state.transcript.splice(0, state.transcript.length - 60);
-    if (this.phase === 'live' && !(seat === 'room' && SEATS.some(person => this.seats[person].questionMode)) && this.referenceCorpus().length && this.codec?.questionAnswering) {
+    if (this.phase === 'live' && this.referenceCorpus().length && this.codec?.questionAnswering) {
       const key = questionKey(text);
       const duplicate = this.questionTurns.slice(-4).some(turn => this.now() - turn.at < 2000 && questionKey(turn.text) === key);
       if (!duplicate) {
@@ -841,10 +827,7 @@ export class Session {
         this.questionQuietTimer.unref();
       }
     }
-    if (seat === 'room') {
-      this.schedulePitchPlanning();
-      this.commitPitchQuestion(state.transcript.at(-1));
-    }
+    if (seat === 'room') this.schedulePitchPlanning();
     this.publish();
   }
 
@@ -944,11 +927,6 @@ export class Session {
             || scenario !== this.coachScenario || this.canned) return;
         this.researchReferences = [...this.researchReferences, document].slice(-12);
         this.clearPitchPlanning();
-        for (const seat of SEATS) {
-          const mode = this.seats[seat].questionMode;
-          mode?.candidate?.controller.abort();
-          if (mode) mode.candidate = null;
-        }
       } finally {
         if (generation === this.generation && !this.closed && !this.lifecycle.signal.aborted) {
           this.researchRunning = false;
@@ -971,16 +949,16 @@ export class Session {
       ...SEATS.map(seat => this.seats[seat].transcript.at(-1)?.at ?? -Infinity));
   }
 
-  canWhisperAutomatically(seat, text = '', { armedAnswer = false } = {}) {
+  canWhisperAutomatically(seat, text = '') {
     const state = this.seats[seat];
     return this.phase === 'live' && !this.canned && !this.closed && state.online
       && !this.room.partial && !this.questionSpeechPending
       && !SEATS.some(person => this.seats[person].pending || this.seats[person].receipt?.until > this.now())
       && (!this.settings.automaticPlaybackGuard || !SEATS.some(person => this.seats[person].audioBusyUntil > this.now()))
       && !announcementInFlight(this.announcement)
-      && this.now() - this.lastSpeechAt() >= (armedAnswer ? this.settings.armedQuestionQuietMs : this.settings.automaticQuietMs)
-      && (armedAnswer || (this.now() - this.lastAutomaticCueAt >= this.settings.automaticCooldownMs
-        && (!text || !this.automaticCueTexts.has(questionKey(text)))));
+      && this.now() - this.lastSpeechAt() >= this.settings.automaticQuietMs
+      && this.now() - this.lastAutomaticCueAt >= this.settings.automaticCooldownMs
+      && (!text || !this.automaticCueTexts.has(questionKey(text)));
   }
 
   rememberAutomaticCue(text) {
@@ -1032,28 +1010,29 @@ export class Session {
     }) };
   }
 
-  stopQuestionMode(seat) {
-    const state = this.seats[seat];
-    const mode = state.questionMode;
-    if (!mode) return;
-    clearTimeout(mode.timer);
-    mode.controller.abort();
-    state.questionMode = null;
-  }
-
-  toggleQuestionMode(seat) {
-    if (this.seats[seat].questionMode) this.stopQuestionMode(seat);
-    else {
-      this.cancelAnswers('question_mode');
-      const controller = new AbortController();
-      const scope = AbortSignal.any([this.liveScope([seat]), controller.signal]);
-      const realtime = this.coachScenario === 'pitch' ? this.codec?.openPitchRealtime?.(scope) : null;
-      this.seats[seat].questionMode = { controller, scope, realtime, realtimeOpenedAt: this.now(), revisions: 0, candidate: null, timer: null };
-      if (this.room.partial && this.now() - this.room.partial.at <= this.settings.pitchPartialMaxMs) {
-        this.preparePitchQuestion(this.room.partial.text);
-      }
+  roomQuestionContext(seat, began) {
+    const context = this.pitchContext(seat, began);
+    const roomTranscript = this.room.transcript.flatMap(turn =>
+      turn.speakers?.length ? turn.speakers.map(run => ({ speaker: run.seat === seat ? 'Wearer' : run.label, text: run.text }))
+        : [{ speaker: 'Room', text: turn.text }]);
+    if (this.room.partial && began - this.room.partial.at <= this.settings.pitchPartialMaxMs
+      && questionKey(roomTranscript.at(-1)?.text) !== questionKey(this.room.partial.text)) {
+      roomTranscript.push({ speaker: 'Room (live partial)', text: this.room.partial.text });
     }
-    this.publish();
+    const questionHint = roomTranscript.findLast(turn => turn.speaker !== 'Wearer' && looksLikeQuestion(turn.text))?.text ?? '';
+    const query = [questionHint, ...roomTranscript.slice(-3).map(turn => turn.text)].filter(Boolean).join('\n');
+    const corpus = [...this.pitchReferences, ...this.referenceCorpus()];
+    const lexical = retrieveProjectReferences(corpus, query, 6, questionHint);
+    const vectors = [this.pitchReferences, this.references, this.researchReferences]
+      .flatMap(documents => retrieveVectorReferences(documents, query, 4))
+      .sort((a, b) => b.score - a.score).map(result => result.passage);
+    const ranked = new Map();
+    for (const passage of [...lexical.slice(0, 3), ...vectors, ...lexical]) {
+      if (!ranked.has(passage.id)) ranked.set(passage.id, passage);
+      if (ranked.size === 8) break;
+    }
+    const passages = [...ranked.values()];
+    return { ...context, passages, roomTranscript, questionHint };
   }
 
   fallbackCue(text, question) {
@@ -1065,170 +1044,13 @@ export class Session {
     if (this.closed || this.canned || this.phase === 'reveal' || scenario === this.coachScenario) return;
     this.coachScenario = scenario;
     this.clearPitchPlanning();
-    for (const seat of SEATS) {
-      const armed = Boolean(this.seats[seat].questionMode);
-      this.stopQuestionMode(seat);
-      this.seats[seat].pitchHelp?.abort();
-      if (armed) this.toggleQuestionMode(seat);
-    }
+    for (const seat of SEATS) this.seats[seat].pitchHelp?.abort();
     this.append('coach_scenario', { seat: null, text: scenario });
     if (this.phase === 'live' && this.room.listening) this.schedulePitchPlanning();
     this.publish();
   }
 
-  pitchRealtime(mode) {
-    if (this.coachScenario !== 'pitch') return null;
-    if (mode.realtime?.closed && !mode.scope.aborted
-        && this.now() - mode.realtimeOpenedAt >= this.settings.pitchRealtimeReconnectMs) {
-      mode.realtimeOpenedAt = this.now();
-      mode.realtime = this.codec.openPitchRealtime(mode.scope);
-    }
-    return mode.realtime;
-  }
-
-  preparePitchQuestion(text) {
-    if (this.phase !== 'live' || this.canned || this.preset !== 'Pitch' || !looksLikeQuestion(text)) return;
-    for (const seat of SEATS) {
-      const mode = this.seats[seat].questionMode;
-      if (!mode || (this.seats[seat].pitchHelp && !mode.delivery)) continue;
-      const previous = mode.candidate;
-      if (previous) {
-        const growth = questionKey(text).split(' ').length - questionKey(previous.text).split(' ').length;
-        // Pitch redrafts over its warm Realtime session. Other scenarios redraft through the text API, a few times at most.
-        const redraft = mode.realtime ? mode.revisions < 2 : this.coachScenario !== 'pitch' && mode.revisions < this.settings.scenarioRevisionLimit;
-        if (!redraft || growth < 3 || this.now() - previous.at < this.settings.pitchRevisionMinMs) continue;
-        previous.controller.abort();
-      }
-      mode.revisions++;
-      const controller = new AbortController();
-      const scope = AbortSignal.any([this.liveScope([seat]), mode.controller.signal, controller.signal]);
-      const input = this.pitchContext(seat, this.now());
-      const started = performance.now();
-      const realtime = this.pitchRealtime(mode);
-      const task = withDeadline(signal => this.composePitchCue(input, signal, started, realtime),
-        this.settings.pitchComposeMs, scope).catch(() => null);
-      mode.candidate = { text, controller, task, at: this.now(), corpus: this.pitchReferences, uploads: this.references, research: this.researchReferences };
-    }
-  }
-
-  holdActivePitchCues() {
-    for (const seat of SEATS) {
-      const state = this.seats[seat];
-      const playback = state.pitchPlayback;
-      if (!playback || playback.held || playback.until <= this.now()) continue;
-      playback.held = true;
-      state.awaitingHeard.delete(playback.entry.messageId);
-      this.emitSeat(seat, { type: 'pitch_help_hold', messageId: playback.entry.messageId });
-    }
-  }
-
-  async waitForPitchPause(signal, quietMs) {
-    while (this.room.partial || this.questionSpeechPending || this.now() - this.lastSpeechAt() < quietMs) {
-      signal.throwIfAborted();
-      await new Promise(resolve => setTimeout(resolve, 75));
-    }
-    signal.throwIfAborted();
-  }
-
-  pitchAnswerAfter(seat, anchor) {
-    if (!anchor) return '';
-    const turns = this.room.transcript;
-    const index = turns.indexOf(anchor);
-    if (index < 0) return '';
-    const answer = [];
-    for (const candidate of turns.slice(index + 1, index + 4)) {
-      if (looksLikeQuestion(candidate.text)) break;
-      if (candidate.speakers?.some(run => run.seat)) {
-        answer.push(...candidate.speakers.filter(run => run.seat === seat).map(run => run.text));
-      } else answer.push(candidate.text);
-    }
-    return answer.join(' ');
-  }
-
-  async reviewPitchAnswer(question, spoken, passages, signal) {
-    if (questionKey(spoken).split(' ').length < 4 || this.coachScenario === 'social') return null;
-    if (this.coachScenario === 'pitch' && isBuildStoryQuestion(question)) {
-      const answer = missingBuildPoint(spoken);
-      const source = passages.find(passage => passage.text.includes(BUILD_STORY_EVIDENCE));
-      return answer && source ? { answer, source: 'project-reference', sources: [{ id: source.id, name: source.name, quote: BUILD_STORY_EVIDENCE }], timing: {} } : null;
-    }
-    if (!this.codec?.questionAnswering || !passages.length) return null;
-    const turns = [{ text: question }, { text: spoken }];
-    try {
-      const value = await withDeadline(deadline => this.codec.answer({
-        activeQuestion: question, turns, passages, requested: true, quietMs: 2500, signal: deadline,
-      }), this.settings.pitchReviewMs, signal);
-      const reviewed = validateAnswer(value, passages, turns);
-      return reviewed.status === 'advice' ? { ...reviewed, source: 'answer-review', timing: {} } : null;
-    } catch { return null; }
-  }
-
-  commitPitchQuestion(entry) {
-    for (const seat of SEATS) {
-      const state = this.seats[seat];
-      const mode = state.questionMode;
-      if (!mode) continue;
-      const playback = state.pitchPlayback;
-      if (playback?.held) {
-        state.pitchPlayback = null;
-        if (!looksLikeQuestion(entry.text)) {
-          const prior = playback;
-          clearTimeout(mode.timer);
-          mode.timer = setTimeout(() => {
-            if (this.seats[seat].questionMode !== mode) return;
-            const spoken = this.pitchAnswerAfter(seat, prior.anchor);
-            if (spoken) void this.requestPitchHelp(seat, {
-              question: prior.question, anchor: prior.anchor, spoken, scope: mode.scope,
-            });
-          }, this.settings.pitchQuestionSettleMs);
-          mode.timer.unref();
-          continue;
-        }
-      }
-      const candidate = mode.candidate;
-      mode.candidate = null;
-      mode.revisions = 0;
-      if (!looksLikeQuestion(entry.text) || (this.seats[seat].pitchHelp && !mode.delivery)
-          || (mode.lastQuestion && sameQuestion(mode.lastQuestion.text, entry.text)
-            && entry.at - mode.lastQuestion.at < this.settings.pitchQuestionRepeatMs)
-          || (mode.pendingQuestion && sameQuestion(mode.pendingQuestion.text, entry.text))) {
-        candidate?.controller.abort();
-        continue;
-      }
-      clearTimeout(mode.timer);
-      mode.pending?.controller.abort();
-      mode.pending = candidate;
-      mode.pendingQuestion = entry;
-      mode.timer = setTimeout(() => {
-        if (this.seats[seat].questionMode !== mode) return;
-        mode.pending = null;
-        mode.pendingQuestion = null;
-        if (this.seats[seat].pitchHelp && !mode.delivery) {
-          candidate?.controller.abort();
-          return;
-        }
-        const questions = entry.speakers?.filter(run => looksLikeQuestion(run.text)) ?? [];
-        if (questions.length && questions.every(run => run.seat === seat)) {
-          candidate?.controller.abort();
-          return;
-        }
-        const prepared = candidate && candidate.corpus === this.pitchReferences && candidate.uploads === this.references && candidate.research === this.researchReferences
-          && (this.coachScenario === 'pitch' ? sameQuestion(candidate.text, entry.text) : nearlySameQuestion(candidate.text, entry.text)) ? candidate : null;
-        if (!prepared) candidate?.controller.abort();
-        mode.lastQuestion = entry;
-        mode.delivery?.abort();
-        const delivery = new AbortController();
-        mode.delivery = delivery;
-        const input = this.pitchContext(seat, this.now(), false);
-        const scope = AbortSignal.any([mode.scope, delivery.signal]);
-        void this.requestPitchHelp(seat, { input, prepared, question: entry.text, anchor: entry, scope, realtime: this.pitchRealtime(mode) })
-          .finally(() => { if (mode.delivery === delivery) mode.delivery = null; });
-      }, this.settings.pitchQuestionSettleMs);
-      mode.timer.unref();
-    }
-  }
-
-  async composePitchCue({ context, passages, recent, earlier, project, frontendStack }, signal, started, realtime) {
+  async composePitchCue({ context, passages, recent, earlier, project, frontendStack }, signal, started) {
     const question = recent.at(-1)?.text ?? '';
     const scenario = this.coachScenario;
     const pitch = scenario === 'pitch';
@@ -1237,37 +1059,21 @@ export class Session {
       return { ...validateAnswer(known, passages, recent), source: 'project-reference', timing: {} };
     }
     if (!this.codec?.pitchHelp || (!passages.length && isGroundedScenario(scenario))) return null;
-    if (!pitch) realtime = null;
     const { plan, source } = await this.pitchPlanner.select(context, { signal, waitMs: this.settings.pitchPlanWaitMs });
     const planned = performance.now();
     const selected = new Set(plan.passageIds);
     const ranked = [...passages.filter(passage => selected.has(passage.id)), ...passages.filter(passage => !selected.has(passage.id))];
     const input = { ...context, project, turns: recent.map(({ speaker, text }) => ({ speaker, text })),
       ...(earlier?.length && { earlierRoomContext: earlier }), passages: ranked, plan };
-    const evidence = realtime ? packReferenceEvidence(ranked, recent.at(-1)?.text ?? '') : [];
-    const raw = realtime ? await withDeadline(deadline => realtime.generate({
-      ...input, turns: input.turns.slice(-4), passages: evidence,
-      plan: { ...plan, passageIds: plan.passageIds.filter(id => evidence.some(passage => passage.id === id)) },
-    }, deadline), this.settings.pitchRealtimeReplyMs, signal).catch(() => null) : null;
-    signal.throwIfAborted();
-    let cue;
-    if (raw) {
-      try {
-        cue = validateAnswer({ ...raw, sources: exactExcerptQuotes(raw.sources, evidence) }, evidence, recent);
-      } catch {}
-      if (cue?.status === 'answer' && cue.answer.split(/\s+/).length <= MAX_PITCH_CUE_WORDS && isUsefulPitchCue(cue.answer, question)) {
-        return { ...cue, source: 'openai-realtime', timing: { planMs: Math.round(planned - started), composeMs: Math.round(performance.now() - planned) } };
-      }
-    }
     const result = await this.codec.pitchHelp({ signal, ...input, ...(!pitch && { scenario }) });
     if (!result) return null;
-    cue = scenario === 'social' ? result : validateAnswer(result, ranked, recent);
+    const cue = scenario === 'social' ? result : validateAnswer(result, ranked, recent);
     if (cue.status !== 'answer' || cue.answer.split(/\s+/).length > MAX_PITCH_CUE_WORDS || (pitch && !isUsefulPitchCue(cue.answer, question))) return null;
     return { ...cue, source, timing: { planMs: Math.round(planned - started), composeMs: Math.round(performance.now() - planned) } };
   }
 
-  async racePitchCue(input, prepared, started, realtime, signal) {
-    const compose = async deadline => (await prepared?.task) ?? this.composePitchCue(input, deadline, started, realtime);
+  async racePitchCue(input, started, signal) {
+    const compose = deadline => this.composePitchCue(input, deadline, started);
     if (!this.coach?.draftPitchCue) {
       return withDeadline(compose, this.settings.pitchRaceMs, signal);
     }
@@ -1317,14 +1123,11 @@ export class Session {
     } catch { return null; }
   }
 
-  async requestPitchHelp(seat, { input, prepared, question, anchor, spoken, scope, realtime } = {}) {
+  async requestPitchHelp(seat, { oneShot = false } = {}) {
     const state = this.seats[seat];
     const began = this.now();
-    if (!state.online || (state.pitchHelp && !state.pitchHelp.signal.aborted && !question)
-        || (!question && began - state.lastPitchHelpAt < this.settings.pitchHelpRepeatMs)) {
-      prepared?.controller.abort();
-      return;
-    }
+    if (!state.online || (state.pitchHelp && !state.pitchHelp.signal.aborted)
+        || began - state.lastPitchHelpAt < this.settings.pitchHelpRepeatMs) return;
     const notify = text => this.emitSeat(seat, { type: 'pitch_help_status', text });
     if (state.sim) {
       notify('Live pitch help requires a real seat.');
@@ -1333,71 +1136,58 @@ export class Session {
     state.lastPitchHelpAt = began;
     const controller = new AbortController();
     state.pitchHelp = controller;
-    const lifecycle = AbortSignal.any([controller.signal, this.liveScope([seat]), ...(scope ? [scope] : [])]);
-    const resolved = input ?? this.pitchContext(seat, began);
+    const lifecycle = AbortSignal.any([controller.signal, this.liveScope([seat])]);
+    const resolved = oneShot ? this.roomQuestionContext(seat, began) : this.pitchContext(seat, began);
+    const question = resolved.recent.at(-1)?.text ?? '';
     const started = performance.now();
     let surfacedCue = false;
-    let verifying = false;
-    const canDeliver = (cue, checkedAnswer) => this.canWhisperAutomatically(seat, cue, { armedAnswer: !checkedAnswer });
     notify('Preparing a private pitch cue…');
     this.publishMonitor();
     try {
       const reply = await withDeadline(async signal => {
-        const known = this.coachScenario === 'pitch' && sourcedProjectCue(
-          question ?? resolved.recent.at(-1)?.text ?? '', resolved.passages, resolved.frontendStack,
-        );
-        let cue = spoken
-          ? await this.reviewPitchAnswer(question, spoken, resolved.passages, signal)
-          : await this.racePitchCue(resolved, prepared, started, realtime, signal).catch(() => null)
-            ?? (known ? { ...validateAnswer(known, resolved.passages, resolved.recent), source: 'project-reference', timing: {} } : null)
-            ?? (anchor ? null : { answer: this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} });
-        if (anchor) await this.waitForPitchPause(signal, spoken ? this.settings.automaticQuietMs : this.settings.armedQuestionQuietMs);
-        let checkedAnswer = spoken || this.pitchAnswerAfter(seat, anchor);
-        const reviewAnswers = this.coachScenario !== 'social';
-        if (checkedAnswer && !spoken && reviewAnswers) cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
-        if (!cue) return null;
-        if (anchor && ((isGroundedScenario(this.coachScenario) && !cue.sources?.length)
-          || (checkedAnswer && !await this.valuableWhisper(cue.answer, resolved.passages, signal)))) return null;
-        const composed = performance.now();
-        const showCue = () => {
+        if (oneShot) {
+          if (!resolved.roomTranscript.length) {
+            notify('No room transcript yet. Start listening on the Mac.');
+            return null;
+          }
+          const result = await withDeadline(deadline => this.codec?.pitchHelp?.({
+            signal: deadline, roomTranscript: resolved.roomTranscript, project: resolved.project,
+            passages: resolved.passages,
+          }), this.settings.pitchRaceMs, signal).catch(() => null);
+          const known = this.coachScenario === 'pitch' && resolved.questionHint
+            ? sourcedProjectCue(resolved.questionHint, resolved.passages, resolved.frontendStack) : null;
+          const answer = result?.status === 'answer' ? result : known;
+          const cue = answer ? validateAnswer(answer, resolved.passages, resolved.roomTranscript) : null;
+          if (!cue) return null;
           notify(cue.answer);
           surfacedCue = true;
-          state.lastPitchCue = {
-            text: cue.answer,
-            points: !checkedAnswer && this.coachScenario === 'pitch' && isBuildStoryQuestion(question ?? resolved.recent.at(-1)?.text ?? '')
-              ? BUILD_STORY_NOTES
-              : cue.sources.slice(0, 1).map(source => source.quote.slice(0, 180)),
-          };
+          state.lastPitchCue = { text: cue.answer, points: [] };
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
-        };
-        showCue();
-        let url = await this.speakPitchCue(seat, cue.answer, signal);
-        if (anchor) await this.waitForPitchPause(signal, checkedAnswer ? this.settings.automaticQuietMs : this.settings.armedQuestionQuietMs);
-        const latestAnswer = this.pitchAnswerAfter(seat, anchor);
-        if (reviewAnswers && latestAnswer && latestAnswer !== checkedAnswer) {
-          checkedAnswer = latestAnswer;
-          cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
-          if (!cue || (anchor && !await this.valuableWhisper(cue.answer, resolved.passages, signal))) return null;
-          showCue();
-          url = await this.speakPitchCue(seat, cue.answer, signal);
-          if (anchor) await this.waitForPitchPause(signal, this.settings.automaticQuietMs);
-          if (this.pitchAnswerAfter(seat, anchor) !== checkedAnswer) return null;
+          const url = await this.speakPitchCue(seat, cue.answer, signal);
+          return { ...cue, url, source: answer === known ? 'project-reference' : 'openai',
+            timing: { hubMs: Math.round(performance.now() - started) } };
         }
+        const cue = await this.racePitchCue(resolved, started, signal).catch(() => null)
+          ?? { answer: this.fallbackCue(question), source: 'local-fallback', sources: [], timing: {} };
+        const composed = performance.now();
+        notify(cue.answer);
+        surfacedCue = true;
+        state.lastPitchCue = {
+          text: cue.answer,
+          points: this.coachScenario === 'pitch' && isBuildStoryQuestion(question)
+            ? BUILD_STORY_NOTES : cue.sources.slice(0, 1).map(source => source.quote.slice(0, 180)),
+        };
+        this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
+        const url = await this.speakPitchCue(seat, cue.answer, signal);
         const rendered = performance.now();
-        return { ...cue, url, reviewed: Boolean(checkedAnswer), timing: {
+        return { ...cue, url, timing: {
           ...cue.timing, speechMs: Math.round(rendered - composed), hubMs: Math.round(rendered - started),
         } };
-      }, Math.max(this.settings.pitchHelpTimeoutMs, this.settings.pitchPauseBudgetMs), lifecycle);
+      }, this.settings.pitchRaceMs + this.settings.pitchSpeechMs, lifecycle);
       if (lifecycle.aborted) return;
       if (!reply) {
-        if (anchor && !surfacedCue) notify('No supported cue for that question.');
+        if (oneShot && resolved.roomTranscript.length && !surfacedCue) notify('No supported cue for that question.');
         return;
-      }
-      if (anchor) {
-        const latest = this.room.transcript.at(-1);
-        if (!canDeliver(reply.answer, reply.reviewed)
-          || latest && latest !== anchor && looksLikeQuestion(latest.text) && !sameQuestion(latest.text, anchor.text)) return;
-        if (reply.reviewed) this.rememberAutomaticCue(reply.answer);
       }
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
@@ -1406,13 +1196,11 @@ export class Session {
       if (messageId) {
         state.awaitingHeard.set(messageId, entry);
         if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
-        if (anchor && !reply.reviewed) state.pitchPlayback = { entry, question, anchor, until: this.now() + 10_000 };
         this.cue(seat, 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
       } else {
         this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
       }
       if (reply.verify && state.lastPitchCue) {
-        verifying = true;
         const shown = state.lastPitchCue;
         const lastTurn = this.room.transcript.at(-1);
         const current = () => !lifecycle.aborted && state.lastPitchCue === shown
@@ -1421,7 +1209,7 @@ export class Session {
         void withDeadline(reply.verify, this.settings.pitchVerifyMs, lifecycle).then(async result => {
           if (!current() || !result) return;
           const revised = result.correction;
-          const url = revised && !anchor ? await this.speakPitchCue(seat, 'Correction. ' + revised.answer, lifecycle) : null;
+          const url = revised ? await this.speakPitchCue(seat, 'Correction. ' + revised.answer, lifecycle) : null;
           if (!current()) return;
           state.lastPitchCue = revised ? {
             text: revised.answer, points: ['Correction verified by ' + result.provider, ...revised.sources.map(source => source.quote)],
@@ -1429,7 +1217,7 @@ export class Session {
           entry.verifiedBy = result.provider;
           entry.corrected = Boolean(revised);
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
-          if (revised && !url && !anchor) this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
+          if (revised && !url) this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
           if (url) {
             const messageId = 'pitch-help-' + (this.sequence + 1);
             const correction = this.append('pitch_help', { seat, text: revised.answer, sources: revised.sources,
@@ -1439,13 +1227,11 @@ export class Session {
             this.cue(seat, 'sent', { kind: 'pitch_help', url, text: revised.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
           }
           this.publish();
-        }).catch(() => {}).finally(() => prepared?.controller.abort());
+        }).catch(() => {});
       }
     } catch {
-      if (!lifecycle.aborted && !surfacedCue) notify(anchor ? 'Cue took too long. Try Cue now.'
-        : this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)));
+      if (!lifecycle.aborted && !surfacedCue) notify(oneShot ? 'Cue took too long. Try Cue now.' : this.fallbackCue(question));
     } finally {
-      if (!verifying) prepared?.controller.abort();
       if (state.pitchHelp === controller) state.pitchHelp = null;
       if (!lifecycle.aborted) this.publish();
     }
@@ -1537,8 +1323,6 @@ export class Session {
         if (room) {
           this.room.partial = { at: this.now(), text: cleanText(text, 260) };
           this.monitor.updatePartial(seat, text);
-          this.holdActivePitchCues();
-          this.preparePitchQuestion(text);
         }
         if (track_questions && this.phase === 'live') {
           this.questionPartialSeats.add(seat);
@@ -1681,7 +1465,6 @@ export class Session {
     const wasRequested = this.room.listeningRequested;
     this.clearPitchPlanning();
     for (const seat of SEATS) {
-      this.stopQuestionMode(seat);
       this.seats[seat].pitchHelp?.abort();
     }
     this.room.listenVersion++;
@@ -2077,7 +1860,6 @@ export class Session {
         if (this.roomInput !== 'mac' || this.canned || this.phase === 'reveal') return;
         this.clearPitchPlanning();
         for (const seat of SEATS) {
-          this.stopQuestionMode(seat);
           this.seats[seat].pitchHelp?.abort();
         }
         this.room.transcript = [];
@@ -2186,7 +1968,6 @@ export class Session {
   }
 
   clearTimers() {
-    for (const seat of SEATS) this.stopQuestionMode(seat);
     this.clearPitchPlanning();
     clearTimeout(this.researchTimer);
     this.researchTimer = null;
