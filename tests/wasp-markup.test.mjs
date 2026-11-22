@@ -111,14 +111,16 @@ test('the Stage console separates live meter frames from room state and keeps ac
   assert.doesNotMatch(component, /getUserMedia|WebSocket/);
 });
 
-test('the Wasp reveal displays the session controller’s score and keeps motion on the stable sections', async () => {
+test('the Wasp reveal places the source score in its focusable heading and animates the connection', async () => {
   const controller = await text('public/stage.mjs');
   const component = await text('wasp-ui/src/StageRevealHeader.tsx');
   const styles = await text('wasp-ui/src/liquid.css');
   assert.ok(controller.includes('telepathy:reveal'));
   assert.match(component, /addEventListener\('telepathy:reveal'/);
-  assert.match(component, /id="reveal-words">\{reveal.words\}/);
-  assert.match(styles, /\[data-phase=reveal\] \.reveal__head \.score \{ animation:/);
+  assert.match(component, /<h1 id="reveal-title" className="score"/);
+  assert.match(component, /id="reveal-words">\{reveal\?\.words\}/);
+  assert.match(component, /aria-live="polite">\{reveal\?\.count\}/);
+  assert.match(styles, /\[data-phase=reveal\] \.score\[data-ready=true\] \.score__arrow-trace \{\s*animation:/);
   assert.doesNotMatch(styles, /\[data-phase=reveal\] \.timeline__row/);
 });
 

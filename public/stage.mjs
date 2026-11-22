@@ -1149,7 +1149,8 @@ function boot() {
         : playbackStarts + ' of ' + messages + ' cues confirmed',
       kicker: ['Reveal', state.preset, span ? formatOffset(span) : null].filter(Boolean).join(' · '),
     };
-    if (ui.revealHead?.dataset.revealOwner === 'react') {
+    const waspReveal = ui.revealHead?.dataset.revealOwner === 'react';
+    if (waspReveal) {
       ui.revealHead.dispatchEvent(new CustomEvent('telepathy:reveal', { detail: view }));
     } else {
       ui.revealBits.textContent = view.bits;
@@ -1197,9 +1198,11 @@ function boot() {
       return item;
     }));
 
-    fill(ui.transcripts, SEATS.map(key => {
+    const transcriptSeats = waspReveal ? SEATS.filter(key => state.seats[key].transcript.length) : SEATS;
+    ui.transcripts.hidden = transcriptSeats.length === 0;
+    fill(ui.transcripts, transcriptSeats.map(key => {
       const seat = state.seats[key];
-      const heard = state.log.filter(entry => entry.kind === 'message' && entry.to === key && (entry.canned || entry.playedAt != null));
+      const heard = waspReveal ? [] : state.log.filter(entry => entry.kind === 'message' && entry.to === key && (entry.canned || entry.playedAt != null));
       const column = node('div');
       const head = node('h2', 'section-title');
       const name = node('span', 'section-title__name', seat.name);
