@@ -65,7 +65,7 @@ export const PULSES: Pulse[] = [
 type Key = { t: number; pos: [number, number, number]; look: [number, number, number] };
 
 const KEYS: Key[] = [
-  { t: 0, pos: [5.9, 0.65, 3.4], look: [3.2, -0.3, 0] },
+  { t: 0, pos: [5.7, 0.7, 3.6], look: [3.3, 0.05, 0] },
   { t: 3, pos: [4.9, 0.4, 5.6], look: [2.7, -0.4, 0] },
   { t: 5.8, pos: [0.3, 0.1, 13], look: [0, -0.9, 0] },
   { t: 8.2, pos: [0, 0.05, 13.6], look: [0, -0.95, 0] },
