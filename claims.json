@@ -1,4 +1,29 @@
 {
-  "revision": 158,
-  "claims": []
+  "revision": 159,
+  "claims": [
+    {
+      "id": "09080e99-5aa1-4393-b1db-e9793c3a335b",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-reflow",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "@ui",
+        "wasp-ui/src/liquid.css"
+      ],
+      "paths": [
+        "public/announcements.mjs",
+        "public/calibrate.mjs",
+        "public/index.html",
+        "public/phone-data.mjs",
+        "public/phone.css",
+        "public/phone.mjs",
+        "public/stage.css",
+        "public/stage.html",
+        "public/stage.mjs",
+        "wasp-ui/src/liquid.css"
+      ],
+      "claimedAt": "2026-11-22T11:31:32.708Z"
+    }
+  ]
 }
