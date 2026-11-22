@@ -1,1 +1,19 @@
-{ "revision": 0, "claims": [] }
+{
+  "revision": 1,
+  "claims": [
+    {
+      "id": "f7b4dbf5-4eaf-40cf-bc11-6ab6bc1b4279",
+      "owner": "fireheartjerry",
+      "agent": "smoke-agent-a",
+      "branch": "telepathy-demo",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        ".agent-board-smoke/cfdbedfb-ff54-4742-b67c-31a6e15227f2/shared"
+      ],
+      "paths": [
+        ".agent-board-smoke/cfdbedfb-ff54-4742-b67c-31a6e15227f2/shared"
+      ],
+      "claimedAt": "2026-11-22T00:49:38.318Z"
+    }
+  ]
+}
