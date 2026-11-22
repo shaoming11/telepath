@@ -181,6 +181,7 @@ function load_settings() {
     network: { ...DEFAULT_NETWORK, enabled: input_mode === 'sim', ...saved.network },
     app: { ...APP_TIMING, ...saved.app },
     profile: saved.profile ?? null,
+    setup_reset: saved.setup_reset ?? null,
     setup: input_mode === saved_input ? { ...fresh_setup(), ...saved.setup } : fresh_setup(),
   };
 }
@@ -376,8 +377,8 @@ function set_playback_state(state) {
 }
 
 function resume_anchor() {
-  const airpods_playback = !is_sim() && settings.gesture_model === AIRPODS_1_ID
-    && (ui.lock_controls || ui.calibration_playback);
+  const airpods_playback = !is_sim() && (ui.calibration_playback
+    || (settings.gesture_model === AIRPODS_1_ID && ui.lock_controls));
   const source = airpods_playback ? AIRPODS_1_PLAYBACK_URL : '/assets/keepalive.wav';
   if (keepalive.getAttribute('src') !== source) {
     ui.anchor_pause_expected = !keepalive.paused;
@@ -552,6 +553,7 @@ function handle_frame(frame, source) {
 function on_state(next, source) {
   const previous = ui.state;
   ui.state = next;
+  if (next.setupReset && settings.setup_reset !== next.hubId + ':' + next.setupReset) reset_phone_setup(next);
   const new_session = previous && (previous.sessionId !== next.sessionId || previous.hubId !== next.hubId);
   if (new_session) {
     audio.clear_session();
@@ -585,6 +587,32 @@ function on_state(next, source) {
   }
   sync_listen(source);
   schedule_render();
+}
+
+function reset_phone_setup(state) {
+  settings.setup_reset = state.hubId + ':' + state.setupReset;
+  settings.setup = fresh_setup();
+  settings.profile = null;
+  settings.timing = { ...DEFAULT_TIMING, countWindowMs: undefined, countMedianMs: undefined };
+  settings.emulator = { ...DEFAULT_EMULATOR };
+  try { localStorage.removeItem(PERSONAL_TIMING_KEY); } catch {}
+  set_consent(false);
+  save_settings();
+  calibration.reset();
+  clear_clone_request();
+  ui.last_profile_json = '';
+  ui.mic_on_next_take = false;
+  ui.mic_after_calibration = false;
+  ui.calibration_playback = false;
+  ui.voice_message = 'Session reset. Set up your voice and earbuds again.';
+  if (ui.lock_controls) set_lock_controls(false, { restore_mic: false });
+  if (capture.open || capture.opening || ui.listen_wanted) stop_mic();
+  input.configure({ timing: settings.timing });
+  emulator.configure(settings.emulator);
+  if (ui.seat && ui.screen !== 'join') {
+    ui.voice_from = 'setup';
+    go('voice');
+  }
 }
 
 function reconcile(next, source) {
@@ -783,7 +811,7 @@ function stop_mic() {
 }
 
 function arm_calibration_media() {
-  ui.calibration_playback = !is_sim() && settings.gesture_model === AIRPODS_1_ID;
+  ui.calibration_playback = !is_sim();
   if (ui.calibration_playback
     && (capture.open || capture.opening || ui.listen_wanted)) {
     ui.mic_after_calibration = true;

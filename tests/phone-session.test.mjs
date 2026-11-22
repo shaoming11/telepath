@@ -317,6 +317,20 @@ test('AirPods 1 calibration releases mic capture until leaving setup', async () 
   assert.equal(mic_tracks.at(-1).readyState, 'live');
 });
 
+test('a full hub reset clears previously ready setup and returns the seat to Voice', async () => {
+  assert.equal(JSON.parse(stored.get(STORAGE_KEY)).setup.ready, true);
+  const reset = seat_state(null, { phase: 'lobby', sessionId: '3', setupReset: '3' });
+  reset.seats.A = { online: true, ready: false, mode: 2, voice: 'idle', calibrated: false };
+  socket.sent.length = 0;
+  socket.receive({ type: 'state', state: reset });
+  world.advance(20);
+  await settle();
+  assert.equal(JSON.parse(stored.get(STORAGE_KEY)).setup.ready, false);
+  assert.equal(stored.has(CONSENT_KEY), false);
+  assert.match(get_element('voice-status').textContent, /set up your voice/i);
+  assert.ok(!socket.sent.some(frame => frame.type === 'setup' && frame.complete));
+});
+
 test.after(() => {
   restore();
   Object.defineProperty(globalThis, 'location', saved_location);
