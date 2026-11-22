@@ -32,6 +32,7 @@ const KIND_LABELS = Object.freeze({
   discard: 'discarded', expire: 'expired', situation: 'situation', preview_playback: 'preview playback',
   confirm: 'confirmed', preset_suggestion: 'suggestion', replay: 'replay',
   back: 'earbud back', cache_error: 'cache error', announcement: 'announcement',
+  answer_evidence: 'answer evidence',
 });
 
 /* ── shapes: the hub is the source of truth, so every field is read defensively ── */
@@ -199,6 +200,11 @@ export function normalizeState(raw) {
     startedAt: asNumber(source.startedAt),
     canned: normalizeCanned(source.canned),
     announcement: isObject(source.announcement) ? source.announcement : null,
+    references: asList(source.references),
+    referencesLoading: source.referencesLoading === true,
+    questionAnswering: source.questionAnswering === true,
+    questionState: isObject(source.questionState) ? source.questionState : { status: 'idle' },
+    answerHistory: asList(source.log).filter(entry => entry?.kind === 'answer_evidence'),
     codebook: normalizeCodebook(source.codebook, preset),
     seats: { A: normalizeSeat('A', seatsRaw.A, onlineMap), B: normalizeSeat('B', seatsRaw.B, onlineMap) },
     log,
@@ -421,6 +427,63 @@ function boot() {
   const seat_fingerprints = new Map();
   const live_panels = new Map();
   let lastFocus = null;
+  let uploadingReferences = false;
+  let referenceMessage = '';
+
+  function renderReferences() {
+    const busy = uploadingReferences || state.referencesLoading;
+    const editable = state.phase === 'lobby' && linkState === 'live' && !busy;
+    byId('reference-files').disabled = !editable;
+    byId('reference-upload').disabled = !editable;
+    byId('reference-clear').disabled = !editable || !state.references.length;
+    byId('reference-status').textContent = busy ? 'Reading documents…' : [referenceMessage,
+      !state.questionAnswering ? 'Document answering requires OPENAI_API_KEY and the OpenAI text provider. Fixed whispers and ordinary coaching remain available.'
+        : !referenceMessage ? state.references.length ? 'References ready. Question answering starts with the session.' : 'No references loaded. Ordinary coaching remains available.' : ''].filter(Boolean).join(' ');
+    fill(byId('reference-list'), state.references.map(item => node('li', null, `${item.name} · ${item.characters.toLocaleString()} characters`)));
+    byId('answer-panel').hidden = state.phase === 'lobby' || !state.references.length;
+    const answer = state.questionState;
+    const labels = { idle: 'Listening for questions', researching: 'Checking the conversation and references…', waiting: 'Giving the conversation time to answer',
+      answer: 'Answer found', preview: 'Private preview · awaiting approval', confirmed: 'Approved for delivery', discarded: 'Answer discarded', expired: 'Approval expired',
+      resolved: 'Question answered or no longer relevant', unsupported: 'No supported answer in these references', none: 'No unanswered question',
+      cancelled: 'Previous answer cancelled as the conversation changed', already_offered: 'Already offered this answer', unavailable: 'Answer unavailable. Fixed whispers still work.' };
+    byId('answer-status').textContent = !state.questionAnswering ? 'Document answering is unavailable with the current text provider.' : labels[answer.status] ?? 'Listening';
+    byId('answer-question').textContent = answer.question ? 'Question: ' + answer.question : '';
+    byId('answer-text').textContent = answer.answer ?? '';
+    fill(byId('answer-sources'), asList(answer.sources).map(source => node('li', null, `${source.name}: “${source.quote}”`)));
+    fill(byId('answer-history'), state.answerHistory.map(entry => node('li', null,
+      `${entry.text} — ${asList(entry.sources).map(source => `${source.name}: “${source.quote}”`).join('; ')}`)));
+  }
+
+  async function uploadReferences(clear = false) {
+    if (uploadingReferences || state.phase !== 'lobby') return;
+    const files = clear ? [] : Array.from(byId('reference-files').files ?? []);
+    if (!clear && !files.length) { referenceMessage = 'Choose at least one document first.'; schedule(); return; }
+    if (files.length > 8 || files.some(file => file.size > 5 * 1024 * 1024) || files.reduce((n, file) => n + file.size, 0) > 8 * 1024 * 1024) {
+      referenceMessage = 'Limit: 8 documents, 5 MB per file and 8 MB total.'; schedule(); return;
+    }
+    const sessionId = state.sessionId, hubId = state.hubId;
+    uploadingReferences = true;
+    referenceMessage = '';
+    schedule();
+    try {
+      const encoded = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, data: String(reader.result).split(',')[1] });
+        reader.onerror = () => reject(new Error('Could not read ' + file.name));
+        reader.readAsDataURL(file);
+      })));
+      const response = await fetch('/references', { method: 'POST', headers: { 'content-type': 'application/json',
+        'x-telepathy-hub': hubId, 'x-telepathy-session': sessionId }, body: JSON.stringify({ files: encoded }), signal: AbortSignal.timeout(30_000) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Upload failed.');
+      if (state.sessionId === sessionId && state.hubId === hubId) {
+        referenceMessage = clear ? 'Documents cleared.' : `${result.documents.length} document(s) loaded.`;
+        byId('reference-files').value = '';
+      }
+    } catch (error) {
+      if (state.sessionId === sessionId && state.hubId === hubId) referenceMessage = error.message || 'Upload failed.';
+    } finally { uploadingReferences = false; schedule(); }
+  }
 
   /* elements */
 
@@ -578,7 +641,7 @@ function boot() {
       : [readoutRow('—', 'the hub has not published a codebook yet', 'wait')]);
 
     const blocked = state.canBegin === false;
-    ui.begin.disabled = blocked;
+    ui.begin.disabled = blocked || uploadingReferences;
     ui.beginHint.textContent = blocked
       ? 'Begin unlocks when both seats have a voice, tested earbuds, calibration and Ready.'
       : state.phase === 'lobby' ? 'Starts the live board on both seats.' : 'The session is already running.';
@@ -917,7 +980,7 @@ function boot() {
   function render() {
     const view = { lobby: renderLobby, live: renderLive, reveal: renderReveal };
     const steps = [
-      ['chrome', renderChrome], ['operator', renderOperator],
+      ['chrome', renderChrome], ['operator', renderOperator], ['references', renderReferences],
       [state.phase, view[state.phase]],
     ];
     for (const [name, step] of steps) {
@@ -1043,6 +1106,8 @@ function boot() {
     });
 
     ui.begin.addEventListener('click', () => send('begin'));
+    byId('reference-upload').addEventListener('click', () => void uploadReferences());
+    byId('reference-clear').addEventListener('click', () => void uploadReferences(true));
     ui.reveal.addEventListener('click', () => send('reveal'));
 
     document.addEventListener('keydown', event => {
@@ -1118,6 +1183,8 @@ function boot() {
       if (state.canned && (!next.canned || next.hubId !== state.hubId || next.sessionId !== state.sessionId
         || next.startedAt !== state.startedAt)) canned_audio.clear_session();
       if (next.hubId !== state.hubId || next.sessionId !== state.sessionId) {
+        referenceMessage = '';
+        byId('reference-files').value = '';
         streamKeys = [];
         ui.stream.replaceChildren();
         seat_fingerprints.clear();

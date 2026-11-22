@@ -1,8 +1,189 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Session } from '../hub/session.mjs';
+import { setTimeout as delay } from 'node:timers/promises';
+import { parseReferences } from '../hub/references.mjs';
 
 const EMPTY_CODEC = { evaluate: async () => ({}) };
+
+const supportedAnswer = request => ({ status: 'answer', question: 'Who buys it?', answer: 'The buyer is a sales team lead.',
+  sources: [{ id: request.passages[0].id, quote: 'The buyer is a sales team lead.' }] });
+
+async function answerFixture(t, options = {}) {
+  const fixture = await createLiveSession({ ...options,
+    codec: { questionAnswering: true, answer: async request => supportedAnswer(request), ...options.codec },
+    settings: { questionDebounceMs: 5, questionQuietMs: 60_000, ...options.settings },
+  });
+  t.after(() => fixture.session.close());
+  fixture.session.references = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
+  return fixture;
+}
+
+async function eventually(predicate) {
+  for (let i = 0; i < 100; i++) { if (predicate()) return; await delay(5); }
+  assert.fail('Expected answer state did not arrive.');
+}
+
+test('completed transcripts promptly retrieve a cited answer through the existing approval flow', async t => {
+  const { session, act, state, audioFrames } = await answerFixture(t);
+  session.addTranscript('A', 'Who buys it? I do not know.');
+  await eventually(() => state().seats.B.pending);
+  const pending = state().seats.B.pending;
+  assert.equal(audioFrames('A', 'soft').length, 0);
+  assert.equal(pending.sources[0].name, 'brief.md');
+  await act('B', { type: 'signal', id: 'blind', signal: 'R1', draftId: pending.id });
+  assert.equal(audioFrames('A', 'soft').length, 0);
+  await act('B', { type: 'heard', messageId: pending.id });
+  await act('B', { type: 'signal', id: 'approved', signal: 'R1', draftId: pending.id });
+  assert.equal(audioFrames('A', 'soft').at(-1).text, 'The buyer is a sales team lead.');
+  assert.equal(state().log.filter(item => item.kind === 'answer_evidence').length, 1);
+});
+
+test('new speech cancels an audible answer and an old approval cannot send it', async t => {
+  const { session, act, state, audioFrames } = await answerFixture(t, { codec: { answer: async request => request.turns.length > 1
+    ? { status: 'resolved', question: 'Who buys it?', answer: '', sources: [] } : supportedAnswer(request) } });
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => state().seats.B.pending);
+  const pending = state().seats.B.pending;
+  await act('B', { type: 'heard', messageId: pending.id });
+  session.addTranscript('A', 'Actually, the buyer is a sales team lead.');
+  assert.equal(state().seats.B.pending, null);
+  await act('B', { type: 'signal', id: 'obsolete', signal: 'R1', draftId: pending.id });
+  await eventually(() => state().questionState.status === 'resolved');
+  assert.equal(audioFrames('A', 'soft').length, 0);
+});
+
+test('a result from superseded conversation cannot preview even when the model ignores abort', async t => {
+  let resolveOld, oldSignal, calls = 0;
+  const { session, state, audioFrames } = await answerFixture(t, { codec: { answer: request => {
+    calls++;
+    if (calls === 1) { oldSignal = request.signal; return new Promise(resolve => { resolveOld = () => resolve(supportedAnswer(request)); }); }
+    return Promise.resolve({ status: 'resolved', question: 'Who buys it?', answer: '', sources: [] });
+  } } });
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => resolveOld);
+  session.addTranscript('B', 'We know the answer now, move on.');
+  assert.equal(oldSignal.aborted, true);
+  resolveOld();
+  await eventually(() => state().questionState.status === 'resolved');
+  assert.equal(audioFrames('B', 'draft').length, 0);
+});
+
+test('new speech cancels already approved speech while it is being synthesized', async t => {
+  let releaseSpeech, speechSignal;
+  const { session, act, state, audioFrames } = await answerFixture(t, { audio: { speech: async (seat, text, options) => {
+    if (options.role === 'assistant') return { url: '/preview' };
+    speechSignal = options.signal;
+    return new Promise(resolve => { releaseSpeech = () => resolve({ url: '/answer' }); });
+  } } });
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => state().seats.B.pending);
+  const pending = state().seats.B.pending;
+  await act('B', { type: 'heard', messageId: pending.id });
+  const approval = act('B', { type: 'signal', signal: 'R1', id: 'approve', draftId: pending.id });
+  await eventually(() => releaseSpeech);
+  session.addTranscript('A', 'Never mind. Let us move on.');
+  assert.equal(speechSignal.aborted, true);
+  releaseSpeech();
+  await approval;
+  assert.equal(audioFrames('A', 'soft').length, 0);
+});
+
+test('unsupported and invalid-source answers remain silent and fixed whispers still work', async t => {
+  const { session, state, act, audioFrames } = await answerFixture(t, { codec: { answer: async request => ({ ...supportedAnswer(request), sources: [{ id: 'fake', quote: 'A fabricated source.' }] }) } });
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => state().questionState.status === 'unavailable');
+  assert.equal(audioFrames('B', 'draft').length, 0);
+  await act('B', { type: 'signal', id: 'fixed', signal: 'R1' });
+  assert.equal(audioFrames('A', 'soft').at(-1).text, 'Slow down');
+  session.codec.answer = async () => ({ status: 'unsupported', question: 'Revenue?', answer: '', sources: [] });
+  session.addTranscript('A', 'What is our revenue?');
+  await eventually(() => state().questionState.status === 'unsupported');
+  assert.equal(audioFrames('B', 'draft').length, 0);
+});
+
+test('partial speech cancels a preview immediately before the completed transcript arrives', async t => {
+  const { session, state } = await answerFixture(t);
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => state().seats.B.pending);
+  const callbacks = session.transcriptionCallbacks('A', session.generation, session.seats.A.listenVersion);
+  callbacks.partial('Actually');
+  assert.equal(state().seats.B.pending, null);
+  await session.answerQuestion('B');
+  assert.equal(state().seats.B.pending, null);
+  callbacks.committed('Actually, let us move on.');
+  assert.equal(session.questionSpeechPending, false);
+});
+
+test('overlapping microphone partials do not lose a question when the second completed transcript is a duplicate', async t => {
+  let calls = 0;
+  const { session, state } = await answerFixture(t, { codec: { answer: async request => { calls++; return supportedAnswer(request); } } });
+  const a = session.transcriptionCallbacks('A', session.generation, session.seats.A.listenVersion);
+  const b = session.transcriptionCallbacks('B', session.generation, session.seats.B.listenVersion);
+  a.partial('Who buys');
+  b.partial('Who buys');
+  a.committed('Who buys it?');
+  await delay(15);
+  assert.equal(calls, 0);
+  b.committed('Who buys it?');
+  await eventually(() => state().seats.B.pending);
+  assert.equal(calls, 1);
+  assert.equal(session.questionTurns.length, 1);
+});
+
+test('quiet follow-up retries a waiting question and expiry never sends an answer', async t => {
+  let calls = 0;
+  const { session, state, audioFrames, advance } = await answerFixture(t, { settings: { questionQuietMs: 30 }, codec: { answer: async request => {
+    calls++;
+    return calls === 1 ? { status: 'waiting', question: 'Who buys it?', answer: '', sources: [] } : supportedAnswer(request);
+  } } });
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => state().questionState.status === 'waiting');
+  advance(3000);
+  await eventually(() => state().seats.B.pending);
+  advance(6001);
+  session.expirePending('B');
+  assert.equal(session.seats.B.pending, null);
+  assert.equal(audioFrames('A', 'soft').length, 0);
+  assert.equal(session.questionState.status, 'expired');
+});
+
+test('reset erases references and rejects an in-flight answer', async t => {
+  let release;
+  const { session, state, audioFrames } = await answerFixture(t, { codec: { answer: request => new Promise(resolve => { release = () => resolve(supportedAnswer(request)); }) } });
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => release);
+  await session.reset();
+  release();
+  await delay(10);
+  assert.equal(state().references.length, 0);
+  assert.equal(state().phase, 'lobby');
+  assert.equal(audioFrames('B', 'draft').length, 0);
+});
+
+test('the same question on both microphones is evaluated once and discarded answers do not repeat', async t => {
+  let calls = 0;
+  const { session, act, state, audioFrames, advance } = await answerFixture(t, { codec: { answer: async request => { calls++; return supportedAnswer(request); } } });
+  session.addTranscript('A', 'Who buys it?');
+  session.addTranscript('B', 'Who buys it?');
+  await eventually(() => state().seats.B.pending);
+  assert.equal(calls, 1);
+  const pending = state().seats.B.pending;
+  await act('B', { type: 'signal', signal: 'L1', id: 'discard', draftId: pending.id });
+  advance(31_000);
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => state().questionState.status === 'already_offered');
+  assert.equal(audioFrames('B', 'draft').length, 1);
+});
+
+test('a timed-out answer does not block fixed cues or a subsequent evaluation', async t => {
+  const { session, state, act, audioFrames } = await answerFixture(t, { settings: { questionTimeoutMs: 15 }, codec: { answer: () => new Promise(() => {}) } });
+  session.addTranscript('A', 'Who buys it?');
+  await eventually(() => state().questionState.status === 'unavailable');
+  assert.equal(session.answerTask, null);
+  await act('B', { type: 'signal', signal: 'R1', id: 'still-fixed' });
+  assert.equal(audioFrames('A', 'soft').length, 1);
+});
 
 async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {}, sim = { A: true, B: true } } = {}) {
   let now = 1000;

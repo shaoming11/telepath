@@ -37,6 +37,27 @@ async function hubFixture(context) {
   return { hub, base: started.stageUrl };
 }
 
+test('reference upload is session-scoped, atomic, lobby-only and absent from phone snapshots', async context => {
+  const { hub, base } = await hubFixture(context);
+  const info = await (await fetch(new URL('/info', base))).json();
+  const upload = (files, sessionId = hub.session.sessionId) => fetch(new URL('/references', base), {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-telepathy-hub': info.hubId, 'x-telepathy-session': sessionId },
+    body: JSON.stringify({ files }),
+  });
+  const document = { name: 'brief.md', data: Buffer.from('Our pilot lasts six weeks.').toString('base64') };
+  assert.equal((await upload([document], 'obsolete')).status, 403);
+  assert.equal((await upload([document])).status, 200);
+  assert.equal(hub.session.references.length, 1);
+  assert.equal(hub.session.snapshot('A').references, undefined);
+  assert.equal((await upload([{ name: 'bad.exe', data: document.data }])).status, 400);
+  assert.equal(hub.session.references[0].name, 'brief.md');
+  hub.session.phase = 'live';
+  assert.equal((await upload([])).status, 409);
+  hub.session.phase = 'lobby';
+  assert.equal((await upload([])).status, 200);
+  assert.equal(hub.session.references.length, 0);
+});
+
 test('state includes a stable hub identity and frame scope across operator reset', async context => {
   const { base } = await hubFixture(context);
   const stage = await open(base, { role: 'stage' });

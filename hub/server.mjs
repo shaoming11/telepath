@@ -6,6 +6,7 @@ import { stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
+import { Worker } from 'node:worker_threads';
 import { bankFileName, createAudio, STATUS_LINES, STOCK_VOICES } from './audio.mjs';
 import { createCodec } from './codec.mjs';
 import { Session } from './session.mjs';
@@ -103,6 +104,40 @@ export function createHub({
   }
 
   async function routes(req, res) {
+    if (req.url === '/references' && req.method === 'POST') {
+      const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+      const current = req.headers['x-telepathy-hub'] === hub_id && req.headers['x-telepathy-session'] === session.sessionId;
+      if (!local || !current) return respond(req, res, 403, TYPES['.json'], JSON.stringify({ error: 'Reconnect to the local stage and try again.' }));
+      if (session.phase !== 'lobby' || session.referencesLoading) return respond(req, res, 409, TYPES['.json'], JSON.stringify({ error: 'Upload documents in the lobby before starting.' }));
+      const generation = session.generation;
+      session.referencesLoading = true;
+      session.publish();
+      try {
+        let size = 0;
+        const chunks = [];
+        for await (const chunk of req) {
+          size += chunk.length;
+          if (size > 12 * 1024 * 1024) throw new Error('Upload exceeds 8 MB of files.');
+          chunks.push(chunk);
+        }
+        const files = JSON.parse(Buffer.concat(chunks).toString('utf8')).files;
+        const documents = await new Promise((resolve, reject) => {
+          const worker = new Worker(new URL('./reference-worker.mjs', import.meta.url), { workerData: files, resourceLimits: { maxOldGenerationSizeMb: 192 } });
+          const timer = setTimeout(() => { void worker.terminate(); reject(new Error('Document parsing timed out. Try a smaller file.')); }, 20_000);
+          worker.once('message', result => { clearTimeout(timer); void worker.terminate(); result.error ? reject(new Error(result.error)) : resolve(result.documents); });
+          worker.once('error', error => { clearTimeout(timer); reject(error); });
+          worker.once('exit', code => { clearTimeout(timer); if (code) reject(new Error('Could not parse these documents.')); });
+        });
+        if (generation !== session.generation || session.phase !== 'lobby') throw new Error('Session changed; upload again.');
+        session.references = documents;
+        respond(req, res, 200, TYPES['.json'], JSON.stringify({ documents: documents.map(({ id, name, characters }) => ({ id, name, characters })) }));
+      } catch (error) {
+        if (!res.headersSent) respond(req, res, 400, TYPES['.json'], JSON.stringify({ error: error.message || 'Upload failed.' }));
+      } finally {
+        if (generation === session.generation) { session.referencesLoading = false; session.publish(); }
+      }
+      return;
+    }
     if (req.method !== 'GET' && req.method !== 'HEAD') return respond(req, res, 405, 'text/plain', 'Use GET.');
     try {
       let path = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);

@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { QUESTION_INSTRUCTIONS, QUESTION_SCHEMA, validateAnswer } from './questions.mjs';
 
 const PRESETS = ['Pitch', 'Party', 'Meeting'];
 const SEATS = ['A', 'B'];
@@ -94,7 +95,7 @@ function simulated({ preset, seats, requestedSeat }) {
   return { situations, candidates };
 }
 
-async function fromOpenAI(env, fetch_impl, input, signal) {
+async function fromOpenAI(env, fetch_impl, input, signal, question = false) {
   const api_base = env.TELEPATHY_OPENAI_BASE_URL ?? 'https://api.openai.com/v1';
   const response = await fetch_impl(api_base.replace(/\/$/, '') + '/responses', {
     method: 'POST',
@@ -103,10 +104,10 @@ async function fromOpenAI(env, fetch_impl, input, signal) {
     body: JSON.stringify({
       model: env.TELEPATHY_OPENAI_MODEL ?? 'gpt-4.1-mini',
       store: false,
-      max_output_tokens: 160,
-      instructions: INSTRUCTIONS,
+      max_output_tokens: question ? 1000 : 160,
+      instructions: question ? QUESTION_INSTRUCTIONS : INSTRUCTIONS,
       input,
-      text: { format: { type: 'json_schema', name: 'telepathy_room', strict: true, schema: SCHEMA } },
+      text: { format: { type: 'json_schema', name: question ? 'telepathy_answer' : 'telepathy_room', strict: true, schema: question ? QUESTION_SCHEMA : SCHEMA } },
     }),
   });
   if (!response.ok) throw new Error('OpenAI request failed (' + response.status + ')');
@@ -140,6 +141,12 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath } 
 
   return {
     mode,
+    questionAnswering: mode === 'openai' && Boolean(env.OPENAI_API_KEY),
+    async answer({ signal, passages, ...context }) {
+      if (mode !== 'openai' || !env.OPENAI_API_KEY) throw new Error('Document answers require the OpenAI text provider.');
+      const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, true);
+      return validateAnswer(raw, passages);
+    },
     reset() { last_request = ''; last_result = undefined; last_request_at = 0; },
     async evaluate(args) {
       if (args.sim) return simulated(args);

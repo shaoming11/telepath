@@ -2,12 +2,12 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-if ! node -e 'if (Number(process.versions.node.split(".")[0]) < 22) process.exit(1)' 2>/dev/null; then
-  printf '%s\n' 'Telepathy needs Node.js 22 or later.' >&2
+if ! node -e 'const [major, minor] = process.versions.node.split(".").map(Number); if (major < 22 || major === 22 && minor < 13) process.exit(1)' 2>/dev/null; then
+  printf '%s\n' 'Telepathy needs Node.js 22.13 or later.' >&2
   exit 1
 fi
 
-if ! node -e 'require.resolve("ws")' 2>/dev/null; then
+if ! node -e 'for (const dependency of ["ws", "mammoth", "pdfjs-dist/legacy/build/pdf.mjs"]) require.resolve(dependency)' 2>/dev/null; then
   npm ci --no-audit --no-fund
 fi
 
