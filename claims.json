@@ -1,33 +1,4 @@
 {
-  "revision": 61,
-  "claims": [
-    {
-      "id": "8b037e3f-f3fe-4a18-8538-6e42a5f29597",
-      "owner": "fireheartjerry",
-      "agent": "codex-question-mode",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub/session.mjs",
-        "hub/pitch-question.mjs",
-        "public/phone.mjs",
-        "public/index.html",
-        "public/stage.mjs",
-        "tests/session.test.mjs",
-        "tests/phone-session.test.mjs",
-        "README.md"
-      ],
-      "paths": [
-        "README.md",
-        "hub/pitch-question.mjs",
-        "hub/session.mjs",
-        "public/index.html",
-        "public/phone.mjs",
-        "public/stage.mjs",
-        "tests/phone-session.test.mjs",
-        "tests/session.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T05:21:24.771Z"
-    }
-  ]
+  "revision": 62,
+  "claims": []
 }
