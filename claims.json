@@ -1,4 +1,21 @@
 {
-  "revision": 144,
-  "claims": []
+  "revision": 145,
+  "claims": [
+    {
+      "id": "94bf12d5-8535-40d9-a424-a7be5e86e7a0",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-audio-wake",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "public/phone-audio.mjs",
+        "tests/phone-audio.test.mjs"
+      ],
+      "paths": [
+        "public/phone-audio.mjs",
+        "tests/phone-audio.test.mjs"
+      ],
+      "claimedAt": "2026-11-22T10:15:00.696Z"
+    }
+  ]
 }
