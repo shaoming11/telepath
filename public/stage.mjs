@@ -583,6 +583,7 @@ function boot() {
   let roomAttempt = 0;
   let roomMessage = '';
   const reactRoom = Boolean(document.querySelector('[data-room-owner="react"]'));
+  const wasp_operator = body.classList.contains('wasp-liquid');
   let roomDevices = [];
   let roomRenderKey = '';
   const roomBars = reactRoom ? [] : Array.from({ length: 24 }, () => node('span'));
@@ -911,6 +912,7 @@ function boot() {
       if (active) active.scrollTop = 0;
       if (enteredReveal && body.dataset.surface === 'stage') {
         window.scrollTo(0, 0);
+        if (wasp_operator && !ui.operator.hidden) setOperator(false, { restore_focus: false });
         if (!body.hasAttribute('data-operator-open')) byId('reveal-title').focus({ preventScroll: true });
       }
     }
@@ -1434,22 +1436,28 @@ function boot() {
     resetTimer = setTimeout(disarmReset, 5000);
   }
 
-  function setOperator(open) {
+  function setOperator(open, { restore_focus = true, trigger = document.activeElement } = {}) {
     if (open === !ui.operator.hidden) return;
-    if (open) lastFocus = document.activeElement;
+    if (open) lastFocus = trigger;
     ui.operator.hidden = !open;
     body.toggleAttribute('data-operator-open', open);
     ui.opToggle.setAttribute('aria-expanded', String(open));
     if (open) {
       const pitch_coach = !ui.opCoach.hidden && !ui.opCoachBeat.disabled;
-      (pitch_coach ? ui.opCoachBeat : state.phase === 'live' ? ui.opAnnouncePreset : ui.opBegin).focus();
+      const preferred = wasp_operator && state.phase !== 'live' ? ui.opClose
+        : pitch_coach ? ui.opCoachBeat : state.phase === 'live' ? ui.opAnnouncePreset : ui.opBegin;
+      preferred.focus();
+      if (wasp_operator && document.activeElement !== preferred) ui.opClose.focus();
       return;
     }
     disarmReset();
-    // never leave focus inside the panel we just hid
+    if (!restore_focus) return;
     const restorable = lastFocus && lastFocus !== document.body && document.contains(lastFocus)
-      && !ui.operator.contains(lastFocus) && typeof lastFocus.focus === 'function';
-    (restorable ? lastFocus : ui.opToggle).focus();
+      && !ui.operator.contains(lastFocus) && typeof lastFocus.focus === 'function'
+      && !lastFocus.disabled && !lastFocus.closest('[hidden]');
+    const target = restorable ? lastFocus : ui.opToggle;
+    target.focus();
+    if (wasp_operator && document.activeElement !== target) ui.opToggle.focus();
   }
 
   function wireOperator() {
@@ -1485,7 +1493,8 @@ function boot() {
       send('coach_send', { coachId: state.coach.id });
     });
 
-    ui.opToggle.addEventListener('click', () => setOperator(ui.operator.hidden));
+    ui.opToggle.addEventListener('click', () => setOperator(ui.operator.hidden,
+      wasp_operator ? { trigger: ui.opToggle } : undefined));
     ui.opClose.addEventListener('click', () => setOperator(false));
     for (const id of ['op-begin', 'op-reveal', 'op-replay', 'op-canned']) {
       const button = byId(id);
@@ -1531,8 +1540,12 @@ function boot() {
     ui.reveal.addEventListener('click', () => send('reveal'));
 
     document.addEventListener('keydown', event => {
-      if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === 'Escape' && !ui.operator.hidden) { setOperator(false); return; }
+      if (event.defaultPrevented || event.isComposing || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === 'Escape' && !ui.operator.hidden) {
+        event.preventDefault();
+        setOperator(false);
+        return;
+      }
       const target = event.target;
       const tag = target?.tagName;
       if (target?.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
