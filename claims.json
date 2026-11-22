@@ -1,29 +1,4 @@
 {
-  "revision": 11,
-  "claims": [
-    {
-      "id": "866666d6-dcd1-43e1-b2cc-d45774532400",
-      "owner": "influxtion",
-      "agent": "claude-ui",
-      "branch": "ui-redesign",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/2",
-      "scopes": [
-        "@ui",
-        "public/fonts"
-      ],
-      "paths": [
-        "public/announcements.mjs",
-        "public/calibrate.mjs",
-        "public/fonts",
-        "public/index.html",
-        "public/phone-data.mjs",
-        "public/phone.css",
-        "public/phone.mjs",
-        "public/stage.css",
-        "public/stage.html",
-        "public/stage.mjs"
-      ],
-      "claimedAt": "2026-11-22T02:42:38.731Z"
-    }
-  ]
+  "revision": 12,
+  "claims": []
 }
