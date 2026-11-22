@@ -818,7 +818,7 @@ export class Session {
         this.questionTurns.push({ seat, text, at: this.now() });
         this.questionTurns = this.questionTurns.filter(turn => this.now() - turn.at < 45_000).slice(-20);
       }
-      if (!duplicate || wasSpeaking) {
+      if ((!duplicate || wasSpeaking) && !(this.preset === 'Pitch' && this.roomInput === 'mac')) {
         clearTimeout(this.questionTimer);
         clearTimeout(this.questionQuietTimer);
         this.questionTimer = setTimeout(() => void this.answerQuestion(), this.settings.questionDebounceMs);
@@ -1238,6 +1238,7 @@ export class Session {
   }
 
   async answerQuestion(requestedSeat) {
+    if (!requestedSeat && this.preset === 'Pitch' && this.roomInput === 'mac') return;
     const sender = requestedSeat ?? 'B';
     if (this.closed || this.phase !== 'live' || this.canned || !this.referenceCorpus().length || !this.codec?.questionAnswering
         || !this.canDraft(sender) || !this.questionTurns.length || this.questionSpeechPending) return;
