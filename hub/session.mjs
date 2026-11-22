@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   questionDebounceMs: 350,
   questionQuietMs: 2700,
   automaticQuietMs: 2500,
+  armedQuestionQuietMs: 650,
   automaticCooldownMs: 30000,
   automaticPlaybackGuard: true,
   questionTimeoutMs: 8000,
@@ -970,16 +971,16 @@ export class Session {
       ...SEATS.map(seat => this.seats[seat].transcript.at(-1)?.at ?? -Infinity));
   }
 
-  canWhisperAutomatically(seat, text = '') {
+  canWhisperAutomatically(seat, text = '', { armedAnswer = false } = {}) {
     const state = this.seats[seat];
     return this.phase === 'live' && !this.canned && !this.closed && state.online
       && !this.room.partial && !this.questionSpeechPending
       && !SEATS.some(person => this.seats[person].pending || this.seats[person].receipt?.until > this.now())
       && (!this.settings.automaticPlaybackGuard || !SEATS.some(person => this.seats[person].audioBusyUntil > this.now()))
       && !announcementInFlight(this.announcement)
-      && this.now() - this.lastSpeechAt() >= this.settings.automaticQuietMs
-      && this.now() - this.lastAutomaticCueAt >= this.settings.automaticCooldownMs
-      && (!text || !this.automaticCueTexts.has(questionKey(text)));
+      && this.now() - this.lastSpeechAt() >= (armedAnswer ? this.settings.armedQuestionQuietMs : this.settings.automaticQuietMs)
+      && (armedAnswer || (this.now() - this.lastAutomaticCueAt >= this.settings.automaticCooldownMs
+        && (!text || !this.automaticCueTexts.has(questionKey(text)))));
   }
 
   rememberAutomaticCue(text) {
@@ -1121,8 +1122,8 @@ export class Session {
     }
   }
 
-  async waitForPitchPause(signal) {
-    while (this.room.partial || this.questionSpeechPending || this.now() - this.lastSpeechAt() < this.settings.automaticQuietMs) {
+  async waitForPitchPause(signal, quietMs) {
+    while (this.room.partial || this.questionSpeechPending || this.now() - this.lastSpeechAt() < quietMs) {
       signal.throwIfAborted();
       await new Promise(resolve => setTimeout(resolve, 75));
     }
@@ -1266,9 +1267,9 @@ export class Session {
   }
 
   async racePitchCue(input, prepared, started, realtime, signal) {
-    const compose = deadline => prepared?.task ?? this.composePitchCue(input, deadline, started, realtime);
+    const compose = async deadline => (await prepared?.task) ?? this.composePitchCue(input, deadline, started, realtime);
     if (!this.coach?.draftPitchCue) {
-      return withDeadline(compose, this.settings.pitchComposeMs, signal);
+      return withDeadline(compose, this.settings.pitchRaceMs, signal);
     }
     const { passages, recent } = input;
     const scenario = this.coachScenario;
@@ -1337,21 +1338,26 @@ export class Session {
     const started = performance.now();
     let surfacedCue = false;
     let verifying = false;
+    const canDeliver = (cue, checkedAnswer) => this.canWhisperAutomatically(seat, cue, { armedAnswer: !checkedAnswer });
     notify('Preparing a private pitch cue…');
     this.publishMonitor();
     try {
       const reply = await withDeadline(async signal => {
+        const known = this.coachScenario === 'pitch' && sourcedProjectCue(
+          question ?? resolved.recent.at(-1)?.text ?? '', resolved.passages, resolved.frontendStack,
+        );
         let cue = spoken
           ? await this.reviewPitchAnswer(question, spoken, resolved.passages, signal)
           : await this.racePitchCue(resolved, prepared, started, realtime, signal).catch(() => null)
+            ?? (known ? { ...validateAnswer(known, resolved.passages, resolved.recent), source: 'project-reference', timing: {} } : null)
             ?? (anchor ? null : { answer: this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} });
-        if (anchor) await this.waitForPitchPause(signal);
+        if (anchor) await this.waitForPitchPause(signal, spoken ? this.settings.automaticQuietMs : this.settings.armedQuestionQuietMs);
         let checkedAnswer = spoken || this.pitchAnswerAfter(seat, anchor);
         const reviewAnswers = this.coachScenario !== 'social';
         if (checkedAnswer && !spoken && reviewAnswers) cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
         if (!cue) return null;
-        if (anchor && ((isGroundedScenario(this.coachScenario) && !cue.sources?.length) || !this.canWhisperAutomatically(seat, cue.answer)
-          || !await this.valuableWhisper(cue.answer, resolved.passages, signal))) return null;
+        if (anchor && ((isGroundedScenario(this.coachScenario) && !cue.sources?.length)
+          || (checkedAnswer && !await this.valuableWhisper(cue.answer, resolved.passages, signal)))) return null;
         const composed = performance.now();
         const showCue = () => {
           notify(cue.answer);
@@ -1366,16 +1372,15 @@ export class Session {
         };
         showCue();
         let url = await this.speakPitchCue(seat, cue.answer, signal);
-        if (anchor) await this.waitForPitchPause(signal);
+        if (anchor) await this.waitForPitchPause(signal, checkedAnswer ? this.settings.automaticQuietMs : this.settings.armedQuestionQuietMs);
         const latestAnswer = this.pitchAnswerAfter(seat, anchor);
         if (reviewAnswers && latestAnswer && latestAnswer !== checkedAnswer) {
           checkedAnswer = latestAnswer;
           cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
-          if (!cue || (anchor && (!this.canWhisperAutomatically(seat, cue.answer)
-            || !await this.valuableWhisper(cue.answer, resolved.passages, signal)))) return null;
+          if (!cue || (anchor && !await this.valuableWhisper(cue.answer, resolved.passages, signal))) return null;
           showCue();
           url = await this.speakPitchCue(seat, cue.answer, signal);
-          if (anchor) await this.waitForPitchPause(signal);
+          if (anchor) await this.waitForPitchPause(signal, this.settings.automaticQuietMs);
           if (this.pitchAnswerAfter(seat, anchor) !== checkedAnswer) return null;
         }
         const rendered = performance.now();
@@ -1383,12 +1388,16 @@ export class Session {
           ...cue.timing, speechMs: Math.round(rendered - composed), hubMs: Math.round(rendered - started),
         } };
       }, Math.max(this.settings.pitchHelpTimeoutMs, this.settings.pitchPauseBudgetMs), lifecycle);
-      if (lifecycle.aborted || !reply) return;
+      if (lifecycle.aborted) return;
+      if (!reply) {
+        if (anchor && !surfacedCue) notify('No supported cue for that question.');
+        return;
+      }
       if (anchor) {
         const latest = this.room.transcript.at(-1);
-        if (!this.canWhisperAutomatically(seat, reply.answer)
+        if (!canDeliver(reply.answer, reply.reviewed)
           || latest && latest !== anchor && looksLikeQuestion(latest.text) && !sameQuestion(latest.text, anchor.text)) return;
-        this.rememberAutomaticCue(reply.answer);
+        if (reply.reviewed) this.rememberAutomaticCue(reply.answer);
       }
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
@@ -1433,7 +1442,8 @@ export class Session {
         }).catch(() => {}).finally(() => prepared?.controller.abort());
       }
     } catch {
-      if (!anchor && !lifecycle.aborted && !surfacedCue) notify(this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)));
+      if (!lifecycle.aborted && !surfacedCue) notify(anchor ? 'Cue took too long. Try Cue now.'
+        : this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)));
     } finally {
       if (!verifying) prepared?.controller.abort();
       if (state.pitchHelp === controller) state.pitchHelp = null;
