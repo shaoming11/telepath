@@ -1,3 +1,4 @@
+import { createResearch } from './research.mjs';
 import { createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import { randomUUID } from 'node:crypto';
@@ -139,6 +140,7 @@ export function createHub({
     audio: speech,
     codec: language,
     coach: maritime,
+    researchFactory: () => createResearch({ env }),
     settings: { roomInput: env.TELEPATHY_ROOM_INPUT ?? 'mac', coachScenario: env.TELEPATHY_COACH_SCENARIO, ...settings },
   });
   let info = {};
