@@ -3,6 +3,7 @@ import { createNetworkLink, DEFAULT_NETWORK } from './network.mjs';
 import { createCapture } from './capture.mjs';
 import { createCalibration } from './calibrate.mjs';
 import { createAudioEngine, createDraftTracker } from './phone-audio.mjs';
+import { diag, installDiag, registerExtraActions } from './diag.mjs';
 import {
   APP_TIMING, APP_TIMING_LIMITS, CONSENT_KEY, CONSENT_TEXT, DEFAULT_VOLUMES, PATTERN_LABELS, PRESETS,
   SEAT_NAMES, SIGNAL_LABELS, SIGNAL_ORDER, STORAGE_KEY, SYSTEM_MEANINGS, VOICE_SCRIPT,
@@ -90,7 +91,10 @@ const input = createMediaInput({
   onRaw: on_raw,
   onError: on_pattern_error,
   onPlay: on_media_play,
-  onMediaEvent: action => calibration.note_media_event(action),
+  onMediaEvent: action => {
+    diag('media', { action, mic_open: capture.open, keepalive_paused: keepalive.paused });
+    calibration.note_media_event(action);
+  },
 });
 const emulator = createEmulator({ input, settings: settings.emulator });
 const touch_emulator = createEmulator({ input, settings: touch_profile() });
@@ -132,7 +136,11 @@ const calibration = createCalibration({
   resume_media: resume_anchor,
   on_apply: apply_profile,
   on_run_state: running => {
-    if (!running) ui.earbud_out = false;
+    if (running) pause_mic_for_calibration();
+    else {
+      ui.earbud_out = false;
+      resume_mic_after_calibration();
+    }
     render();
   },
   on_exit: exit_calibration,
@@ -303,6 +311,7 @@ function on_media_play() {
 }
 
 function on_signal(signal, trace) {
+  diag('signal', { signal, calibrating: calibration.active() });
   if (calibration.active()) {
     calibration.note_signal(signal);
     return;
@@ -388,6 +397,8 @@ function arm_media() {
   void audio.unlock();
   const media_session = navigator.mediaSession;
   const registered = input.register(media_session);
+  registerExtraActions();
+  diag('arm', { registered, model: settings.gesture_model, input_mode: settings.input_mode });
   if (media_session && globalThis.MediaMetadata) {
     media_session.metadata = new MediaMetadata({
       title: 'Telepathy', artist: ui.seat ? 'Seat ' + ui.seat : 'Seat',
@@ -763,6 +774,25 @@ function stop_mic() {
   if (connection) connection.listen_sent = false;
   send({ type: 'listen', enabled: false });
   schedule_render();
+}
+
+// While a page holds the microphone, iOS puts the AirPods in a call-style audio
+// session and a stem press toggles mic mute instead of reaching Media Session.
+// Close the mic for the earbud check and timing trials, then reopen it.
+function pause_mic_for_calibration() {
+  if (is_sim() || ui.mic_paused_for_calibration) return;
+  if (!ui.listen_wanted && !capture.open && !capture.opening) return;
+  ui.mic_paused_for_calibration = true;
+  diag('mic_paused_for_calibration');
+  stop_mic();
+  if (!ui.earbud_out) resume_anchor();
+}
+
+function resume_mic_after_calibration() {
+  if (!ui.mic_paused_for_calibration) return;
+  ui.mic_paused_for_calibration = false;
+  diag('mic_resumed_after_calibration');
+  void start_mic();
 }
 
 /* Navigation. */
@@ -1382,6 +1412,7 @@ function set_earbud_model(model) {
 }
 
 function bind_events() {
+  installDiag({ send, keepalive });
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);
   keepalive.addEventListener('playing', () => {

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { appendFile, stat } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -10,11 +10,13 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { bankFileName, createAudio, STATUS_LINES, STOCK_VOICES } from './audio.mjs';
 import { createCodec } from './codec.mjs';
 import { createMaritimeCoach } from './maritime.mjs';
+import { createRoomMic } from './room-mic.mjs';
 import { Session } from './session.mjs';
 import { findLanAddress, hotspotIPv6Peers, resolveTLS } from './tls.mjs';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const RUNTIME = fileURLToPath(new URL('../.runtime/', import.meta.url));
+const DIAG_LOG = resolve(RUNTIME, 'diag.log');
 const MAX_SOCKET_BACKLOG = 2 * 1024 * 1024;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const LOOPBACK_PEERS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -92,6 +94,20 @@ export function createHub({
   const scope = frame => frame.type === 'state'
     ? { ...frame, state: { ...frame.state, hubId: hub_id, serverNow: Date.now() } }
     : { sessionId: session.sessionId, ...frame, hubId: hub_id };
+  let room_timer = null;
+  const room_frame = () => ({ type: 'room_mic', room: room.snapshot() });
+  const room = createRoomMic({
+    env,
+    onLine: line => { if (line.seat) session?.addTranscript(line.seat, line.text); },
+    onChange: () => {
+      if (room_timer) return;
+      room_timer = setTimeout(() => {
+        room_timer = null;
+        const frame = room_frame();
+        stage.forEach(socket => send(socket, frame));
+      }, 150);
+    },
+  });
   session = new Session({
     emitSeat: (seat, frame) => send(seats.get(seat), scope(frame)),
     emitStage: frame => {
@@ -131,6 +147,7 @@ export function createHub({
       if (TEST_AUDIO[path]) path = '/assets/' + TEST_AUDIO[path];
       if (path === '/') path = '/index.html';
       if (path === '/stage') path = '/stage.html';
+      if (path === '/room') path = '/room.html';
       if (path.split('/').some(segment => segment.startsWith('.'))) return respond(req, res, 404, 'text/plain', 'Not found.');
       const absolute = resolve(PUBLIC, '.' + path);
       if (!absolute.startsWith(resolve(PUBLIC) + sep)) return respond(req, res, 404, 'text/plain', 'Not found.');
@@ -192,6 +209,7 @@ export function createHub({
           if (role === 'stage') {
             stage.add(ws);
             send(ws, scope({ type: 'state', state: session.snapshot() }));
+            send(ws, room_frame());
           } else {
             const old = seats.get(seat);
             if (old) session.disconnect(seat);
@@ -204,7 +222,23 @@ export function createHub({
             let frame;
             try { frame = JSON.parse(String(raw)); } catch { return; }
             if (!frame || typeof frame.type !== 'string') return;
+            if (role === 'stage' && frame.type === 'room_mic_audio') return room.push(frame.audio, frame.level);
+            if (role === 'stage' && frame.type === 'room_mic') {
+              if (frame.action === 'start') room.start().catch(() => {});
+              else if (frame.action === 'stop') room.stop();
+              else if (frame.action === 'swap') room.swap();
+              else if (frame.action === 'clear') room.clear();
+              else if (frame.action === 'assign') room.assign(frame.speaker, frame.seat ?? null);
+              return;
+            }
             if (role === 'stage' && frame.type !== 'operator') return;
+            if (role === 'seat' && frame.type === 'diag') {
+              const { type, hubId, sessionId, ...entry } = frame;
+              const line = JSON.stringify({ at: new Date().toISOString(), seat, ...entry });
+              console.log('[diag] ' + line);
+              appendFile(DIAG_LOG, line + '\n').catch(() => {});
+              return;
+            }
             const current = (frame.hubId === undefined || frame.hubId === hub_id)
               && (frame.sessionId === undefined || frame.sessionId === session.sessionId);
             const reason = current ? {} : { reason: 'session_changed' };
@@ -267,6 +301,8 @@ export function createHub({
     },
     async close() {
       clearInterval(heartbeat);
+      clearTimeout(room_timer);
+      room.stop();
       for (const ws of wss.clients) ws.terminate();
       wss.close();
       await Promise.all([session.close(), end(http), end(https)]);

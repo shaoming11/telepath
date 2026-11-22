@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Room Mic</title>
+  <style>
+    @font-face { font-family: "Geist"; src: url("/fonts/Geist-Variable.woff2") format("woff2"); font-weight: 100 900; }
+    @font-face { font-family: "Geist Mono"; src: url("/fonts/GeistMono-Variable.woff2") format("woff2"); font-weight: 100 900; }
+    :root {
+      --base: #060708; --panel: #0C0E10; --raised: #121519; --line: rgba(255, 255, 255, 0.08);
+      --fg: #F3F5F7; --dim: #858B91; --sa: #FF6B2C; --sb: #4C8DFF; --danger: #FF8A84;
+      --sans: "Geist", ui-sans-serif, system-ui, -apple-system, sans-serif;
+      --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--base); color: var(--fg); font: 15px/1.45 var(--sans); }
+    main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+    header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    h1 { font-size: 20px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    .sub { color: var(--dim); font-size: 13px; margin: 4px 0 0; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button {
+      font: 500 13px var(--sans); color: var(--fg); background: var(--raised); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 14px; cursor: pointer;
+    }
+    button:hover:not(:disabled) { border-color: rgba(255, 255, 255, 0.2); }
+    button:disabled { opacity: 0.4; cursor: default; }
+    button.primary { background: var(--fg); color: var(--base); border-color: var(--fg); }
+    .status { font: 12px var(--mono); color: var(--dim); display: flex; align-items: center; gap: 8px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+    .status[data-state="live"] .dot { background: #4ADE80; }
+    .status[data-state="connecting"] .dot { background: #FACC15; }
+    .status[data-state="error"] .dot { background: var(--danger); }
+    .meter { width: 90px; height: 6px; border-radius: 3px; background: var(--raised); overflow: hidden; }
+    .meter span { display: block; height: 100%; width: 0; background: var(--fg); transition: width 80ms linear; }
+    .speakers { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .speaker { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 220px; flex: 1; }
+    .speaker b { font: 500 12px var(--mono); color: var(--dim); }
+    .speaker p { margin: 6px 0 8px; color: var(--dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .speaker .row { display: flex; gap: 6px; }
+    .speaker button { padding: 4px 10px; font-size: 12px; }
+    .speaker button[aria-pressed="true"][data-seat="A"] { background: var(--sa); border-color: var(--sa); color: #000; }
+    .speaker button[aria-pressed="true"][data-seat="B"] { background: var(--sb); border-color: var(--sb); color: #000; }
+    .lanes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 720px) { .lanes { grid-template-columns: 1fr; } }
+    .lane { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; min-height: 320px; }
+    .lane h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .lane h2::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--c); }
+    .lane[data-seat="A"] { --c: var(--sa); }
+    .lane[data-seat="B"] { --c: var(--sb); }
+    .lane ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .lane li { border-left: 2px solid var(--c); padding: 2px 0 2px 10px; }
+    .lane time { display: block; font: 11px var(--mono); color: var(--dim); }
+    .empty { color: var(--dim); font-size: 13px; }
+    .unassigned { margin-top: 12px; }
+    .unassigned li { --c: var(--dim); }
+    .note { margin-top: 18px; color: var(--dim); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Room mic</h1>
+        <p class="sub">One MacBook microphone, split into two transcripts by ElevenLabs speaker diarization.</p>
+      </div>
+      <div class="controls">
+        <div class="status" id="status" data-state="off"><span class="dot"></span><span id="status-text">Off</span></div>
+        <div class="meter" aria-hidden="true"><span id="meter"></span></div>
+        <button class="primary" id="toggle">Start listening</button>
+        <button id="swap">Swap A ↔ B</button>
+        <button id="clear">Clear</button>
+      </div>
+    </header>
+
+    <section class="speakers" id="speakers" aria-label="Detected speakers"></section>
+
+    <section class="lanes">
+      <div class="lane" data-seat="A"><h2 id="lane-a-title">Seat A</h2><ol id="lane-A"></ol></div>
+      <div class="lane" data-seat="B"><h2 id="lane-b-title">Seat B</h2><ol id="lane-B"></ol></div>
+    </section>
+    <section class="lane unassigned" id="unassigned-wrap" hidden><h2>Unassigned voices</h2><ol id="lane-none"></ol></section>
+
+    <p class="note">The first two voices are assigned to Seat A and Seat B in the order they speak. Use Swap or the A/B buttons if that's wrong. Assigned lines also feed each seat's transcript for the AI coach when that seat is connected.</p>
+  </main>
+  <script type="module" src="/room.mjs"></script>
+</body>
+</html>
