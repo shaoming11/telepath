@@ -1,0 +1,176 @@
+.film {
+  position: fixed;
+  inset: 0;
+  background: var(--void);
+  overflow: clip;
+}
+.film-canvas {
+  position: absolute !important;
+  inset: 0;
+}
+
+.film-copy {
+  position: absolute;
+  inset: auto 0 8vh;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+.film-line {
+  grid-area: 1 / 1;
+  margin: 0;
+  padding: 0 6vw;
+  max-width: min(92vw, 40ch);
+  font-size: clamp(2rem, 4.6vw, 4.5rem);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  line-height: 1.04;
+  text-align: center;
+  text-wrap: balance;
+  visibility: hidden;
+}
+.film-line span {
+  display: inline-block;
+  margin-right: 0.24em;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.film-line span:last-child {
+  margin-right: 0;
+}
+
+.film-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.film-anchor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  visibility: hidden;
+  will-change: transform, opacity;
+}
+.film-label {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  width: max-content;
+  max-width: 44vw;
+  color: var(--ink);
+  text-shadow:
+    0 0 0.5em var(--void),
+    0 0 0.2em var(--void);
+  transform: translate(-50%, -100%);
+  text-align: center;
+}
+.film-label[data-at="A"] {
+  transform: translate(0, -50%);
+  text-align: left;
+}
+.film-label[data-at="B"] {
+  transform: translate(-100%, -50%);
+  text-align: right;
+}
+.film-label-text {
+  font-size: clamp(1.1rem, 1.9vw, 1.75rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.film-label[data-at="A"] .film-label-text,
+.film-label[data-at="B"] .film-label-text {
+  font-size: var(--headline);
+  letter-spacing: var(--track-headline);
+  line-height: 1.06;
+}
+.film-label-taps {
+  font-size: clamp(0.75rem, 1vw, 1rem);
+  font-weight: 500;
+  color: var(--seat-b);
+}
+.film-label-caption {
+  font-size: clamp(0.95rem, 1.4vw, 1.35rem);
+  color: var(--ink-secondary);
+  margin-top: 6px;
+}
+
+.film-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--void);
+  pointer-events: none;
+}
+.film-title {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  font-size: var(--display);
+  font-weight: 600;
+  letter-spacing: var(--track-display);
+  pointer-events: none;
+}
+
+.film-tick {
+  position: absolute;
+  width: max-content;
+  max-width: 8.5em;
+  font-size: clamp(0.95rem, 1.5vw, 1.4rem);
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: center;
+  color: var(--ink-secondary);
+  transform: translate(-50%, 1.4em);
+}
+.film-tick[data-side="above"] {
+  transform: translate(-50%, calc(-100% - 1.4em));
+}
+.film-tick[data-seat="A"] {
+  color: var(--seat-a);
+}
+
+@media (max-width: 640px) {
+  .film-label-text {
+    font-size: 0.75rem;
+  }
+  .film-label-taps {
+    display: none;
+  }
+  .film-label[data-at="A"] .film-label-text,
+  .film-label[data-at="B"] .film-label-text {
+    font-size: 1.25rem;
+  }
+  .film-label-caption {
+    font-size: 0.75rem;
+  }
+  .film-tick {
+    font-size: 0.625rem;
+    max-width: 7em;
+  }
+}
+
+.film .film-label[data-at="A"],
+.film .film-label[data-at="B"] {
+  max-width: 22vw;
+  text-wrap: balance;
+}
+.film .film-label[data-at="A"] .film-label-text,
+.film .film-label[data-at="B"] .film-label-text {
+  font-size: clamp(18px, 2.45vw, 46px);
+}
+
+@media (max-width: 700px) {
+  .film .film-label[data-at="A"],
+  .film .film-label[data-at="B"] {
+    max-width: 32vw;
+  }
+  .film .film-label[data-at="A"] .film-label-text,
+  .film .film-label[data-at="B"] .film-label-text {
+    font-size: 16px;
+  }
+}

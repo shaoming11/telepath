@@ -1,0 +1,9 @@
+.wasp/
+node_modules/
+dist/
+src/upstream/
+public/fonts/
+
+public/assets/
+offline/
+public/posters/

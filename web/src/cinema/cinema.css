@@ -1,0 +1,151 @@
+.cinema,
+.film {
+  font-family: "Inter Variable", Geist, Arial, sans-serif;
+}
+.cinema {
+  background: #000;
+  color: #f5f5f7;
+}
+.cinema-track {
+  position: relative;
+}
+.cinema-pinned {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: clip;
+  background: #000;
+}
+.cinema-pinned .film {
+  position: absolute;
+}
+.cinema-head,
+.cinema-foot,
+.still-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px clamp(22px, 4vw, 76px);
+}
+.cinema-head,
+.cinema-foot {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  pointer-events: none;
+}
+.cinema-head a,
+.cinema-foot nav,
+.still-head a {
+  pointer-events: auto;
+}
+.cinema-head a,
+.still-head a {
+  color: #d7d9e0;
+  text-decoration: none;
+  font-size: 15px;
+  padding: 10px;
+}
+.cinema-foot {
+  inset: auto 0 0;
+  color: #afb3bc;
+  font-size: 14px;
+}
+.cinema-foot nav {
+  display: flex;
+  gap: 8px;
+}
+.cinema-foot button {
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: #f9fafb;
+  background: rgb(22 23 25 / 90%);
+  border: 1px solid #45464b;
+}
+.cinema-progress {
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  background: #15171b;
+}
+.cinema-progress > div {
+  height: 100%;
+  background: #aeb4bc;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+}
+.cinema-stills section {
+  min-height: 100svh;
+  max-width: 1600px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #000;
+}
+.cinema-stills figure {
+  margin: 0 auto;
+  max-width: 1040px;
+  width: 100%;
+}
+.cinema-stills figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.still-copy {
+  padding: 10px clamp(25px, 8vw, 120px) clamp(62px, 9vh, 120px);
+  max-width: 82ch;
+}
+.still-copy h2 {
+  margin: 0;
+  font-size: clamp(2.3rem, 5.8vw, 6rem);
+  line-height: 1;
+  letter-spacing: -0.06em;
+  text-wrap: balance;
+}
+.still-copy p {
+  font-size: clamp(1.09rem, 1.6vw, 1.45rem);
+  line-height: 1.45;
+  color: #b3b6bb;
+  max-width: 47ch;
+}
+.cinema .stage {
+  --ink: #f4f3ef;
+  font-family: Geist, Arial, sans-serif;
+}
+.cinema-load {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  font-size: clamp(3rem, 7.2vw, 6.5rem);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  margin: -1px;
+  padding: 0;
+  white-space: nowrap;
+}
+@media (max-width: 700px) {
+  .cinema-stills section {
+    min-height: 100svh;
+  }
+  .still-head {
+    padding: 18px 22px;
+  }
+  .still-copy {
+    padding-bottom: 54px;
+  }
+  .cinema-stills figure {
+    margin-block: auto;
+  }
+}
