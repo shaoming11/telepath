@@ -1,5 +1,5 @@
 {
-  "revision": 165,
+  "revision": 166,
   "claims": [
     {
       "id": "dd59a1b8-73ac-4c4c-9986-f338d313d603",
@@ -18,6 +18,20 @@
         "tests/references.test.mjs"
       ],
       "claimedAt": "2026-11-22T12:01:53.513Z"
+    },
+    {
+      "id": "5a0de4bc-da58-4ad7-808a-68099131805b",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-reference-ranking",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "hub/references.mjs"
+      ],
+      "paths": [
+        "hub/references.mjs"
+      ],
+      "claimedAt": "2026-11-22T12:03:19.513Z"
     }
   ]
 }
