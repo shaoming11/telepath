@@ -682,6 +682,7 @@ function boot() {
     if (reactRoom) {
       const detail = {
         wanted: roomWanted, canStart, devices: roomDevices, tone: status.tone, label: status.label, notice,
+        reviewing: state.phase === 'reveal',
         waiting: status.tone === 'live', turns: runs,
         speakers: state.phase === 'reveal' || state.canned ? [] : [...speakers].map(([id, run]) => ({
           id, label: run.label, seat: run.seat ?? '',
