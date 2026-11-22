@@ -1213,6 +1213,14 @@ export class Session {
             clauses.sort((a, b) => b.words.filter(word => questionWords.has(word)).length
               - a.words.filter(word => questionWords.has(word)).length);
             if (clauses.length) lead = clauses[0].text;
+            else if (this.coachScenario !== 'social' && resolved.questionHint) {
+              const alternative = roomFallbackCue(resolved.questionHint, resolved.passages, resolved.frontendStack, resolved.wearerAnswerSoFar);
+              if (alternative.sources.length && questionKey(alternative.answer).split(' ').length <= SPOKEN_CUE_TARGET_WORDS) {
+                cue = alternative;
+                lead = cue.answer;
+                source = 'project-reference';
+              }
+            }
           }
           cue.answer = COACHING_VERB.test(lead) ? lead : 'In your own words: ' + lead;
           const synthesisStarted = performance.now();
