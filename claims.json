@@ -1,23 +1,4 @@
 {
-  "revision": 55,
-  "claims": [
-    {
-      "id": "ae9a41ab-1b05-47cc-bbaa-eab17892a9d5",
-      "owner": "fireheartjerry",
-      "agent": "codex-calibration-counts",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/earbuds/airpods-1/input.mjs",
-        "tests/airpods-1.test.mjs",
-        "tests/phone-calibrate.test.mjs"
-      ],
-      "paths": [
-        "public/earbuds/airpods-1/input.mjs",
-        "tests/airpods-1.test.mjs",
-        "tests/phone-calibrate.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T05:05:38.969Z"
-    }
-  ]
+  "revision": 56,
+  "claims": []
 }
