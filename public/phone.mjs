@@ -102,7 +102,7 @@ const capture = createCapture({
   get_context: () => audio.context(),
   frame_ms: () => settings.app.micFrameMs,
   on_frame: ({ audio: pcm, level }) => {
-    if (ui.listen_wanted) send({ type: 'mic', audio: pcm, level });
+    if (ui.listen_wanted && ui.state?.roomInput !== 'mac') send({ type: 'mic', audio: pcm, level });
   },
   on_state: on_capture_state,
 });
@@ -526,6 +526,7 @@ function on_state(next, source) {
     ? performance.now() + Math.max(0, receipt.until - (next.serverNow ?? Date.now()))
     : null;
   drafts.observe(next.seats?.[ui.seat]?.pending ?? null);
+  if (next.roomInput === 'mac' && !ui.voice_task && (capture.open || capture.opening || ui.listen_wanted)) stop_mic();
   if (next.phase === 'reveal' && previous?.phase !== 'reveal' || next.canned && !previous?.canned) {
     audio.cancel_previews();
     audio.cancel_announcements();
@@ -579,6 +580,7 @@ function reconcile(next, source) {
 }
 
 function sync_listen(source = connection) {
+  if (ui.state?.roomInput === 'mac') return;
   if (!source || source.listen_sent || !capture.open || !ui.listen_wanted) return;
   if (my_state()?.listening) {
     source.listen_sent = true;
@@ -699,7 +701,8 @@ function on_capture_state(status, detail) {
   schedule_render();
 }
 
-async function start_mic() {
+async function start_mic({ recording = false } = {}) {
+  if ((!ui.state || ui.state.roomInput === 'mac') && !recording) return false;
   if (is_sim() || !has_consent() || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
   ui.listen_wanted = true;
   const opened = await capture.start();
@@ -831,7 +834,9 @@ function set_voice_progress(fraction) {
 
 async function record_sample(kind) {
   arm_media();
-  if (!(await start_mic())) {
+  ui.voice_task = kind;
+  if (!(await start_mic({ recording: true }))) {
+    ui.voice_task = null;
     ui.voice_message = 'The microphone is not available. Use the premade voice to continue.';
     render();
     return;
@@ -857,6 +862,8 @@ async function record_sample(kind) {
     set_voice_progress(0);
     ui.voice_message = error?.message === 'Recording cancelled.' ? '' : 'The recording stopped early. Try again.';
     render();
+  } finally {
+    if (ui.state?.roomInput === 'mac') stop_mic();
   }
 }
 
@@ -1188,8 +1195,9 @@ function render_live() {
   // Old hubs omit `transcription`. Otherwise "Listening" means the room is actually being transcribed.
   const transcribing = mine?.transcription == null || mine.transcription === 'live';
   const listening = !is_sim() && capture.open && mine?.listening && transcribing;
-  listen.dataset.state = is_sim() ? 'sim' : listening ? 'on' : 'off';
-  set_text($('live-listen-text'), is_sim() ? 'Simulated' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
+  listen.dataset.state = state?.roomInput === 'mac' ? state.room?.transcription === 'live' ? 'on' : 'off' : is_sim() ? 'sim' : listening ? 'on' : 'off';
+  set_text($('live-listen-text'), state?.roomInput === 'mac' ? state.room?.transcription === 'live' ? 'Mac listening' : 'Mac mic ' + (state.room?.transcription ?? 'off')
+    : is_sim() ? 'Simulated' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
   set_text($('live-cache'), ui.failed_manifest ? 'Failed' : mine?.ready ? 'Cached' : state?.presetPending ? 'Caching' : 'Not ready');
 
   render_draft(mine?.pending ?? null);
@@ -1256,7 +1264,7 @@ function render_settings() {
     radio.checked = Number(radio.value) === settings.mode;
   }
   $('settings-drafts').checked = settings.drafts;
-  $('settings-listen-row').hidden = is_sim();
+  $('settings-listen-row').hidden = is_sim() || ui.state?.roomInput === 'mac';
   $('settings-listen').checked = capture.open && ui.listen_wanted;
   for (const name of ['cue', 'voice']) {
     const field = $('settings-volume-' + name);

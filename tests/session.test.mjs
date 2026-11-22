@@ -227,6 +227,62 @@ test('covering a missed point cancels its preview and prevents a repeated remind
   assert.equal(audioFrames('B', 'draft').length, 1);
 });
 
+test('Mac room audio drives grounded answers without phone microphones and stops pending work on pause', async t => {
+  let callbacks;
+  const calls = [];
+  const { session, state } = await answerFixture(t, { settings: { roomInput: 'mac' }, audio: {
+    listen: async (seat, enabled, next) => { calls.push([seat, enabled]); if (enabled) callbacks = next; return { listening: enabled }; },
+    mic: async (seat, audio, level, next) => { assert.equal(seat, 'room'); callbacks = next; next.committed('Who buys it? I do not know.'); },
+  } });
+  await session.setListening('A', true);
+  assert.equal(calls.length, 0);
+  await session.setRoomListening(true);
+  await session.receiveMic('A', { audio: 'QUJD', level: .2 });
+  assert.equal(session.seats.A.transcript.length, 0);
+  await session.receiveRoomMic({ audio: 'QUJD', level: .2 });
+  await eventually(() => state().seats.B.pending);
+  assert.equal(state().room.transcript[0].text, 'Who buys it? I do not know.');
+  assert.equal(state().seats.A.transcript.length, 0);
+  assert.equal(session.snapshot('A').room.transcript, undefined);
+  const late = callbacks;
+  await session.setRoomListening(false);
+  assert.equal(state().seats.B.pending, null);
+  late.committed('This callback is stale.');
+  assert.equal(state().room.transcript.length, 1);
+  assert.deepEqual(calls, [['room', true], ['room', false]]);
+});
+
+test('Mac shared-room transcripts reach ordinary coaching and Reveal freezes the stream', async t => {
+  let request, callbacks;
+  const { session, state } = await createLiveSession({ settings: { roomInput: 'mac' }, audio: {
+    listen: async (seat, enabled, cb) => { if (enabled) callbacks = cb; return { listening: enabled }; },
+  }, codec: { evaluate: async input => { request = input; return {}; } } });
+  t.after(() => session.close());
+  await session.setRoomListening(true);
+  callbacks('Show the working demo now.');
+  await session.sense();
+  assert.equal(request.room.transcript[0].text, 'Show the working demo now.');
+  assert.equal(request.sim, false);
+  await session.handleStage({ action: 'reveal' });
+  callbacks('Late room speech.');
+  assert.equal(state().room.listening, false);
+  assert.equal(state().room.transcript.length, 1);
+});
+
+test('reset while Mac transcription starts prevents a late activation', async t => {
+  let finish;
+  const { session, state } = await createLiveSession({ audio: {
+    listen: (seat, enabled) => enabled ? new Promise(resolve => { finish = resolve; }) : Promise.resolve({ listening: false }),
+  } });
+  t.after(() => session.close());
+  const starting = session.setRoomListening(true);
+  await session.reset();
+  finish({ listening: true });
+  await starting;
+  assert.equal(state().room.listening, false);
+  assert.equal(state().room.transcript.length, 0);
+});
+
 async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, settings = {}, sim = { A: true, B: true } } = {}) {
   let now = 1000;
   const seatFrames = { A: [], B: [] };

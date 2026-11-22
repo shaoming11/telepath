@@ -58,6 +58,36 @@ test('reference upload is session-scoped, atomic, lobby-only and absent from pho
   assert.equal(hub.session.references.length, 0);
 });
 
+test('only the owning stage tab can stream room audio; disconnect and stale-session frames cannot keep it live', async context => {
+  const audioFrames = [];
+  const hub = createHub({ env: {}, audio: {
+    listen: async (seat, enabled) => ({ listening: enabled }),
+    mic: async (seat, audio, level, callbacks) => { audioFrames.push([seat, audio]); callbacks('Shared room speech.'); },
+  } });
+  context.after(() => hub.close());
+  const { stageUrl: base } = await hub.start({ port: 0, host: '127.0.0.1' });
+  const owner = await open(base, { role: 'stage' });
+  const other = await open(base, { role: 'stage' });
+  const { state } = await owner.take(stateFrame);
+  const scope = { hubId: state.hubId, sessionId: state.sessionId };
+  owner.send({ ...scope, type: 'operator', action: 'room_listen', enabled: true });
+  await owner.take(frame => frame.type === 'room_ack' && frame.listening);
+  other.send({ ...scope, type: 'operator', action: 'room_listen', enabled: true });
+  const rejected = await other.take(frame => frame.type === 'operator_ack');
+  assert.equal(rejected.reason, 'microphone_owned');
+  other.send({ ...scope, type: 'room_mic', audio: 'OTHER', level: .1 });
+  owner.send({ ...scope, type: 'room_mic', audio: 'OWNER', level: .1 });
+  await owner.take(frame => frame.state?.room?.transcript?.length === 1);
+  assert.deepEqual(audioFrames, [['room', 'OWNER']]);
+  owner.socket.close();
+  await other.take(frame => frame.state?.room?.transcription === 'off' && frame.state?.room?.transcript?.length === 1);
+  assert.equal(hub.session.room.listening, false);
+  await hub.session.reset();
+  other.send({ ...scope, type: 'operator', action: 'room_listen', enabled: true });
+  await delay(20);
+  assert.equal(hub.session.room.listening, false);
+});
+
 test('state includes a stable hub identity and frame scope across operator reset', async context => {
   const { base } = await hubFixture(context);
   const stage = await open(base, { role: 'stage' });
