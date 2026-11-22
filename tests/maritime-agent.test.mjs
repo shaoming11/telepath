@@ -165,3 +165,27 @@ test('slow inference aborts and falls back within its deadline', async t => {
   assert.deepEqual(await readAdvice(await chat()), { ...recommendLocally(PITCH), engine: 'rules' });
   assert.equal(aborted, true);
 });
+
+test('the hosted agent drafts and independently reviews a private cue', async t => {
+  const passage = { id: 'mic', text: 'The MacBook microphone captures room audio.', name: 'private filename' };
+  const context = { type: 'pitch_cue', seat: 'A', scenario: 'pitch', elapsedSeconds: 20,
+    turns: [{ speaker: 'Judge', text: 'What captures room audio?' }], passages: [passage] };
+  const { chat } = await startCoach(t, {
+    env: ENV,
+    fetchImpl: async (_url, options) => {
+      const { messages } = JSON.parse(options.body);
+      const input = JSON.parse(messages[1].content);
+      assert.deepEqual(input.passages, [{ id: passage.id, text: passage.text }]);
+      if (input.type === 'pitch_cue_review') {
+        assert.equal(input.firstCue, passage.text);
+        assert.match(messages[0].content, /Verify the first/);
+        return modelResponse({ status: 'resolved' });
+      }
+      assert.equal(input.type, 'pitch_cue');
+      return modelResponse({ status: 'answer', answer: passage.text, sources: [{ id: passage.id, quote: passage.text }] });
+    },
+  });
+  assert.equal((await readAdvice(await chat(context))).status, 'answer');
+  assert.equal((await readAdvice(await chat({ ...context, type: 'pitch_cue_review', firstCue: passage.text }))).status, 'resolved');
+  assert.equal((await chat({ ...context, type: 'pitch_cue_review' })).status, 400);
+});

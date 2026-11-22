@@ -10,7 +10,7 @@ A short cached chime announces the private whisper. Stage records which planner 
 
 Set `TELEPATHY_MARITIME_CUE_RACE=on` alongside `TELEPATHY_MARITIME=on` to start an independent Maritime draft when the seat requests a cue. OpenAI can prepare its draft while the question is still being spoken. The hub plays the first usable cue to the requesting seat. The other provider reviews the cue with the same conversation and source excerpts after its own draft finishes. Verification appears next to the private cue. A material correction must cite a supplied passage. It can play a follow-up whisper while the conversation and request are still current.
 
-The hub allows up to six seconds for the initial race and up to ten seconds for review. ElevenLabs renders the whisper on the Mac hub. Browser playback has an eight-second start window to allow for decoding, waking audio, and earlier queued messages. If speech is unavailable, the phone keeps the cue readable and shows the audio status.
+The hub allows up to six seconds for the initial race and up to fifteen seconds for background review. ElevenLabs renders the whisper on the Mac hub. Browser playback has an eight-second start window to allow for decoding, waking audio, and earlier queued messages. If speech is unavailable, the phone keeps the cue readable and shows the audio status.
 
 ## Platform choices
 
