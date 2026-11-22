@@ -399,9 +399,10 @@ export function roomConsoleStatus({ link, phase, canned, ownedElsewhere, startin
 
 export function revealSummary(state) {
   const messages = state.log.filter(entry => entry.kind === 'message');
-  const words = messages.reduce((sum, entry) =>
+  const wordCount = entries => entries.reduce((sum, entry) =>
     sum + (entry.text?.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)?.length ?? 0), 0);
-  return { messages: messages.length, words, playbackStarts: messages.filter(entry => entry.playedAt != null).length };
+  const started = messages.filter(entry => entry.playedAt != null);
+  return { messages: messages.length, words: wordCount(messages), playbackStarts: started.length, playbackWords: wordCount(started) };
 }
 
 export function announcementNote(progress) {
@@ -477,7 +478,8 @@ function boot() {
     liveSeats: byId('live-seats'), stream: byId('stream-list'), streamEmpty: byId('stream-empty'),
     revealBits: byId('reveal-bits'), revealCount: byId('reveal-count'),
     revealWords: byId('reveal-words'), revealLanes: byId('reveal-lanes'), revealNote: byId('reveal-message-note'),
-    revealKicker: byId('reveal-kicker'), liveMessages: byId('live-messages'), liveWords: byId('live-words'),
+    revealKicker: byId('reveal-kicker'), revealHead: byId('reveal-head'), revealWordLabel: byId('reveal-word-label'),
+    liveMessages: byId('live-messages'), liveWords: byId('live-words'),
     readout: { A: byId('readout-a'), B: byId('readout-b'), An: byId('readout-a-name'), Bn: byId('readout-b-name'),
       preset: byId('readout-preset'), cache: byId('readout-cache') },
     diagram: byId('lobby-diagram'), diaHost: byId('dia-host'), diaAgent: byId('dia-agent'),
@@ -510,6 +512,7 @@ function boot() {
   let lastPhase = null;
   let lastBits = null;
   let streamKeys = [];
+  let revealFingerprint = '';
   const seat_fingerprints = new Map();
   const live_panels = new Map();
   let lastFocus = null;
@@ -842,10 +845,16 @@ function boot() {
       if (section) section.hidden = phase !== state.phase;
     }
     if (state.phase !== lastPhase) {
+      const enteredReveal = lastPhase === 'live' && state.phase === 'reveal';
       lastPhase = state.phase;
+      revealFingerprint = '';
       ui.announce.textContent = 'Stage phase: ' + state.phase;
       const active = ui.screens[state.phase];
       if (active) active.scrollTop = 0;
+      if (enteredReveal && body.dataset.surface === 'stage') {
+        window.scrollTo(0, 0);
+        if (!body.hasAttribute('data-operator-open')) byId('reveal-title').focus({ preventScroll: true });
+      }
     }
 
     const canned = state.canned;
@@ -1070,26 +1079,37 @@ function boot() {
   }
 
   function renderReveal() {
-    ui.revealBits.textContent = state.bits === null ? '—' : String(Math.round(state.bits * 100) / 100);
+    const fingerprint = JSON.stringify([state.hubId, state.sessionId, state.bits, state.startedAt,
+      state.preset, state.canned, state.log, SEATS.map(key => [state.seats[key].name, state.seats[key].transcript])]);
+    if (fingerprint === revealFingerprint) return;
+    revealFingerprint = fingerprint;
     const rows = timelineRows(state);
-    const { messages, words, playbackStarts } = revealSummary(state);
-    if (ui.revealWords) ui.revealWords.textContent = String(words);
-    ui.revealCount.textContent = messages
-      ? messages + (messages === 1 ? ' message' : ' messages') + ' · ' + words + (words === 1 ? ' word' : ' words')
-      : rows.length + ' events';
-    if (!state.canned && messages && playbackStarts < messages) {
-      ui.revealCount.textContent += ' · ' + playbackStarts + ' playback confirmed';
+    const { messages, words, playbackStarts, playbackWords } = revealSummary(state);
+    const base = timelineBase(state);
+    const times = state.log.map(entry => entry.at).filter(Number.isFinite);
+    const span = base !== null && times.length ? Math.max(...times) - base : null;
+    const view = {
+      bits: state.bits === null ? '—' : String(Math.round(state.bits * 100) / 100),
+      words: state.canned ? words : playbackWords,
+      wordLabel: state.canned ? 'scripted words' : 'words in confirmed cues',
+      count: !messages ? 'No cues sent' : state.canned
+        ? messages + (messages === 1 ? ' scripted cue' : ' scripted cues')
+        : playbackStarts + ' of ' + messages + ' cues confirmed',
+      kicker: ['Reveal', state.preset, span ? formatOffset(span) : null].filter(Boolean).join(' · '),
+    };
+    if (ui.revealHead?.dataset.revealOwner === 'react') {
+      ui.revealHead.dispatchEvent(new CustomEvent('telepathy:reveal', { detail: view }));
+    } else {
+      ui.revealBits.textContent = view.bits;
+      ui.revealWords.textContent = String(view.words);
+      ui.revealWordLabel.textContent = view.wordLabel;
+      ui.revealCount.textContent = view.count;
+      ui.revealKicker.textContent = view.kicker;
     }
     if (ui.revealNote) {
       ui.revealNote.textContent = messages
-        ? messages + ' sent · ' + (state.canned ? messages : playbackStarts) + ' heard'
+        ? state.canned ? 'Recorded take' : messages + ' sent · ' + playbackStarts + ' playback confirmed'
         : '';
-    }
-    if (ui.revealKicker) {
-      const base = timelineBase(state);
-      const times = state.log.map(entry => entry.at).filter(Number.isFinite);
-      const span = base !== null && times.length ? Math.max(...times) - base : null;
-      ui.revealKicker.textContent = ['Reveal', state.preset, span ? formatOffset(span) : null].filter(Boolean).join(' · ');
     }
     ui.timelineEmpty.hidden = rows.length > 0;
     renderLanes();
@@ -1127,12 +1147,13 @@ function boot() {
 
     fill(ui.transcripts, SEATS.map(key => {
       const seat = state.seats[key];
-      const heard = state.log.filter(entry => entry.kind === 'message' && entry.to === key);
+      const heard = state.log.filter(entry => entry.kind === 'message' && entry.to === key && (entry.canned || entry.playedAt != null));
       const column = node('div');
       const head = node('h2', 'section-title');
       const name = node('span', 'section-title__name', seat.name);
       const lines = seat.transcript.length + (seat.transcript.length === 1 ? ' line' : ' lines');
-      head.append(name, node('span', null, heard.length ? lines + ' · ' + heard.length + ' heard' : lines));
+      const delivery = state.canned ? ' scripted' : ' playback confirmed';
+      head.append(name, node('span', null, heard.length ? lines + ' · ' + heard.length + delivery : lines));
       column.append(head, revealTranscript(seat, heard));
       return column;
     }));
@@ -1160,7 +1181,7 @@ function boot() {
       } else {
         row.classList.add('transcript__line--heard');
         if (entry.message.seat) row.dataset.from = entry.message.seat;
-        const text = node('span', 'transcript__text', 'Heard ');
+        const text = node('span', 'transcript__text', entry.message.canned ? 'Scripted cue ' : 'Playback ');
         text.append(node('b', null, '“' + (entry.message.text ?? entry.message.signal ?? 'a message') + '”'));
         row.append(text);
       }
@@ -1183,7 +1204,7 @@ function boot() {
       if (!Number.isFinite(entry.at) || !SEATS.includes(entry.seat)) continue;
       if (entry.kind === 'message') {
         marks.push({ lane: entry.seat, type: 'tap', at: entry.at, label: entry.signal, seat: entry.seat, urgent: entry.urgent });
-        if (SEATS.includes(entry.to)) {
+        if (SEATS.includes(entry.to) && (entry.canned || entry.playedAt != null)) {
           marks.push({ lane: entry.to, type: 'heard', at: entry.playedAt ?? entry.at, seat: entry.seat, urgent: entry.urgent });
         }
       } else if (entry.kind === 'receipt') {
@@ -1233,7 +1254,7 @@ function boot() {
     });
 
     const legend = node('div', 'lanes__legend');
-    for (const [type, label] of [['speech', 'Speaking'], ['tap', 'Tap sent'], ['heard', 'Whisper heard'], ['receipt', 'Receipt'], ['draft', 'Agent draft']]) {
+    for (const [type, label] of [['speech', 'Speaking'], ['tap', 'Tap sent'], ['heard', 'Whisper playback'], ['receipt', 'Receipt'], ['draft', 'Agent draft']]) {
       const item = node('span');
       item.append(node('i', 'mark mark--' + type), label);
       legend.append(item);
