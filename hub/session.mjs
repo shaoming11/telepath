@@ -8,6 +8,7 @@ import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcement
 import { COUNT_CALIBRATION_WINDOW_MS } from '../public/earbuds/airpods-1/input.mjs';
 import { normalizePitch, normalizePitchHelp, recommendLocally } from '../maritime/policy.mjs';
 import { createPitchPlanner } from './pitch-planner.mjs';
+import { coachScenario, isGroundedScenario, scenarioFallbackCue, SCENARIO_QUERY } from './coach-scenarios.mjs';
 import { createSessionMonitor } from '../monitor/session.mjs';
 import { createSpeakerBindings, splitDiarizedSegment } from '../monitor/speakers.mjs';
 
@@ -148,6 +149,7 @@ export class Session {
     this.monitor = createSessionMonitor(now);
     this.pitchPlanner = createPitchPlanner({ remote: coach?.planPitchHelp?.bind(coach), now });
     this.pitchPlanTimer = null;
+    this.coachScenario = coachScenario(this.settings.coachScenario);
     this.initialize();
   }
 
@@ -199,6 +201,7 @@ export class Session {
       phase: this.phase,
       preset: this.preset,
       pitchHelp: this.preset === 'Pitch',
+      coachScenario: this.coachScenario,
       questionModeAvailable: this.preset === 'Pitch' && this.roomInput === 'mac',
       presetPending: this.cacheCandidate?.preset ?? (this.targetPreset.preset !== this.preset ? this.targetPreset.preset : null),
       cacheId: this.activeCache?.id ?? null,
@@ -904,15 +907,17 @@ export class Session {
     const recent = turns.slice(-6);
     const latest = recent.at(-1)?.text ?? '';
     const earlier = recallRoomTurns(history.filter(turn => !recent.includes(turn)), latest);
-    const query = recent.slice(-3).map(turn => turn.text).join(' ') || 'Telepathy live pitch demo';
-    let passages = retrieveProjectReferences([...this.references, ...this.pitchReferences], query, 7, latest);
-    const frontendStack = this.pitchReferences.find(doc => doc.kind === 'frontend')
-      ?.chunks.find(chunk => chunk.heading === 'Active frontend stack');
+    const pitch = this.coachScenario === 'pitch';
+    const query = recent.slice(-3).map(turn => turn.text).join(' ') || SCENARIO_QUERY[this.coachScenario];
+    const corpus = pitch ? [...this.references, ...this.pitchReferences] : this.references;
+    let passages = corpus.length ? retrieveProjectReferences(corpus, query, 7, latest) : [];
+    const frontendStack = pitch ? this.pitchReferences.find(doc => doc.kind === 'frontend')
+      ?.chunks.find(chunk => chunk.heading === 'Active frontend stack') : undefined;
     if (frontendStack && isFrontendStackQuestion(latest)) {
       passages = [frontendStack, ...passages.filter(passage => passage.id !== frontendStack.id)].slice(0, 7);
     }
-    const overview = this.pitchReferences.find(doc => doc.name === 'Telepathy technical reference.md')
-      ?.chunks.find(chunk => chunk.heading === 'Project overview')?.text;
+    const overview = pitch ? this.pitchReferences.find(doc => doc.name === 'Telepathy technical reference.md')
+      ?.chunks.find(chunk => chunk.heading === 'Project overview')?.text : undefined;
     const project = [overview, frontendStack?.text].filter(Boolean).join('\n\n') || undefined;
     return { passages, recent, earlier, project, frontendStack, context: normalizePitchHelp({
       type: 'pitch_help', seat, elapsedSeconds: Math.min(86400, Math.max(0, Math.floor((began - this.startedAt) / 1000))),
@@ -935,7 +940,7 @@ export class Session {
       this.cancelAnswers('question_mode');
       const controller = new AbortController();
       const scope = AbortSignal.any([this.liveScope([seat]), controller.signal]);
-      const realtime = this.codec?.openPitchRealtime?.(scope);
+      const realtime = this.coachScenario === 'pitch' ? this.codec?.openPitchRealtime?.(scope) : null;
       this.seats[seat].questionMode = { controller, scope, realtime, realtimeOpenedAt: this.now(), revisions: 0, candidate: null, timer: null };
       if (this.room.partial && this.now() - this.room.partial.at <= this.settings.pitchPartialMaxMs) {
         this.preparePitchQuestion(this.room.partial.text);
@@ -944,7 +949,28 @@ export class Session {
     this.publish();
   }
 
+  fallbackCue(text, question) {
+    return scenarioFallbackCue(this.coachScenario, question) ?? fallbackPitchCue(text, question);
+  }
+
+  selectCoachScenario(value) {
+    const scenario = coachScenario(value);
+    if (this.closed || this.canned || this.phase === 'reveal' || scenario === this.coachScenario) return;
+    this.coachScenario = scenario;
+    this.clearPitchPlanning();
+    for (const seat of SEATS) {
+      const armed = Boolean(this.seats[seat].questionMode);
+      this.stopQuestionMode(seat);
+      this.seats[seat].pitchHelp?.abort();
+      if (armed) this.toggleQuestionMode(seat);
+    }
+    this.append('coach_scenario', { seat: null, text: scenario });
+    if (this.phase === 'live' && this.room.listening) this.schedulePitchPlanning();
+    this.publish();
+  }
+
   pitchRealtime(mode) {
+    if (this.coachScenario !== 'pitch') return null;
     if (mode.realtime?.closed && !mode.scope.aborted
         && this.now() - mode.realtimeOpenedAt >= this.settings.pitchRealtimeReconnectMs) {
       mode.realtimeOpenedAt = this.now();
@@ -1011,8 +1037,8 @@ export class Session {
   }
 
   async reviewPitchAnswer(question, spoken, passages, signal) {
-    if (questionKey(spoken).split(' ').length < 4) return null;
-    if (isBuildStoryQuestion(question)) {
+    if (questionKey(spoken).split(' ').length < 4 || this.coachScenario === 'social') return null;
+    if (this.coachScenario === 'pitch' && isBuildStoryQuestion(question)) {
       const answer = missingBuildPoint(spoken);
       const source = passages.find(passage => passage.text.includes(BUILD_STORY_EVIDENCE));
       return answer && source ? { answer, source: 'project-reference', sources: [{ id: source.id, name: source.name, quote: BUILD_STORY_EVIDENCE }], timing: {} } : null;
@@ -1095,11 +1121,14 @@ export class Session {
 
   async composePitchCue({ context, passages, recent, earlier, project, frontendStack }, signal, started, realtime) {
     const question = recent.at(-1)?.text ?? '';
-    const known = sourcedProjectCue(question, passages, frontendStack);
+    const scenario = this.coachScenario;
+    const pitch = scenario === 'pitch';
+    const known = pitch ? sourcedProjectCue(question, passages, frontendStack) : null;
     if (known) {
       return { ...validateAnswer(known, passages, recent), source: 'project-reference', timing: {} };
     }
-    if (!this.codec?.pitchHelp || !passages.length) return null;
+    if (!this.codec?.pitchHelp || (!passages.length && isGroundedScenario(scenario))) return null;
+    if (!pitch) realtime = null;
     const { plan, source } = await this.pitchPlanner.select(context, { signal, waitMs: this.settings.pitchPlanWaitMs });
     const planned = performance.now();
     const selected = new Set(plan.passageIds);
@@ -1121,10 +1150,10 @@ export class Session {
         return { ...cue, source: 'openai-realtime', timing: { planMs: Math.round(planned - started), composeMs: Math.round(performance.now() - planned) } };
       }
     }
-    const result = await this.codec.pitchHelp({ signal, ...input });
+    const result = await this.codec.pitchHelp({ signal, ...input, ...(!pitch && { scenario }) });
     if (!result) return null;
-    cue = validateAnswer(result, ranked, recent);
-    if (cue.status !== 'answer' || cue.answer.split(/\s+/).length > MAX_PITCH_CUE_WORDS || !isUsefulPitchCue(cue.answer, question)) return null;
+    cue = scenario === 'social' ? result : validateAnswer(result, ranked, recent);
+    if (cue.status !== 'answer' || cue.answer.split(/\s+/).length > MAX_PITCH_CUE_WORDS || (pitch && !isUsefulPitchCue(cue.answer, question))) return null;
     return { ...cue, source, timing: { planMs: Math.round(planned - started), composeMs: Math.round(performance.now() - planned) } };
   }
 
@@ -1156,10 +1185,11 @@ export class Session {
           ? await this.reviewPitchAnswer(question, spoken, resolved.passages, signal)
           : await withDeadline(deadline => prepared?.task ?? this.composePitchCue(resolved, deadline, started, realtime),
             this.settings.pitchComposeMs, signal).catch(() => null)
-            ?? { answer: fallbackPitchCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} };
+            ?? { answer: this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} };
         if (anchor) await this.waitForPitchPause(signal);
         let checkedAnswer = spoken || this.pitchAnswerAfter(seat, anchor);
-        if (checkedAnswer && !spoken) cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
+        const reviewAnswers = this.coachScenario !== 'social';
+        if (checkedAnswer && !spoken && reviewAnswers) cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
         if (!cue) return null;
         const composed = performance.now();
         const speak = async text => {
@@ -1172,7 +1202,7 @@ export class Session {
           surfacedCue = true;
           state.lastPitchCue = {
             text: cue.answer,
-            points: !checkedAnswer && isBuildStoryQuestion(question ?? resolved.recent.at(-1)?.text ?? '')
+            points: !checkedAnswer && this.coachScenario === 'pitch' && isBuildStoryQuestion(question ?? resolved.recent.at(-1)?.text ?? '')
               ? BUILD_STORY_NOTES
               : cue.sources.slice(0, 1).map(source => source.quote.slice(0, 180)),
           };
@@ -1182,7 +1212,7 @@ export class Session {
         let url = await speak(cue.answer);
         if (anchor) await this.waitForPitchPause(signal);
         const latestAnswer = this.pitchAnswerAfter(seat, anchor);
-        if (latestAnswer && latestAnswer !== checkedAnswer) {
+        if (reviewAnswers && latestAnswer && latestAnswer !== checkedAnswer) {
           checkedAnswer = latestAnswer;
           cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
           if (!cue) return null;
@@ -1199,6 +1229,7 @@ export class Session {
       if (lifecycle.aborted || !reply) return;
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
+        scenario: this.coachScenario, ...(reply.ungrounded && { ungrounded: true }),
         timing: reply.timing, requestedAt: began, messageId });
       if (messageId) {
         state.awaitingHeard.set(messageId, entry);
@@ -1207,7 +1238,7 @@ export class Session {
         this.cue(seat, 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: 2000 });
       }
     } catch {
-      if (!lifecycle.aborted && !surfacedCue) notify(fallbackPitchCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)));
+      if (!lifecycle.aborted && !surfacedCue) notify(this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)));
     } finally {
       prepared?.controller.abort();
       if (state.pitchHelp === controller) state.pitchHelp = null;
@@ -1825,6 +1856,7 @@ export class Session {
         if (this.room.listening) this.schedulePitchPlanning();
         break;
       case 'preset': return this.selectPreset(frame.preset, frame.context);
+      case 'coach_scenario': return this.selectCoachScenario(frame.scenario);
       case 'announce': return this.announce(frame.text);
       case 'room_speaker_assign': return this.assignRoomSpeaker(frame);
       case 'room_transcript_clear':

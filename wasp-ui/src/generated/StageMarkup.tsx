@@ -147,6 +147,13 @@ export function StageMarkup() {
             <ChannelMonitor id="lobby-monitor" className="channel-monitor" />
             <section className="reference-panel" id="reference-setup" aria-labelledby="reference-title">
               <h2 className="kicker" id="reference-title">{"TEAM BRIEF & REFERENCES"}</h2>
+              <label htmlFor="coach-scenario">Coaching scenario</label>
+              <select id="coach-scenario">
+                <option value="pitch">{"Pitch Q&A"}</option>
+                <option value="interview">Interview</option>
+                <option value="social">Date or small talk</option>
+              </select>
+              <p className="reference-note" id="coach-scenario-note"></p>
               <p>Add documents so the coach can find supported answers to live questions. Answers are previewed privately and require a tap to send.</p>
               <label htmlFor="reference-files">Choose a brief and reference documents</label>
               <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx" />

@@ -31,3 +31,29 @@ The baseline material describes this build and its intended behavior. Treat resu
 ElevenLabs provides live diarized transcription, speech for the assistant and both seats, and the generated chime assets. Optional instant voice cloning is for playback, not for assigning speaker identity. Premade voices can be used for the whole demo. Fixed messages stay available from cached assets. The operator can play a bundled canned pitch and reveal if live hardware or network conditions stop the demo.
 
 Documents, room audio, and the live session are ephemeral on the hub. Reset clears uploaded documents and session data. The hub holds the API credentials. Each cloud service sees only the inputs it needs for its part of the flow.
+
+## Two features: Telepathy and the coaching agent
+
+Telepathy is the teammate channel. A teammate in the audience sends a cue such as "Slow down" or "One minute left" with an AirPods gesture, and it plays privately in the presenter's earbuds. Today the gestures are tap and double tap on AirPods 1, or stem squeezes on AirPods Pro.
+
+The coaching agent is "your agent in your ear". It listens to the room through the MacBook microphone. When someone asks a question, it whispers what to talk about. After the wearer answers, it can remind them of an important point they missed.
+
+## Coaching scenarios
+
+The operator picks one scenario on the stage before the session begins.
+
+- **Pitch Q&A.** Judges question the team about the project. Cues come from the built-in project documents and any uploaded pitch notes, and each cue must quote a source.
+- **Interview.** Someone being interviewed uploads their own background, such as a bio and prepared stories. Cues come only from those uploaded documents and must quote them. Without uploads, the coach stays quiet.
+- **Date or small talk.** For a shy or awkward person getting to know someone. The coach suggests a topic or a question to ask, such as "Ask where they grew up", based on what the other person just said. It needs no documents, and the stage marks these cues as not coming from any document.
+
+The stranger test shows the coaching agent at its clearest: hand the AirPods to someone who knows nothing about a topic, ask them a hard question, and the coach suggests the terms to mention or a clarifying question to ask.
+
+## Planned: profile lookup with Fiber AI
+
+Planned and not yet built. When you meet someone and they tell you their role, the coaching agent would look up their professional profile with Fiber AI. It would then suggest follow-up questions and how to tailor the pitch to that person's role.
+
+## Roles of each service
+
+- ElevenLabs transcribes the room, separates speakers, and speaks every whisper.
+- Maritime hosts the planning agent. It decides whether a cue should answer a question, add a missed point, or suggest what to say next, and picks the supporting passages.
+- OpenAI writes the short cue from that plan, the recent conversation, and the passages.
