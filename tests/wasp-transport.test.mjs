@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 import test from 'node:test';
 import { createHub } from '../hub/server.mjs';
 
@@ -15,14 +16,30 @@ test('the Wasp client owns phone and Stage navigations while the hub retains ses
   await mkdir(join(root, 'wasp-assets'));
   await writeFile(join(root, 'index.html'), '<title>Telepathy</title><script type="module" src="/wasp-assets/app.js"></script>');
   await writeFile(join(root, 'wasp-assets', 'app.js'), 'export {};');
+  const bundled = 'window.telepathy = true;\n'.repeat(100);
+  const compressed = gzipSync(bundled);
+  await writeFile(join(root, 'wasp-assets', 'app-abcdefgh.js'), bundled);
+  await writeFile(join(root, 'wasp-assets', 'app-abcdefgh.js.gz'), compressed);
   const { stageUrl } = await hub.start({ host: '127.0.0.1', port: 0 });
   const hit = (path, options) => fetch(new URL(path, stageUrl), options);
   for (const path of ['/?sim=1&seat=A', '/stage']) {
     const response = await hit(path);
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.match(await response.text(), /\/wasp-assets\/app\.js/);
   }
   assert.match((await hit('/wasp-assets/app.js')).headers.get('content-type'), /javascript/);
+  const gzipped = await hit('/wasp-assets/app-abcdefgh.js', { headers: { 'Accept-Encoding': 'gzip, br' } });
+  assert.equal(gzipped.headers.get('content-encoding'), 'gzip');
+  assert.equal(gzipped.headers.get('content-length'), String(compressed.length));
+  assert.equal(gzipped.headers.get('vary'), 'Accept-Encoding');
+  assert.match(gzipped.headers.get('cache-control'), /immutable/);
+  assert.equal(await gzipped.text(), bundled);
+  const identity = await hit('/wasp-assets/app-abcdefgh.js', { headers: { 'Accept-Encoding': 'gzip;q=0, *;q=1' } });
+  assert.equal(identity.headers.get('content-encoding'), null);
+  assert.equal(identity.headers.get('content-length'), String(Buffer.byteLength(bundled)));
+  assert.equal(await identity.text(), bundled);
+  assert.equal((await hit('/wasp-assets/app-abcdefgh.js.gz')).status, 404);
   const alias = await hit('/index.html?sim=1', { redirect: 'manual' });
   assert.equal(alias.status, 302);
   assert.equal(alias.headers.get('location'), '/?sim=1');

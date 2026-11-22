@@ -41,15 +41,23 @@ dist="$PWD/.wasp/out/web-app/build"
 test -s "$dist/200.html"
 test -d "$dist/wasp-assets"
 mkdir -p "$target/wasp-assets"
-cp -R "$dist/wasp-assets/." "$target/wasp-assets/"
 node --input-type=module - "$dist/200.html" "$target/index.html.next" <<'JS'
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { gzipSync } from 'node:zlib';
 const [source, target] = process.argv.slice(2);
 const html = readFileSync(source, 'utf8');
 const viewport = /<meta\b[^>]*\bname=(["'])viewport\1[^>]*>/gi;
 if ([...html.matchAll(viewport)].length !== 1) throw new Error('Expected one Wasp viewport meta tag.');
 writeFileSync(target, html.replace(viewport, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'));
+const assets = join(dirname(source), 'wasp-assets');
+for (const name of readdirSync(assets)) {
+  if (!/-[\w-]{8,}\.(?:js|css)$/.test(name)) continue;
+  const asset = join(assets, name);
+  writeFileSync(asset + '.gz', gzipSync(readFileSync(asset), { level: 9 }));
+}
 JS
+cp -R "$dist/wasp-assets/." "$target/wasp-assets/"
 mv "$target/index.html.next" "$target/index.html"
 printf '%s\n' "$fingerprint" > "$target/source.sha256.next"
 mv "$target/source.sha256.next" "$target/source.sha256"
