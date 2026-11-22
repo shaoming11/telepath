@@ -72,6 +72,13 @@ export function LiveStage({ embedded = false }: { embedded?: boolean }) {
   }, [setOperator]);
 
   useEffect(() => {
+    const element = root.current;
+    if (!element) return;
+    const box = element.getBoundingClientRect();
+    if (box.top < 0 && box.bottom > 0) element.scrollIntoView({ block: "start" });
+  }, [state.phase]);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === "Escape" && operatorOpen) { closeOperator(); return; }
