@@ -16,6 +16,9 @@ import { pulseMaterial } from "./pulse";
 
 const HDR = 3.2;
 
+const WHISPERS = PULSES.filter(pulse => pulse.id === "first" || pulse.id === "approved")
+  .flatMap(pulse => [0, 1, 2].map(ring => ({ at: pulse.land, ring })));
+
 function seeded(seed: number) {
   return () => {
     seed = (seed + 0x6d2b79f5) | 0;
@@ -38,6 +41,7 @@ type Props = {
 export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }: Props) {
   const camera = useThree(state => state.camera) as PerspectiveCamera;
   const size = useThree(state => state.size);
+  const scene = useThree(state => state.scene);
   const budA = useRef<Group>(null);
   const budB = useRef<Group>(null);
   const lightA = useRef<PointLight>(null);
@@ -48,6 +52,7 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
   const rings = useRef<(Mesh | null)[]>([]);
   const dots = useRef<(Mesh | null)[]>([]);
   const hold = useRef<Mesh>(null);
+  const whispers = useRef<(Mesh | null)[]>([]);
   const look = useMemo(() => new Vector3(), []);
   const point = useMemo(() => new Vector3(), []);
 
@@ -81,6 +86,7 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
     const t = clock.current;
     cameraAt(t, size.width / size.height, camera.position, look);
     camera.lookAt(look);
+    scene.environmentIntensity = 0.04 + 1.66 * easeInOut(ramp(t, 1.6, 4.4));
 
     const reveal = easeInOut(ramp(t, REVEAL_START + 1.8, REVEAL_START + 3.8));
     const spread = easeInOut(ramp(t, REVEAL_START + 0.6, REVEAL_START + 3.4));
@@ -129,6 +135,15 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
           label.style.filter = "blur(" + ((1 - easeOut(ramp(t, shownAt, shownAt + 0.7))) * 10).toFixed(2) + "px)";
         }
       }
+    });
+
+    WHISPERS.forEach((whisper, i) => {
+      const ring = whispers.current[i];
+      if (!ring) return;
+      const life = ramp(t, whisper.at + whisper.ring * 0.28, whisper.at + whisper.ring * 0.28 + 1.5);
+      ring.visible = life > 0 && life < 1;
+      ring.scale.setScalar(0.5 + easeOut(life) * (0.9 + whisper.ring * 0.5));
+      (ring.material as MeshBasicMaterial).opacity = Math.sin(life * Math.PI) * 0.8;
     });
 
     const draft = pulses.find(pulse => pulse.id === "draft")!;
@@ -199,7 +214,7 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
   return (
     <>
       <color attach="background" args={["#000"]} />
-      <Environment resolution={256} frames={1} environmentIntensity={1.7}>
+      <Environment resolution={256} frames={1}>
         <Lightformer form="rect" intensity={4.2} position={[0, 6, 2]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 4, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[-9, 1, 3]} rotation={[0, Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[9, 1, 3]} rotation={[0, -Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
@@ -232,6 +247,13 @@ export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }:
         >
           <ringGeometry args={[0.2, 0.226, 64]} />
           <meshBasicMaterial color={new Color(tap.seat === "B" ? SEAT_B : SEAT_A).multiplyScalar(HDR)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
+        </mesh>
+      ))}
+
+      {WHISPERS.map((whisper, i) => (
+        <mesh key={i} ref={node => { whispers.current[i] = node; }} position={[A_POS.x + 0.62, A_POS.y, 0.5]} rotation={[0, 0.2, 0]}>
+          <ringGeometry args={[0.3, 0.312, 48, 1, -0.6, 1.2]} />
+          <meshBasicMaterial color={new Color(SEAT_B).multiplyScalar(HDR)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
         </mesh>
       ))}
 

@@ -30,7 +30,7 @@ export function Film({ t, clock, copy = true, paused = false, onFrame, onReady }
   const words = useMemo(() => BEATS.map(beat => beat.line.split(" ")), []);
 
   const onTime = useCallback((now: number) => {
-    if (veil.current) veil.current.style.opacity = String(1 - ramp(now, 0.9, 2.6));
+    if (veil.current) veil.current.style.opacity = String(1 - ramp(now, 0.7, 1.8));
     if (title.current) {
       const shown = 1 - ramp(now, 0.5, 1.5);
       title.current.style.opacity = String(shown);
