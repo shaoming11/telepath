@@ -1,4 +1,33 @@
 {
-  "revision": 88,
-  "claims": []
+  "revision": 89,
+  "claims": [
+    {
+      "id": "8691c696-2c7b-4112-aec6-c547f9ef6001",
+      "owner": "fireheartjerry",
+      "agent": "codex-whisper-chime",
+      "branch": "jerry/airpods-1",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "hub/codec.mjs",
+        "hub/session.mjs",
+        "tests/session.test.mjs",
+        "tests/transport.test.mjs",
+        "tests/phone-audio.test.mjs",
+        "docs/technical-reference.md",
+        "docs/handbook/architecture/question-coaching.md",
+        "docs/maritime.md"
+      ],
+      "paths": [
+        "docs/handbook/architecture/question-coaching.md",
+        "docs/maritime.md",
+        "docs/technical-reference.md",
+        "hub/codec.mjs",
+        "hub/session.mjs",
+        "tests/phone-audio.test.mjs",
+        "tests/session.test.mjs",
+        "tests/transport.test.mjs"
+      ],
+      "claimedAt": "2026-11-22T05:53:30.009Z"
+    }
+  ]
 }
