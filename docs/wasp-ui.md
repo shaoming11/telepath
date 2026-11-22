@@ -57,6 +57,8 @@ npm run rehearse:faults -- --tls --fast --cycles=5
 
 If the Stage loses its hub connection mid-take, keep both phone tabs open. Wait for **Hub online** and confirm the seat cards have caught up. Click **Start listening** again to resume Mac transcription.
 
+If a phone disconnects, leave its Safari tab open and wait for **Live** and **Cached** before resuming cues. The phone rejoins the current take. Any interrupted draft needs a fresh preview and approval.
+
 The branch passed a local two-seat rehearsal using the iPhone SE and iPhone 17 Pro Safari simulators with fixture transcription and bundled audio. That test checked browser playback, which starts the Stage receipt. The five-run physical check still needs both phones, both AirPods pairs, and the live provider configuration.
 
 ## Visual direction
