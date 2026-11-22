@@ -10,7 +10,7 @@ type Snapshot = {
   coachScenario?: string; startedAt?: number; log: Entry[]; stageAudio?: Clip[];
   seats?: Record<string, { name: string; online: boolean; ready: boolean }>;
   references?: Array<{ name: string }>; research?: { status?: string; retained?: number };
-  room?: { listening: boolean; transcript?: RoomTurn[] };
+  room?: { listening: boolean; transcription?: string; partial?: string; transcript?: RoomTurn[] };
 };
 const gestures: Record<string, string> = { R1: 'Single gesture', R2: 'Double gesture', L1: 'Triple gesture', L2: 'Read codebook', LR: 'Ask assistant', OUT: 'Earbud removed', BACK: 'Earbud returned' };
 const kinds: Record<string, string> = { message: 'Teammate whisper', pitch_help: 'AI whisper', signal: 'Gesture', back: 'Movement', draft: 'Private draft', confirm: 'Approved', discard: 'Discarded', receipt: 'Acknowledged', announcement: 'Operator cue', answer_evidence: 'Context insight', preset_suggestion: 'Suggested context', preview_playback: 'Preview played' };
@@ -192,6 +192,11 @@ export function StageTimeline() {
             ? <p>OpenAI suggests follow-ups from the conversation.</p>
             : <p>{state?.references?.length || 0} uploads <span>·</span> {state?.research?.retained || 0} research notes</p>}
             <RoomTranscript turns={state?.room?.transcript} seats={state?.seats} />
+            {state?.room?.partial && <p>Hearing: {state.room.partial}</p>}
+            {!state?.room?.partial && !state?.room?.transcript?.length && (
+              <p>{state?.room?.transcription === 'live' ? 'Mic connected. Say a test sentence before asking for a cue.'
+                : 'Start listening on this Mac before asking for a cue.'}</p>
+            )}
           </section>
           <p className="demo-footnote">A whisper in your ear.<br />A little more confidence in the room.</p>
         </aside>

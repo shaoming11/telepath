@@ -1614,7 +1614,9 @@ test('Cue now condenses a long draft and coaches what to say next', async t => {
   session.addTranscript('room', 'Who is the buyer?');
   const request = id => act('A', { type: 'signal', signal: 'R1', id });
   await request('long');
+  session.addTranscript('room', 'Who is the buyer?');
   await request('unsupported');
+  session.addTranscript('room', 'Who is the buyer?');
   await request('advice');
   session.addTranscript('room', 'The buyer is the sales team lead.');
   session.room.transcript.at(-1).speakers = [{ seat: 'A', label: 'Seat A', text: 'The buyer is the sales team lead.' }];
@@ -1627,6 +1629,39 @@ test('Cue now condenses a long draft and coaches what to say next', async t => {
   assert.equal(cues[3].text, 'Show what the presenter hears next.');
   assert.equal(session.log.filter(entry => entry.kind === 'pitch_help').at(-1).source, 'openai');
   assert.ok(!seatFrames.A.some(frame => frame.text?.includes('No supported cue')));
+});
+
+test('Cue now waits for new mic speech instead of answering the previous turn', async t => {
+  const received = [];
+  const { session, act, advance, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchWaitForSpeechMs: 120 },
+    codec: { pitchHelp: async input => {
+      received.push(input);
+      return { status: 'advice', answer: 'Explain the microphone setup.', sources: [] };
+    } },
+    audio: { listen: async () => ({ listening: true }) },
+  });
+  t.after(() => session.close());
+  const ask = id => act('A', { type: 'signal', signal: 'R1', id });
+  await ask('mic-off');
+  assert.equal(received.length, 0);
+  assert.match(seatFrames.A.at(-2)?.text ?? seatFrames.A.find(frame => frame.type === 'pitch_help_status')?.text, /Start listening/);
+  await session.setRoomListening(true);
+  session.addTranscript('room', 'What framework is the UI made with?');
+  await ask('first');
+  assert.equal(received.length, 1);
+  await ask('unchanged');
+  assert.equal(received.length, 1);
+  assert.ok(seatFrames.A.some(frame => frame.text?.includes('No new room speech')));
+  advance(600);
+  await session.receiveRoomMic({ audio: 'QUJD', level: .15 });
+  const newest = ask('waiting');
+  await delay(6);
+  session.addTranscript('room', 'Which device has the room microphone?');
+  await newest;
+  assert.equal(received.length, 2);
+  assert.equal(received.at(-1).latestSpeech, 'Which device has the room microphone?');
+  assert.equal(received.at(-1).questionHint, 'Which device has the room microphone?');
 });
 
 test('an unusable GPT reply still gives a concrete backend cue', async t => {

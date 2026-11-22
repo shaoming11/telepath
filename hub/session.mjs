@@ -43,6 +43,8 @@ const DEFAULT_SETTINGS = Object.freeze({
   pitchPlanDebounceMs: 220,
   pitchHelpRepeatMs: 1500,
   pitchPartialMaxMs: 2500,
+  pitchFreshRoomSpeechMs: 15_000,
+  pitchWaitForSpeechMs: 1200,
   pitchContext: DEFAULT_CONTEXT.Pitch,
   names: { A: 'Presenter', B: 'Coach' },
 });
@@ -196,7 +198,8 @@ export class Session {
     this.questionSpeechPending = false;
     this.questionPartialSeats = new Set();
     this.roomInput = this.settings.roomInput === 'mac' ? 'mac' : 'phones';
-    this.room = { listening: false, listeningRequested: false, transcription: 'off', listenVersion: 0, level: 0, transcript: [], partial: null };
+    this.room = { listening: false, listeningRequested: false, transcription: 'off', listenVersion: 0, level: 0,
+      transcript: [], partial: null, lastSoundAt: -Infinity, speechOnsetAt: -Infinity };
     this.questionState = { status: 'idle' };
     this.dismissedQuestions = new Set();
     this.seats = Object.fromEntries(SEATS.map(seat => [
@@ -219,7 +222,8 @@ export class Session {
       roomInput: this.roomInput,
       room: { listening: this.room.listening, listeningRequested: this.room.listeningRequested,
         transcription: this.room.transcription, level: this.room.level,
-        ...(viewer == null && { transcript: this.room.transcript.slice(-60), speakerStream: this.room.speakerStream }) },
+        ...(viewer == null && { transcript: this.room.transcript.slice(-60), partial: this.room.partial?.text,
+          speakerStream: this.room.speakerStream }) },
       codebook: BOOKS[this.preset],
       calibration: this.calibration,
       online: Object.fromEntries(SEATS.map(seat => [seat, this.seats[seat].online])),
@@ -1035,7 +1039,7 @@ export class Session {
       : [...CUE_SENTENCES.segment(turn.text)].map(({ segment }) => segment.trim())
         .filter(text => looksLikeQuestion(text) && !/^(?:does that make sense|any questions|okay|right)[.!? ]*$/i.test(text))
         .map(text => ({ text, index })));
-    const { text: questionHint = '', index: questionIndex = -1 } = questions.at(-1) ?? {};
+    const { text: questionHint = '', index: questionIndex = -1 } = questions.findLast(question => question.index >= roomTranscript.length - 4) ?? {};
     const wearerAnswerSoFar = questionIndex < 0 ? '' : roomTranscript.slice(questionIndex + 1)
       .filter(turn => turn.speaker === 'Wearer').map(turn => turn.text).join(' ');
     const focus = [questionHint, roomCueTopicTerms(questionHint)].filter(Boolean).join(' ');
@@ -1052,7 +1056,24 @@ export class Session {
       if (ranked.size === 8) break;
     }
     const passages = [...ranked.values()];
-    return { ...context, passages, roomTranscript, questionHint, wearerAnswerSoFar };
+    return { ...context, passages, roomTranscript, questionHint, wearerAnswerSoFar, latestSpeech: roomTranscript.at(-1)?.text };
+  }
+
+  async freshRoomSpeech(seat, signal) {
+    const until = performance.now() + this.settings.pitchWaitForSpeechMs;
+    do {
+      signal.throwIfAborted();
+      const now = this.now();
+      const partial = this.room.partial;
+      const latest = partial && now - partial.at <= this.settings.pitchPartialMaxMs
+        ? partial : this.room.transcript.at(-1);
+      if (latest && latest !== this.seats[seat].lastRoomCueSpeech
+        && now - latest.at <= this.settings.pitchFreshRoomSpeechMs
+        && latest.at >= this.room.speechOnsetAt) return latest;
+      if (performance.now() >= until) break;
+      await new Promise(resolve => setTimeout(resolve, 50));
+    } while (this.room.listening);
+    return null;
   }
 
   fallbackCue(text, question) {
@@ -1158,18 +1179,37 @@ export class Session {
     const controller = new AbortController();
     state.pitchHelp = controller;
     const lifecycle = AbortSignal.any([controller.signal, this.liveScope([seat])]);
-    const resolved = oneShot ? this.roomQuestionContext(seat, began) : this.pitchContext(seat, began);
-    const question = resolved.recent.at(-1)?.text ?? '';
+    const requireRoomSpeech = oneShot && this.coachScenario !== 'social';
+    let resolved, question, roomSpeech;
     const started = performance.now();
     let surfacedCue = false;
-    notify('Preparing a private pitch cue…');
+    if (oneShot) {
+      state.lastPitchCue = null;
+      this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
+    }
     this.publishMonitor();
     try {
+      if (requireRoomSpeech) {
+        if (!this.room.listening) {
+          notify('Start listening on the Mac Stage, then ask the question again.');
+          return;
+        }
+        notify('Listening for the latest words…');
+        roomSpeech = await this.freshRoomSpeech(seat, lifecycle);
+        if (!roomSpeech) {
+          notify('No new room speech heard. Check the Mac mic and ask the question again.');
+          return;
+        }
+      }
+      resolved = oneShot ? this.roomQuestionContext(seat, this.now()) : this.pitchContext(seat, began);
+      question = resolved.recent.at(-1)?.text ?? '';
+      notify('Preparing a private pitch cue…');
       const reply = await withDeadline(async signal => {
         if (oneShot) {
           const result = await withDeadline(deadline => this.codec?.pitchHelp?.({
             signal: deadline, scenario: this.coachScenario, roomTranscript: resolved.roomTranscript, project: resolved.project,
-            passages: resolved.passages, questionHint: resolved.questionHint, wearerAnswerSoFar: resolved.wearerAnswerSoFar,
+            passages: resolved.passages, questionHint: resolved.questionHint, latestSpeech: resolved.latestSpeech,
+            wearerAnswerSoFar: resolved.wearerAnswerSoFar,
           }), this.settings.pitchRaceMs, signal).catch(() => null);
           signal.throwIfAborted();
           let cue;
@@ -1252,6 +1292,7 @@ export class Session {
       }, this.settings.pitchRaceMs + this.settings.pitchSpeechMs, lifecycle);
       if (lifecycle.aborted) return;
       if (!reply) return;
+      if (roomSpeech) state.lastRoomCueSpeech = roomSpeech;
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
         scenario: this.coachScenario, ...(reply.draftedBy && { draftedBy: reply.draftedBy }), ...(reply.ungrounded && { ungrounded: true }),
@@ -1517,6 +1558,11 @@ export class Session {
     if (this.roomInput !== 'mac' || !this.room.listening || this.canned || this.phase === 'reveal'
         || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
     this.room.level = this.levelValue(frame.level);
+    if (this.room.level >= 0.015) {
+      const at = this.now();
+      if (at - this.room.lastSoundAt > 350) this.room.speechOnsetAt = at;
+      this.room.lastSoundAt = at;
+    }
     this.monitor.updateInput('room', this.room.level);
     this.publishMonitor();
     try {
@@ -1536,6 +1582,8 @@ export class Session {
     this.room.listeningRequested = false;
     this.room.transcription = 'off';
     this.room.level = 0;
+    this.room.lastSoundAt = -Infinity;
+    this.room.speechOnsetAt = -Infinity;
     this.room.partial = null;
     this.monitor.updatePartial('room', '');
     this.questionPartialSeats.delete('room');
