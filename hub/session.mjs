@@ -1,4 +1,4 @@
-import { BUILD_STORY_EVIDENCE, BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, missingBuildPoint, sameQuestion, sourcedProjectCue } from './pitch-question.mjs';
+import { BUILD_STORY_EVIDENCE, BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, missingBuildPoint, nearlySameQuestion, sameQuestion, sourcedProjectCue } from './pitch-question.mjs';
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   pitchReviewMs: 1200,
   pitchQuestionSettleMs: 120,
   pitchRevisionMinMs: 350,
+  scenarioRevisionLimit: 3,
   pitchRealtimeReconnectMs: 3000,
   pitchRealtimeReplyMs: 1550,
   pitchQuestionRepeatMs: 2500,
@@ -987,7 +988,9 @@ export class Session {
       const previous = mode.candidate;
       if (previous) {
         const growth = questionKey(text).split(' ').length - questionKey(previous.text).split(' ').length;
-        if (!mode.realtime || mode.revisions >= 2 || growth < 3 || this.now() - previous.at < this.settings.pitchRevisionMinMs) continue;
+        // Pitch redrafts over its warm Realtime session. Other scenarios redraft through the text API, a few times at most.
+        const redraft = mode.realtime ? mode.revisions < 2 : this.coachScenario !== 'pitch' && mode.revisions < this.settings.scenarioRevisionLimit;
+        if (!redraft || growth < 3 || this.now() - previous.at < this.settings.pitchRevisionMinMs) continue;
         previous.controller.abort();
       }
       mode.revisions++;
@@ -1104,7 +1107,7 @@ export class Session {
           return;
         }
         const prepared = candidate && candidate.corpus === this.pitchReferences && candidate.uploads === this.references
-          && sameQuestion(candidate.text, entry.text) ? candidate : null;
+          && (this.coachScenario === 'pitch' ? sameQuestion(candidate.text, entry.text) : nearlySameQuestion(candidate.text, entry.text)) ? candidate : null;
         if (!prepared) candidate?.controller.abort();
         mode.lastQuestion = entry;
         mode.delivery?.abort();
