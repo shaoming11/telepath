@@ -31,11 +31,6 @@
 
 .wasp-liquid #screen-live:has(> .stage-pair) .actionbar__note { display: none; }
 .wasp-liquid #screen-live:has(> .stage-pair) #reveal-button { min-block-size: 46px; }
-.wasp-liquid #screen-live:has(> .stage-pair) #reveal-button .begin__arrow {
-  background: var(--glass-solid);
-  color: var(--fg);
-}
-
 .wasp-liquid #screen-live:has(> .stage-pair) > :is(.stage-pair, .live__context, #stage-monitor, .board) {
   grid-column: 1 / -1;
   min-inline-size: 0;
