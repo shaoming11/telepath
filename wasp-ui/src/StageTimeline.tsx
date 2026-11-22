@@ -3,17 +3,41 @@ import './StageTimeline.css';
 
 type Entry = { id: string; kind: string; seat?: string; to?: string; text?: string; signal?: string; at: number; playedAt?: number; messageId?: string; draftId?: string; source?: string; sources?: Array<{ name?: string }> };
 type Clip = { messageId: string; url: string };
+type RoomRun = { text: string; label: string; speaker?: string; seat?: 'A' | 'B' | null };
+type RoomTurn = { at: number; text: string; speakers?: RoomRun[] };
 type Snapshot = {
   hubId: string; sessionId: string; phase: string; canned?: boolean; canBegin?: boolean;
   coachScenario?: string; startedAt?: number; log: Entry[]; stageAudio?: Clip[];
   seats?: Record<string, { name: string; online: boolean; ready: boolean }>;
   references?: Array<{ name: string }>; research?: { status?: string; retained?: number };
-  room?: { listening: boolean; transcript?: Array<{ text: string; speaker?: string }> };
+  room?: { listening: boolean; transcript?: RoomTurn[] };
 };
 const gestures: Record<string, string> = { R1: 'Single gesture', R2: 'Double gesture', L1: 'Triple gesture', L2: 'Read codebook', LR: 'Ask assistant', OUT: 'Earbud removed', BACK: 'Earbud returned' };
 const kinds: Record<string, string> = { message: 'Teammate whisper', pitch_help: 'AI whisper', signal: 'Gesture', back: 'Movement', draft: 'Private draft', confirm: 'Approved', discard: 'Discarded', receipt: 'Acknowledged', announcement: 'Operator cue', answer_evidence: 'Context insight', preset_suggestion: 'Suggested context', preview_playback: 'Preview played' };
 const scenarios = [['pitch', 'Pitch Q&A'], ['social', 'Stranger Interview']];
 const liveKinds = new Set(['message', 'pitch_help', 'announcement']);
+function voiceColor(run: RoomRun) {
+  if (run.seat) return run.seat;
+  if (!run.speaker) return 'room';
+  const index = Array.from(run.speaker).reduce((sum, char) => sum + char.charCodeAt(0), 0) % 4;
+  return 'voice-' + index;
+}
+
+function RoomTranscript({ turns, seats }: { turns?: RoomTurn[]; seats?: Snapshot['seats'] }) {
+  const runs = (turns ?? []).slice(-4).flatMap(turn =>
+    (turn.speakers?.length ? turn.speakers : [{ label: 'Room', text: turn.text }])
+      .map((run, index) => ({ run, key: turn.at + ':' + index + ':' + run.text }))).slice(-6);
+  return (
+    <ol className="demo-room-transcript" aria-label="Room transcript" role="log">
+      {runs.length ? runs.map(({ run, key }) => (
+        <li key={key} data-voice={voiceColor(run)}>
+          <strong>{run.seat && seats?.[run.seat]?.name ? seats[run.seat].name : run.label}</strong>
+          <span>{run.text}</span>
+        </li>
+      )) : <li className="demo-room-empty">Speaker turns appear as people talk.</li>}
+    </ol>
+  );
+}
 function action(action: string, options = {}) { document.dispatchEvent(new CustomEvent('telepathy:stage-action', { detail: { action, options } })); }
 function replaying(active: boolean) { document.dispatchEvent(new CustomEvent('telepathy:stage-replay', { detail: active })); }
 
@@ -164,9 +188,11 @@ export function StageTimeline() {
         </div>
         <aside className="demo-context"><section><h2>{state?.coachScenario === 'social' ? 'Interviewer' : 'Seats'}</h2><div className="demo-seats">{(state?.coachScenario === 'social' && !state.seats?.B?.online ? ['A'] : ['A', 'B']).map(seat => <div key={seat}><span className="demo-avatar" data-seat={seat}>{seat}</span><div><b>{name(seat)}</b><small>{state?.seats?.[seat]?.ready ? 'Ready' : state?.seats?.[seat]?.online ? 'Connected · setting up' : 'Waiting to join'}</small></div></div>)}</div>
           <button className="demo-primary" disabled={link !== 'live' || (state?.phase !== 'live' && !state?.canBegin) || state?.phase === 'reveal' || !!state?.canned} onClick={() => action(state?.phase === 'live' ? 'reveal' : 'begin')}>{state?.phase === 'live' ? 'End & reveal session' : state?.phase === 'reveal' ? 'Session complete' : 'Begin session'}</button><button className="demo-mic" disabled={!room.wanted && !room.canStart} onClick={() => document.getElementById(room.wanted ? 'room-mic-stop' : 'room-mic-start')?.click()}>{room.wanted ? '● Stop listening' : 'Start listening'}</button><p className="demo-hint">{room.wanted ? playing ? 'Room capture paused for speaker audio.' : 'Listening to the room.' : room.notice || (state?.coachScenario === 'social' ? 'Connect Seat A to begin.' : 'Connect both seats in Setup to begin.')}</p></section>
-          <section className="demo-memory"><h3>Room context</h3>{state?.coachScenario === 'social'
+          <section className="demo-memory"><h3>Room transcript</h3>{state?.coachScenario === 'social'
             ? <p>OpenAI suggests follow-ups from the conversation.</p>
-            : <p>{state?.references?.length || 0} uploads <span>·</span> {state?.research?.retained || 0} research notes</p>}{state?.room?.transcript?.slice(-2).map((turn, i) => <blockquote key={i}>{turn.text}</blockquote>)}</section>
+            : <p>{state?.references?.length || 0} uploads <span>·</span> {state?.research?.retained || 0} research notes</p>}
+            <RoomTranscript turns={state?.room?.transcript} seats={state?.seats} />
+          </section>
           <p className="demo-footnote">A whisper in your ear.<br />A little more confidence in the room.</p>
         </aside>
       </section>
