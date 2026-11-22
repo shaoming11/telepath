@@ -1,4 +1,31 @@
 {
-  "revision": 84,
-  "claims": []
+  "revision": 85,
+  "claims": [
+    {
+      "id": "2389808e-9295-4bea-b498-bfd4e64f63ca",
+      "owner": "fireheartjerry",
+      "agent": "codex-live-rag",
+      "branch": "jerry/airpods-1",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "README.md",
+        "hub/project-references.mjs",
+        "hub/references.mjs",
+        "hub/session.mjs",
+        "hub/server.mjs",
+        "tests/references.test.mjs",
+        "tests/session.test.mjs"
+      ],
+      "paths": [
+        "README.md",
+        "hub/project-references.mjs",
+        "hub/references.mjs",
+        "hub/server.mjs",
+        "hub/session.mjs",
+        "tests/references.test.mjs",
+        "tests/session.test.mjs"
+      ],
+      "claimedAt": "2026-11-22T05:46:21.952Z"
+    }
+  ]
 }
