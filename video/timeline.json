@@ -1,0 +1,35 @@
+{
+  "fps": 30,
+  "seconds": 62,
+  "beats": {
+    "silence": [0, 8],
+    "tap": [8, 18],
+    "meanings": [18, 28],
+    "asks": [28, 38],
+    "reveal": [38, 46],
+    "stage": [46, 54],
+    "lockup": [54, 62]
+  },
+  "cues": {
+    "tap": 10.0,
+    "arrive": 12.5,
+    "voice": 12.9,
+    "receiptTap": 15.5,
+    "receiptArrive": 16.7,
+    "fan": [19.0, 20.0, 21.0, 22.0],
+    "fold": 27.0,
+    "assistant": 28.6,
+    "draftLeave": 29.8,
+    "draftPreview": 30.6,
+    "approveTap": 33.5,
+    "draftArrive": 34.8,
+    "draftVoice": 35.1,
+    "reveal": 38.0,
+    "dots": [38.7, 39.3, 39.9, 40.5],
+    "stageLive": 46.0,
+    "stageReveal": 48.5,
+    "lockup": 54.0,
+    "lockupPulse": 54.3,
+    "wordmark": 55.2
+  }
+}
