@@ -492,7 +492,7 @@ body.wasp-liquid[data-solid-surfaces] {
   .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(min(12rem, 40%), 1fr) minmax(0, auto);
     column-gap: 16px;
     margin-block-start: 16px;
     padding: 7px var(--console-gutter);
@@ -517,6 +517,12 @@ body.wasp-liquid[data-solid-surfaces] {
   .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__actions {
     grid-area: 1 / 2 / span 2;
     align-self: center;
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__actions button {
+    white-space: normal;
   }
   .wasp-liquid[data-surface=stage][data-phase=live] .room-console[data-expanded=false] .room-console__state {
     min-inline-size: 16ch;
