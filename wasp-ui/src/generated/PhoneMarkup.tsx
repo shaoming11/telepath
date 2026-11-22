@@ -1,4 +1,6 @@
 // Generated from public/index.html. Run python3 scripts/generate-wasp-surfaces.py after edits.
+import { PhonePitchControls } from '../PhonePitchControls';
+
 export function PhoneMarkup() {
   return (
     <>
@@ -211,13 +213,7 @@ export function PhoneMarkup() {
               <div><dt>Messages</dt><dd id="live-cache"></dd></div>
             </dl>
 
-            <button className="signal" id="question-mode" type="button" aria-pressed="false" hidden><b>Question mode</b><span>Prepare while the judge speaks</span></button>
-
-            <section className="pitch-notes" id="live-pitch-notes" aria-labelledby="live-pitch-notes-label" hidden>
-              <h3 className="kicker" id="live-pitch-notes-label">Private cue</h3>
-              <p id="live-pitch-cue" className="pitch-notes__cue"></p>
-              <ul id="live-pitch-points" className="pitch-notes__points"></ul>
-            </section>
+            <PhonePitchControls />
             <section className="channel-monitor channel-monitor--phone" id="phone-monitor" aria-label="Live audio and context"></section>
 
             <div className="lock-controls" id="lock-controls" hidden>

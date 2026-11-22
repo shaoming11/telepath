@@ -157,9 +157,21 @@ def generated(component, source):
     parser = BodyToJsx()
     parser.feed((ROOT / source).read_text())
     markup = parser.markup()
+    imports = ""
+    if component == "PhoneMarkup":
+        markup, replacements = re.subn(
+            r'<button[^>]* id="question-mode"[^>]*>[\s\S]*?</button>\s*'
+            r'<section[^>]* id="live-pitch-notes"[^>]*>[\s\S]*?</section>',
+            "<PhonePitchControls />",
+            markup,
+        )
+        if replacements != 1:
+            raise ValueError("Expected exactly one contiguous phone pitch control fragment.")
+        imports = "import { PhonePitchControls } from '../PhonePitchControls';\n\n"
     lines = "\n".join("      " + line if line else "" for line in markup.splitlines())
     return (
         f"// Generated from {source}. Run python3 scripts/generate-wasp-surfaces.py after edits.\n"
+        f"{imports}"
         f"export function {component}() {{\n"
         "  return (\n"
         "    <>\n"
