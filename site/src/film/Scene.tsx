@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Environment, Html, Lightformer } from "@react-three/drei";
+import { Environment, Lightformer } from "@react-three/drei";
 import { Bloom, EffectComposer, ToneMapping, Vignette } from "@react-three/postprocessing";
 import { ToneMappingMode } from "postprocessing";
 import {
@@ -26,7 +26,14 @@ function seeded(seed: number) {
 
 const REVEAL_PULSES = PULSES.filter(pulse => pulse.inReveal);
 
-export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (t: number) => void }) {
+type Props = {
+  clock: { current: number };
+  labels: { current: (HTMLDivElement | null)[] };
+  onTime: (t: number) => void;
+  onFrame?: (delta: number) => void;
+};
+
+export function Scene({ clock, labels, onTime, onFrame }: Props) {
   const camera = useThree(state => state.camera) as PerspectiveCamera;
   const size = useThree(state => state.size);
   const budA = useRef<Group>(null);
@@ -36,7 +43,6 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
   const dust = useRef<Points>(null);
   const tubes = useRef<(Mesh | null)[]>([]);
   const heads = useRef<(Mesh | null)[]>([]);
-  const labels = useRef<(HTMLDivElement | null)[]>([]);
   const rings = useRef<(Mesh | null)[]>([]);
   const dots = useRef<(Mesh | null)[]>([]);
   const hold = useRef<Mesh>(null);
@@ -48,7 +54,7 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
     geometry: new TubeGeometry(pulse.curve, 180, 0.02, 10, false),
     material: pulseMaterial(pulse.color),
     headMaterial: new MeshBasicMaterial({ color: new Color(pulse.color).multiplyScalar(HDR * 1.6), toneMapped: false, transparent: true, blending: AdditiveBlending, depthWrite: false }),
-    anchor: pulse.label?.at === "apex" ? pulse.curve.getPoint(0.5).add(new Vector3(0, 0.3, 0))
+    anchor: pulse.label?.at === "apex" ? pulse.curve.getPoint(0.5).add(new Vector3(0, 0.26, 0))
       : pulse.label?.at === "A" ? new Vector3(-1.75, 0.75, 0.4)
       : new Vector3(2.05, 0.35, 0.6),
   })), []);
@@ -66,7 +72,8 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
     return geometry;
   }, []);
 
-  useFrame(() => {
+  useFrame((_, delta) => {
+    onFrame?.(delta);
     const t = clock.current;
     cameraAt(t, size.width / size.height, camera.position, look);
     camera.lookAt(look);
@@ -108,9 +115,13 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
       if (label && pulse.label) {
         const shownAt = pulse.label.at === "apex" ? pulse.launch + (pulse.land - pulse.launch) * 0.5 : pulse.land - 0.1;
         const shown = span(t, shownAt, shownAt + 0.7, pulse.fade - 0.7, pulse.fade);
-        label.style.opacity = String(shown);
-        label.style.filter = "blur(" + ((1 - easeOut(ramp(t, shownAt, shownAt + 0.7))) * 10).toFixed(2) + "px)";
         label.style.visibility = shown > 0.001 ? "visible" : "hidden";
+        if (shown > 0.001) {
+          point.copy(pulse.anchor).project(camera);
+          label.style.transform = "translate3d(" + ((point.x * 0.5 + 0.5) * size.width).toFixed(1) + "px," + ((0.5 - point.y * 0.5) * size.height).toFixed(1) + "px,0)";
+          label.style.opacity = String(shown);
+          label.style.filter = "blur(" + ((1 - easeOut(ramp(t, shownAt, shownAt + 0.7))) * 10).toFixed(2) + "px)";
+        }
       }
     });
 
@@ -128,7 +139,7 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
       if (!ring) return;
       const life = ramp(t, tap.t, tap.t + 1.1);
       ring.visible = life > 0 && life < 1;
-      ring.scale.setScalar(0.3 + easeOut(life) * 2.4);
+      ring.scale.setScalar(0.3 + easeOut(life) * 1.3);
       (ring.material as MeshBasicMaterial).opacity = (1 - life) * 0.9;
       ring.quaternion.copy(camera.quaternion);
     });
@@ -168,7 +179,7 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
   return (
     <>
       <color attach="background" args={["#000"]} />
-      <Environment resolution={256} frames={1}>
+      <Environment resolution={256} frames={1} environmentIntensity={1.35}>
         <Lightformer form="rect" intensity={4.2} position={[0, 6, 2]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 4, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[-9, 1, 3]} rotation={[0, Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[9, 1, 3]} rotation={[0, -Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
@@ -190,15 +201,6 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
           <mesh ref={node => { heads.current[i] = node; }} material={pulse.headMaterial}>
             <sphereGeometry args={[0.05, 24, 24]} />
           </mesh>
-          {pulse.label && (
-            <Html position={pulse.anchor} zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
-              <div ref={node => { labels.current[i] = node; }} className="film-label" data-at={pulse.label.at} data-seat={pulse.color === SEAT_B ? "B" : "N"}>
-                {pulse.label.taps && <span className="film-label-taps">{pulse.label.taps}</span>}
-                <span className="film-label-text">{pulse.label.text}</span>
-                {pulse.label.caption && <span className="film-label-caption">{pulse.label.caption}</span>}
-              </div>
-            </Html>
-          )}
         </group>
       ))}
 
@@ -208,7 +210,7 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
           ref={node => { rings.current[i] = node; }}
           position={tap.seat === "B" ? [B_POS.x + 0.2, B_POS.y - 1.0, 0.45] : [A_POS.x - 0.2, A_POS.y - 1.0, 0.45]}
         >
-          <ringGeometry args={[0.2, 0.215, 64]} />
+          <ringGeometry args={[0.2, 0.226, 64]} />
           <meshBasicMaterial color={new Color(tap.seat === "B" ? SEAT_B : SEAT_A).multiplyScalar(HDR)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
         </mesh>
       ))}
@@ -228,7 +230,7 @@ export function Scene({ clock, onTime }: { clock: { current: number }; onTime: (
       <EffectComposer multisampling={4}>
         <Bloom mipmapBlur intensity={0.9} luminanceThreshold={1} luminanceSmoothing={0.2} radius={0.72} />
         <Vignette eskil={false} offset={0.22} darkness={0.72} />
-        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        <ToneMapping mode={ToneMappingMode.NEUTRAL} />
       </EffectComposer>
     </>
   );

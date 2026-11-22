@@ -47,7 +47,7 @@ export const PULSES: Pulse[] = [
   },
   { id: "receipt", curve: arc(A_EAR, B_EAR, -0.45, 0.4), color: SEAT_A, launch: 16.3, land: 17.9, fade: 18.4, inReveal: true },
   ...FAN.map((entry, i): Pulse => ({
-    id: "fan" + i, curve: arc(B_EAR, A_EAR, 0.55 + i * 0.62, -0.2 * i), color: SEAT_B,
+    id: "fan" + i, curve: arc(B_EAR, A_EAR, 0.6 + i * 0.85, -0.2 * i), color: SEAT_B,
     launch: 19.6 + i * 1.15, land: 21.8 + i * 1.15, fade: 27.4, inReveal: i < 2,
     label: { ...entry, at: "apex" },
   })),
@@ -57,7 +57,7 @@ export const PULSES: Pulse[] = [
     label: { text: "The judge on the left looks lost", taps: "", at: "B", caption: "A draft. Only you hear it." },
   },
   {
-    id: "approved", curve: arc(B_EAR, A_EAR, 1.1), color: SEAT_B, launch: 34.25, land: 36.5, fade: 37.7, inReveal: true,
+    id: "approved", curve: arc(B_EAR, A_EAR, 1.1), color: SEAT_B, launch: 34.25, land: 36.5, fade: 38.3, inReveal: true,
     label: { text: "The judge on the left looks lost", taps: "", at: "A", caption: "Sent after your tap" },
   },
 ];
@@ -65,20 +65,21 @@ export const PULSES: Pulse[] = [
 type Key = { t: number; pos: [number, number, number]; look: [number, number, number] };
 
 const KEYS: Key[] = [
-  { t: 0, pos: [5.9, 0.65, 3.4], look: [3.2, -0.65, 0.0] },
-  { t: 4, pos: [4.6, 0.25, 6.4], look: [2.5, -0.75, 0.0] },
-  { t: 7.6, pos: [0.0, 0.05, 13.4], look: [0.0, -0.95, 0.0] },
-  { t: 10.2, pos: [4.3, -0.05, 5.8], look: [2.9, -0.95, 0.0] },
-  { t: 12.6, pos: [0.4, 0.65, 12.2], look: [0.0, -0.45, 0.0] },
-  { t: 15.2, pos: [-4.4, -0.05, 6.2], look: [-2.5, -0.75, 0.0] },
-  { t: 17.6, pos: [-3.4, 0.35, 8.6], look: [-1.6, -0.65, 0.0] },
-  { t: 20.4, pos: [0.0, 2.35, 14.2], look: [0.0, 0.35, 0.0] },
-  { t: 26.6, pos: [0.5, 2.65, 13.4], look: [0.0, 0.45, 0.0] },
-  { t: 30, pos: [4.6, -1.15, 7.2], look: [2.7, -1.25, 0.0] },
-  { t: 33.8, pos: [4.2, -0.55, 6.4], look: [2.8, -0.95, 0.0] },
-  { t: 36.4, pos: [-0.6, 0.45, 12.6], look: [-0.4, -0.55, 0.0] },
-  { t: 39.6, pos: [0.0, 0.65, 14.6], look: [0.0, -0.65, 0.0] },
-  { t: 46, pos: [0.0, 0.15, 16.2], look: [0.0, -0.75, 0.0] },
+  { t: 0, pos: [5.9, 0.65, 3.4], look: [3.2, -0.3, 0] },
+  { t: 3, pos: [4.9, 0.4, 5.6], look: [2.7, -0.4, 0] },
+  { t: 5.8, pos: [0.3, 0.1, 13], look: [0, -0.9, 0] },
+  { t: 8.2, pos: [0, 0.05, 13.6], look: [0, -0.95, 0] },
+  { t: 10.2, pos: [3.9, 0, 6.6], look: [1.9, -0.75, 0] },
+  { t: 12.6, pos: [0.4, 0.65, 12.6], look: [0, -0.6, 0] },
+  { t: 15.2, pos: [-3.6, 0.1, 7.4], look: [-1.3, -0.6, 0] },
+  { t: 17.6, pos: [-2.6, 0.35, 9.4], look: [-0.8, -0.6, 0] },
+  { t: 20.4, pos: [0, 1.2, 18.6], look: [0, 0.2, 0] },
+  { t: 26.6, pos: [0.5, 1.4, 17.8], look: [0, 0.25, 0] },
+  { t: 30, pos: [3.6, -1.15, 8], look: [1.3, -1, 0] },
+  { t: 33.8, pos: [3.4, -0.55, 7.4], look: [1.5, -0.8, 0] },
+  { t: 36.4, pos: [-0.6, 0.45, 12.8], look: [-0.4, -0.6, 0] },
+  { t: 39.6, pos: [0, 0.65, 14.6], look: [0, -0.65, 0] },
+  { t: 46, pos: [0, 0.15, 16.2], look: [0, -0.75, 0] },
 ];
 
 const posCurve = new CatmullRomCurve3(KEYS.map(k => new Vector3(...k.pos)), false, "centripetal");
