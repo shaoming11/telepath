@@ -3,11 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#10100F">
+  <meta name="theme-color" content="#060708">
   <meta name="color-scheme" content="dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Telepathy</title>
+  <link rel="preload" href="./fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="./phone.css">
 </head>
 <body>
@@ -16,9 +17,12 @@
   <div class="app" id="app">
     <header class="masthead">
       <button class="back" id="nav-back" type="button" aria-label="Back" hidden>
-        <span aria-hidden="true">&larr;</span>
+        <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M11 4L6 9l5 5"/></svg>
       </button>
-      <span class="wordmark">Telepathy</span>
+      <span class="wordmark">
+        <svg width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l7.5 4.3v6.4L10 17.5l-7.5-4.3V6.8z"/><path d="M2.5 6.8L10 11l7.5-4.2M10 11v6.5" opacity=".55"/></svg>
+        Telepathy
+      </span>
       <span class="masthead-seat" id="masthead-seat"></span>
       <span class="connection" id="connection" role="status" data-state="off">
         <i class="dot" aria-hidden="true"></i><span id="connection-text">Hub</span>
@@ -32,22 +36,28 @@
 
     <main class="screens">
       <section class="screen screen-join" id="screen-join" data-screen="join" hidden>
-        <h1 class="display">Pick your seat</h1>
+        <div class="join-head">
+          <h1 class="display"><span class="display-dim">Two seats.</span> Pick yours.</h1>
+          <p class="lede">Setup takes about ninety seconds. Keep this screen awake for the whole session.</p>
+        </div>
         <div class="seat-grid">
-          <button class="seat" type="button" data-seat="A"><span>A</span></button>
-          <button class="seat" type="button" data-seat="B"><span>B</span></button>
+          <button class="seat" type="button" data-seat="A"><span class="seat-letter">A</span><span class="seat-role">Presenter</span></button>
+          <button class="seat" type="button" data-seat="B"><span class="seat-letter">B</span><span class="seat-role">Coach</span></button>
         </div>
         <fieldset class="segmented">
           <legend>Input</legend>
-          <label><input type="radio" name="input_mode" value="sim"><span>Simulated</span></label>
           <label><input type="radio" name="input_mode" value="real"><span>Earbuds</span></label>
+          <label><input type="radio" name="input_mode" value="sim"><span>Simulated</span></label>
         </fieldset>
         <p class="meta" id="join-status" role="status"></p>
         <p class="meta" id="join-secure" hidden></p>
       </section>
 
       <section class="screen" id="screen-voice" data-screen="voice" hidden>
-        <header class="step-head"><span class="step-index" id="voice-step">1 / 4</span><h2>Voice</h2></header>
+        <header class="step-head" data-step="1">
+          <div class="step-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <h2>Voice</h2><span class="step-index" id="voice-step">1 / 4</span>
+        </header>
         <label class="check" id="voice-consent-row">
           <input type="checkbox" id="voice-consent">
           <span id="voice-consent-text"></span>
@@ -59,12 +69,15 @@
           <button class="primary" id="voice-record" type="button">Read for 30 seconds</button>
           <button id="voice-room" type="button">Room sample only</button>
           <button id="voice-cancel" type="button" hidden>Cancel</button>
-          <button id="voice-skip" type="button">Use the premade voice</button>
+          <button class="quiet" id="voice-skip" type="button">Use the premade voice</button>
         </div>
       </section>
 
       <section class="screen" id="screen-earbuds" data-screen="earbuds" hidden>
-        <header class="step-head"><span class="step-index">2 / 4</span><h2>Earbuds</h2></header>
+        <header class="step-head" data-step="2">
+          <div class="step-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <h2>Earbuds</h2><span class="step-index">2 / 4</span>
+        </header>
         <fieldset class="choice">
           <legend>How many are you wearing</legend>
           <label><input type="radio" name="earbud_mode" value="2"><span><strong>Two earbuds</strong><small>Left and right taps carry different signals</small></span></label>
@@ -81,7 +94,10 @@
       </section>
 
       <section class="screen" id="screen-calibrate" data-screen="calibrate" hidden>
-        <header class="step-head"><span class="step-index" id="cal-step">3 / 4</span><h2>Calibrate</h2></header>
+        <header class="step-head" data-step="3">
+          <div class="step-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <h2>Calibrate</h2><span class="step-index" id="cal-step">3 / 4</span>
+        </header>
 
         <div class="cal-section" id="cal-intro">
           <div class="split" id="cal-seat" hidden>
@@ -101,7 +117,7 @@
           <p class="fineprint" id="cal-measure"></p>
           <div class="actions">
             <button class="primary" id="cal-start" type="button">Start</button>
-            <button id="cal-skip" type="button">Skip and use defaults</button>
+            <button class="quiet" id="cal-skip" type="button">Skip and use defaults</button>
           </div>
         </div>
 
@@ -127,13 +143,16 @@
             <button class="primary" id="cal-done" type="button">Done</button>
             <button id="cal-apply" type="button" hidden>Apply anyway</button>
             <button id="cal-download" type="button">Download JSON</button>
-            <button id="cal-again" type="button">Run again</button>
+            <button class="quiet" id="cal-again" type="button">Run again</button>
           </div>
         </div>
       </section>
 
       <section class="screen" id="screen-preset" data-screen="preset" hidden>
-        <header class="step-head"><span class="step-index">4 / 4</span><h2>Preset</h2></header>
+        <header class="step-head" data-step="4">
+          <div class="step-bar" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <h2>Preset</h2><span class="step-index">4 / 4</span>
+        </header>
         <div class="preset-list" id="preset-list"></div>
         <label class="field" id="preset-custom-row" hidden>
           <span>Context, one line</span>
@@ -157,8 +176,10 @@
         </dl>
 
         <div class="draft" id="live-draft" hidden>
+          <div class="draft-top">
+            <span class="label" id="live-draft-label">Send this?</span>
+          </div>
           <div class="draft-clock" aria-hidden="true"><i id="live-draft-clock"></i></div>
-          <span class="label" id="live-draft-label">Send this?</span>
           <p id="live-draft-text"></p>
           <div class="split">
             <button class="primary" id="draft-send" type="button">Send</button>
@@ -166,14 +187,16 @@
           </div>
         </div>
 
-        <article class="message" id="live-in">
-          <header><span class="label">In</span><time id="live-in-time"></time></header>
-          <p id="live-in-text"></p>
-        </article>
-        <article class="message" id="live-out">
-          <header><span class="label">Out</span><time id="live-out-time"></time></header>
-          <p id="live-out-text"></p>
-        </article>
+        <div class="messages">
+          <article class="message" id="live-in">
+            <header><span class="label">In</span><time id="live-in-time"></time></header>
+            <p id="live-in-text"></p>
+          </article>
+          <article class="message" id="live-out">
+            <header><span class="label">Out</span><time id="live-out-time"></time></header>
+            <p id="live-out-text"></p>
+          </article>
+        </div>
 
         <p class="live-note" id="live-note" role="status"></p>
 
@@ -186,25 +209,25 @@
         </form>
 
         <nav class="live-nav" aria-label="Seat screens">
-          <button type="button" data-go="codebook">Codebook</button>
-          <button type="button" data-go="log">Log</button>
-          <button type="button" data-go="settings">Settings</button>
+          <button type="button" data-go="codebook"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 4.5h12M3 9h12M3 13.5h8"/></svg>Codebook</button>
+          <button type="button" data-go="log"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="6.5"/><path d="M9 5.5V9l2.5 1.5"/></svg>Log</button>
+          <button type="button" data-go="settings"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 5h7M13 5h2M3 13h2M8 13h7"/><circle cx="11.5" cy="5" r="1.5"/><circle cx="6.5" cy="13" r="1.5"/></svg>Settings</button>
         </nav>
       </section>
 
       <section class="screen" id="screen-codebook" data-screen="codebook" hidden>
-        <header class="step-head"><span class="step-index" id="codebook-context"></span><h2>Codebook</h2></header>
+        <header class="step-head"><h2>Codebook</h2><span class="step-index" id="codebook-context"></span></header>
         <ol class="codebook" id="codebook-list"></ol>
       </section>
 
       <section class="screen" id="screen-log" data-screen="log" hidden>
-        <header class="step-head"><span class="step-index" id="log-count"></span><h2>Log</h2></header>
+        <header class="step-head"><h2>Log</h2><span class="step-index" id="log-count"></span></header>
         <ol class="log" id="log-list"></ol>
         <p class="meta" id="log-empty">Nothing sent yet.</p>
       </section>
 
       <section class="screen" id="screen-settings" data-screen="settings" hidden>
-        <header class="step-head"><span class="step-index" id="settings-context"></span><h2>Settings</h2></header>
+        <header class="step-head"><h2>Settings</h2><span class="step-index" id="settings-context"></span></header>
 
         <fieldset class="segmented">
           <legend>Earbuds</legend>
@@ -212,11 +235,15 @@
           <label><input type="radio" name="settings_mode" value="1"><span>One</span></label>
         </fieldset>
 
-        <label class="row-toggle"><span>AI drafts</span><input type="checkbox" id="settings-drafts"></label>
-        <label class="row-toggle" id="settings-listen-row"><span>Listen to the room</span><input type="checkbox" id="settings-listen"></label>
+        <div class="toggles">
+          <label class="row-toggle"><span>AI drafts</span><input type="checkbox" id="settings-drafts"></label>
+          <label class="row-toggle" id="settings-listen-row"><span>Listen to the room</span><input type="checkbox" id="settings-listen"></label>
+        </div>
 
-        <label class="range"><span>Sounds</span><input type="range" id="settings-volume-cue" min="0" max="1" step="0.05"><output id="settings-volume-cue-value"></output></label>
-        <label class="range"><span>Voices</span><input type="range" id="settings-volume-voice" min="0" max="1" step="0.05"><output id="settings-volume-voice-value"></output></label>
+        <div class="ranges">
+          <label class="range"><span>Sounds</span><input type="range" id="settings-volume-cue" min="0" max="1" step="0.05"><output id="settings-volume-cue-value"></output></label>
+          <label class="range"><span>Voices</span><input type="range" id="settings-volume-voice" min="0" max="1" step="0.05"><output id="settings-volume-voice-value"></output></label>
+        </div>
 
         <div class="split">
           <button id="settings-voice" type="button">Re-record voice</button>

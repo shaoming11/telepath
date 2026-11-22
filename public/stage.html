@@ -5,200 +5,298 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark only">
 <title>Telepathy · Stage</title>
-<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAHklEQVR42mMQEOAnCTHQUcP/FCs8aFTD8NEwaBIfAEVtvfmzixrdAAAAAElFTkSuQmCC">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect width='20' height='20' rx='4' fill='%23060708'/%3E%3Cpath d='M10 3.5l6 3.4v6.2L10 16.5l-6-3.4V6.9z' fill='none' stroke='%23F1F3F5' stroke-width='1.4'/%3E%3C/svg%3E">
+<link rel="preload" href="./fonts/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="./stage.css">
 </head>
 <body data-stage-root data-phase="lobby" data-link="connecting">
 <a class="skip-link" href="#stage-main">Skip to stage content</a>
 
-<header class="masthead">
-  <div class="masthead__brand">
-    <span class="wordmark">Telepathy</span>
-    <span class="masthead__rule" aria-hidden="true"></span>
-    <span class="mono micro" id="session-readout">session &mdash;</span>
-  </div>
+<div class="frame">
+  <header class="nav">
+    <span class="brand">
+      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l7.5 4.3v6.4L10 17.5l-7.5-4.3V6.8z"/><path d="M2.5 6.8L10 11l7.5-4.2M10 11v6.5" opacity=".55"/></svg>
+      Telepathy
+    </span>
 
-  <nav class="phases" aria-label="Stage phase">
-    <ol>
-      <li data-phase-step="lobby"><span class="phases__name">Lobby</span></li>
-      <li data-phase-step="live"><span class="phases__name">Live board</span></li>
-      <li data-phase-step="reveal"><span class="phases__name">Reveal</span></li>
-    </ol>
-  </nav>
+    <nav class="phases" aria-label="Stage phase">
+      <ol>
+        <li data-phase-step="lobby">Lobby</li>
+        <li data-phase-step="live">Live board</li>
+        <li data-phase-step="reveal">Reveal</li>
+      </ol>
+    </nav>
 
-  <div class="masthead__meta">
-    <p class="meta-line"><span class="dot" id="link-dot" aria-hidden="true"></span><span class="mono micro" id="link-readout">hub connecting</span></p>
-    <p class="meta-line mono micro" id="preset-readout">preset &mdash;</p>
-    <p class="meta-line mono micro" id="clock-readout" hidden>00:00</p>
-    <button class="op-toggle" id="op-toggle" type="button" aria-expanded="false" aria-controls="operator" title="Operator controls (keyboard O)">
-      <span class="op-toggle__dot" aria-hidden="true"></span>
-      <span class="sr-only">Operator controls</span>
-    </button>
-  </div>
-</header>
-
-<p class="canned-banner" id="canned-banner" hidden>
-  <span class="canned-banner__tag mono">Canned take</span>
-  <span id="canned-detail">Playing the recorded demo take.</span>
-</p>
-
-<main id="stage-main">
-
-  <!-- ─────────────── LOBBY ─────────────── -->
-  <section class="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>
-    <div class="lobby__head">
-      <h1 class="display" id="lobby-title">Two seats,<br>one silent channel.</h1>
-      <p class="lede">Have both phones join over the hotspot. Test the voices and earbuds before you begin.</p>
+    <div class="nav__meta">
+      <span class="nav__link" id="link-readout">Connecting</span>
+      <span id="session-readout">Session</span>
+      <span id="preset-readout">Preset</span>
+      <span class="nav__clock" id="clock-readout" hidden>00:00</span>
+      <button class="op-toggle" id="op-toggle" type="button" aria-expanded="false" aria-controls="operator" title="Operator controls (keyboard O)">Operator <kbd>O</kbd></button>
     </div>
+  </header>
 
-    <div class="join">
-      <h2 class="eyebrow">Join address</h2>
-      <p class="join__url mono" id="join-url">&mdash;</p>
-      <dl class="readout">
-        <div class="readout__row"><dt>Stage</dt><dd class="mono" id="stage-url">&mdash;</dd></div>
-        <div class="readout__row"><dt>Transport</dt><dd class="mono" id="secure-readout">&mdash;</dd></div>
-        <div class="readout__row" id="certificate-row" hidden><dt>Certificate</dt><dd class="mono" id="certificate-readout"></dd></div>
-      </dl>
-      <p class="note" id="join-guidance" hidden></p>
-      <h2 class="eyebrow eyebrow--spaced">Rehearsal</h2>
-      <ul class="linkset">
-        <li><a class="linkset__link" href="/?sim=1&amp;seat=A"><span class="mono">A</span> Simulated seat A</a></li>
-        <li><a class="linkset__link" href="/?sim=1&amp;seat=B"><span class="mono">B</span> Simulated seat B</a></li>
-        <li><a class="linkset__link" href="/?calibrate=1"><span class="mono">&#8212;</span> Calibration bench</a></li>
-      </ul>
-    </div>
+  <p class="canned-banner" id="canned-banner" hidden>
+    <span class="canned-banner__tag">CANNED TAKE</span>
+    <span id="canned-detail">Playing the recorded demo take.</span>
+  </p>
 
-    <div class="lobby__seats" id="lobby-seats"></div>
+  <main id="stage-main">
 
-    <div class="lobby__codebook">
-      <h2 class="eyebrow">Codebook <span class="mono micro" id="codebook-preset"></span></h2>
-      <dl class="readout readout--codebook" id="lobby-codebook"></dl>
-    </div>
+    <!-- Lobby -->
+    <section class="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>
+      <div class="hero">
+        <div class="hero__copy">
+          <h1 class="display" id="lobby-title"><span class="display__dim">Two seats.</span> One silent channel.</h1>
+          <p class="lede">Tap an earbud and your partner hears you in your own voice. An agent on the hub listens to both rooms, drafts the answer, and waits for your tap before it sends.</p>
+          <div class="cta">
+            <button class="begin" id="begin-button" type="button">
+              <span class="begin__label">Begin session</span>
+              <span class="begin__arrow" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span>
+            </button>
+          </div>
+          <p class="begin-hint" id="begin-hint">both seats ready</p>
+          <dl class="readout-row" id="lobby-readout">
+            <div><dt id="readout-a-name">PRESENTER</dt><dd id="readout-a">Waiting</dd></div>
+            <div><dt id="readout-b-name">COACH</dt><dd id="readout-b">Waiting</dd></div>
+            <div><dt>PRESET</dt><dd id="readout-preset">&mdash;</dd></div>
+            <div><dt>MESSAGES</dt><dd id="readout-cache">&mdash;</dd></div>
+          </dl>
+        </div>
 
-    <div class="primary-bar">
-      <button class="primary" id="begin-button" type="button">
-        <span class="primary__label">Begin session</span>
-        <span class="primary__hint mono" id="begin-hint">both seats ready</span>
-      </button>
-    </div>
-  </section>
+        <svg class="diagram" id="lobby-diagram" viewBox="-560 -250 1120 700" role="img" aria-labelledby="diagram-label">
+          <title id="diagram-label">Seat A and Seat B linked through the hub</title>
+          <defs>
+            <path id="prof" d="M0 0 L3 -34 C-6 -46 -16 -66 -16 -92 C-16 -132 14 -160 56 -160 C90 -160 112 -138 113 -112 C113 -104 111 -100 112 -96 L124 -76 C125 -73 123 -71 119 -71 L114 -71 C116 -66 114 -63 116 -60 C113 -58 114 -55 115 -53 C112 -50 111 -48 110 -44 C112 -38 108 -32 98 -30 C84 -28 72 -24 66 -14 L66 0 Z"/>
+            <clipPath id="profclip"><use href="#prof"/></clipPath>
+            <g id="headset">
+              <use href="#prof" class="d-head"/>
+              <path class="d-scan" d="M-20 -150H130M-20 -140H130M-20 -130H130M-20 -120H130M-20 -110H130M-20 -100H130M-20 -90H130M-20 -80H130M-20 -70H130M-20 -60H130M-20 -50H130M-20 -40H130M-20 -30H130M-20 -20H130M-20 -10H130"/>
+              <circle class="d-budring" cx="35" cy="-86" r="9"/>
+              <circle class="d-bud" cx="35" cy="-86" r="4"/>
+            </g>
+          </defs>
 
-  <!-- ─────────────── LIVE BOARD ─────────────── -->
-  <section class="screen screen--live" id="screen-live" aria-labelledby="live-title" hidden>
-    <div class="live__head">
-      <h1 class="eyebrow" id="live-title">Live board</h1>
-      <p class="live__preset" id="live-preset">&mdash;</p>
-      <p class="live__context" id="live-context"></p>
-      <div class="bits">
-        <span class="bits__value display-num" id="bits-value">&mdash;</span>
-        <span class="bits__unit mono">bits from taps</span>
+          <polygon class="d-wire d-faint" points="225.2,-290 675.5,-30 -225.2,490 -675.5,230"/>
+          <polygon class="d-wire" points="207.8,-200 519.6,-20 -207.8,400 -519.6,220"/>
+          <path class="d-wire d-faint" d="M363.7,-110 L-363.7,310 M51.9,-290 L-519.6,40"/>
+          <g transform="matrix(0.866 0.5 -0.866 0.5 -467.6 236)"><text class="d-lbl d-sm" id="dia-host">HOTSPOT</text></g>
+
+          <g class="d-seat seat-a" id="dia-seat-a" data-state="waiting">
+            <polygon class="d-plate" points="259.8,-100 346.4,-50 259.8,0 173.2,-50"/>
+            <g transform="translate(-10.4 -6) matrix(-0.866 0.5 0 1 259.8 -50)"><use href="#prof" class="d-headback" transform="translate(-48 0) scale(0.9)"/></g>
+            <g transform="matrix(-0.866 0.5 0 1 259.8 -50)"><use href="#headset" transform="translate(-48 0) scale(0.9)"/></g>
+          </g>
+
+          <polygon class="d-under" points="0,-20 207.8,100 0,220 -207.8,100"/>
+          <polygon class="d-sideL" points="0,176 -173.2,76 -173.2,100 0,200"/>
+          <polygon class="d-sideR" points="173.2,76 0,176 0,200 173.2,100"/>
+          <polygon class="d-top" points="0,-24 173.2,76 0,176 -173.2,76"/>
+          <polygon class="d-wire" points="0,1 129.9,76 0,151 -129.9,76"/>
+
+          <path class="d-seg seat-a" d="M274.1,-135.7 Q140,-110 0,76"/>
+          <path class="d-pk seat-a" d="M274.1,-135.7 Q140,-110 0,76"/>
+          <path class="d-seg seat-b" d="M0,76 Q-130,190 -274.1,180.9"/>
+          <path class="d-pk seat-b" d="M0,76 Q-130,190 -274.1,180.9"/>
+          <circle class="d-pt" cx="0" cy="76" r="3.5"/>
+
+          <path class="d-dash" d="M0,-130 V-4 M138.6,-50 V76 M-138.6,-50 V76 M0,30 V156"/>
+          <polygon class="d-wire d-hi" points="0,-130 138.6,-50 0,30 -138.6,-50"/>
+          <path class="d-squig" d="M-96,-46 C-78,-78 -58,-18 -38,-44 S2,-76 22,-48 S62,-18 92,-52"/>
+          <g transform="matrix(0.866 0.5 -0.866 0.5 12 -128)"><text class="d-lbl" y="12">ROOM READ</text></g>
+          <g transform="matrix(0.866 -0.5 0.866 0.5 -124 -40)"><text class="d-lbl d-sm">LIVE TRANSCRIPT</text></g>
+
+          <g class="d-seat seat-b" id="dia-seat-b" data-state="waiting">
+            <polygon class="d-plate" points="-259.8,200 -173.2,250 -259.8,300 -346.4,250"/>
+            <g transform="translate(-10.4 -6) matrix(0.866 -0.5 0 1 -259.8 250)"><use href="#prof" class="d-headback" transform="translate(-48 0) scale(0.9)"/></g>
+            <g transform="matrix(0.866 -0.5 0 1 -259.8 250)"><use href="#headset" transform="translate(-48 0) scale(0.9)"/></g>
+          </g>
+
+          <g class="seat-a" transform="matrix(0.866 0.5 -0.866 0.5 324.8 -12.5)">
+            <text class="d-lbl" id="dia-a-name">A · PRESENTER</text>
+            <rect class="d-pill" x="0" y="8" width="96" height="17" rx="3" id="dia-a-pill"/>
+            <text class="d-pilltxt" x="7" y="20" id="dia-a-state">WAITING</text>
+          </g>
+          <g class="seat-b" transform="matrix(0.866 0.5 -0.866 0.5 -194.9 287.5)">
+            <text class="d-lbl" id="dia-b-name">B · COACH</text>
+            <rect class="d-pill" x="0" y="8" width="96" height="17" rx="3" id="dia-b-pill"/>
+            <text class="d-pilltxt" x="7" y="20" id="dia-b-state">WAITING</text>
+          </g>
+          <g transform="matrix(0.866 0.5 -0.866 0.5 -62.4 112)">
+            <rect class="d-pill d-pill--hub" x="-78" y="-9" width="156" height="18" rx="3"/>
+            <text class="d-pilltxt" x="-70" y="4" id="dia-agent">AGENT · STANDING BY</text>
+          </g>
+
+          <circle class="d-pt" cx="0" cy="-24" r="2.4"/><circle class="d-pt" cx="173.2" cy="76" r="2.4"/><circle class="d-pt" cx="-173.2" cy="76" r="2.4"/>
+          <circle class="d-pt" cx="0" cy="-130" r="2.4"/><circle class="d-pt" cx="138.6" cy="-50" r="2.4"/><circle class="d-pt" cx="-138.6" cy="-50" r="2.4"/>
+        </svg>
+
+        <div class="join">
+          <p class="kicker">JOIN FROM EACH PHONE ON THE HOTSPOT</p>
+          <div class="join__row">
+            <span class="join__url" id="join-url">&mdash;</span>
+            <a class="join__link" href="/?sim=1&amp;seat=A">Simulated seat A <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?sim=1&amp;seat=B">Simulated seat B <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?calibrate=1">Calibration bench <span aria-hidden="true">↗</span></a>
+          </div>
+          <p class="join__note" id="join-guidance" hidden></p>
+        </div>
       </div>
-    </div>
 
-    <div class="live__seats" id="live-seats"></div>
+      <div class="detail">
+        <div class="detail__seats" id="lobby-seats"></div>
 
-    <div class="stream">
-      <h2 class="eyebrow">Signals, drafts, messages</h2>
-      <ol class="stream__list" id="stream-list" aria-label="Session stream"></ol>
-      <p class="empty mono" id="stream-empty">waiting for the first tap</p>
-    </div>
+        <div class="detail__col">
+          <h2 class="kicker">CODEBOOK <span id="codebook-preset"></span></h2>
+          <dl class="kv kv--codebook" id="lobby-codebook"></dl>
+        </div>
 
-    <div class="primary-bar">
-      <button class="primary" id="reveal-button" type="button">
-        <span class="primary__label">Reveal</span>
-        <span class="primary__hint mono">show the timeline and both transcripts</span>
-      </button>
-    </div>
-  </section>
-
-  <!-- ─────────────── REVEAL ─────────────── -->
-  <section class="screen screen--reveal" id="screen-reveal" aria-labelledby="reveal-title" hidden>
-    <div class="reveal__head">
-      <h1 class="display" id="reveal-title">Everything that<br>went across.</h1>
-      <div class="reveal__total">
-        <span class="display-num" id="reveal-bits">&mdash;</span>
-        <span class="mono micro">total bits tapped</span>
-        <span class="mono micro" id="reveal-count"></span>
+        <div class="detail__col">
+          <h2 class="kicker">CONNECTION</h2>
+          <dl class="kv">
+            <div class="kv__row"><dt>Stage</dt><dd class="mono" id="stage-url">&mdash;</dd></div>
+            <div class="kv__row"><dt>Transport</dt><dd id="secure-readout">&mdash;</dd></div>
+            <div class="kv__row" id="certificate-row" hidden><dt>Certificate</dt><dd class="mono" id="certificate-readout"></dd></div>
+          </dl>
+        </div>
       </div>
-    </div>
+    </section>
 
-    <div class="timeline">
-      <h2 class="eyebrow">Timeline</h2>
-      <ol class="timeline__list" id="timeline-list" aria-label="Message timeline"></ol>
-      <p class="empty mono" id="timeline-empty">no messages in this session</p>
-    </div>
+    <!-- Live board -->
+    <section class="screen screen--live" id="screen-live" aria-labelledby="live-title" hidden>
+      <div class="live__head">
+        <div class="live__title">
+          <h1 class="kicker" id="live-title">LIVE BOARD</h1>
+          <p class="live__preset" id="live-preset">&mdash;</p>
+          <p class="live__context" id="live-context"></p>
+        </div>
+        <dl class="stats">
+          <div class="stat stat--lead"><dt>Bits tapped</dt><dd class="bits__value" id="bits-value">&mdash;</dd></div>
+          <div class="stat"><dt>Messages</dt><dd id="live-messages">0</dd></div>
+          <div class="stat"><dt>Words heard</dt><dd id="live-words">0</dd></div>
+        </dl>
+      </div>
 
-    <div class="transcripts" id="reveal-transcripts"></div>
-  </section>
-</main>
+      <div class="board">
+        <div class="board__seats" id="live-seats"></div>
+        <div class="stream">
+          <h2 class="kicker stream__title">CHANNEL</h2>
+          <ol class="stream__list" id="stream-list" aria-label="Session stream"></ol>
+          <p class="empty" id="stream-empty">Waiting for the first tap.</p>
+        </div>
+      </div>
+
+      <div class="actionbar">
+        <p class="actionbar__note">Keep the deck on the projector until the pitch ends.</p>
+        <button class="begin" id="reveal-button" type="button">
+          <span class="begin__label">Reveal</span>
+          <span class="begin__arrow" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Reveal -->
+    <section class="screen screen--reveal" id="screen-reveal" aria-labelledby="reveal-title" hidden>
+      <div class="reveal__head">
+        <div>
+          <p class="kicker" id="reveal-kicker">REVEAL</p>
+          <h1 class="display display--reveal" id="reveal-title"><span class="display__dim">Everything that</span> went across.</h1>
+        </div>
+        <div class="score">
+          <div class="score__num"><span id="reveal-bits">&mdash;</span><small>bits tapped</small></div>
+          <svg class="score__arrow" width="34" height="14" viewBox="0 0 34 14" aria-hidden="true"><path d="M0 7h31M26 2l5 5-5 5"/></svg>
+          <div class="score__num"><span id="reveal-words">&mdash;</span><small>words heard</small></div>
+          <p class="score__count" id="reveal-count"></p>
+        </div>
+      </div>
+
+      <section class="lanes-wrap" aria-labelledby="lanes-title">
+        <h2 class="section-title" id="lanes-title">Timeline <span>Speech, taps and whispers on one clock</span></h2>
+        <div class="lanes" id="reveal-lanes"></div>
+      </section>
+
+      <section class="timeline" aria-labelledby="messages-title">
+        <h2 class="section-title" id="messages-title">Messages <span id="reveal-message-note"></span></h2>
+        <ol class="timeline__list" id="timeline-list" aria-label="Message timeline"></ol>
+        <p class="empty" id="timeline-empty">No messages in this session.</p>
+      </section>
+
+      <div class="transcripts" id="reveal-transcripts"></div>
+    </section>
+  </main>
+</div>
 
 <p class="phase-announce" id="phase-announce" role="status" aria-live="polite"></p>
 
 <aside class="operator" id="operator" aria-labelledby="operator-title" hidden>
   <div class="operator__head">
-    <h2 class="eyebrow" id="operator-title">Operator</h2>
-    <button class="ghost" id="op-close" type="button">Close <span class="mono micro">esc</span></button>
+    <h2 id="operator-title">Operator</h2>
+    <button class="ghost" id="op-close" type="button">Close <kbd>Esc</kbd></button>
   </div>
 
-  <div class="operator__group">
-    <div class="operator__buttons">
-      <button class="op-action" id="op-begin" type="button" data-action="begin">Begin</button>
-      <button class="op-action" id="op-reveal" type="button" data-action="reveal">Reveal</button>
-      <button class="op-action" id="op-replay" type="button" data-action="replay">Replay last</button>
-      <button class="op-action op-action--accent" id="op-canned" type="button" data-action="canned">Canned take</button>
+  <div class="operator__body">
+    <div class="operator__group">
+      <h3 class="operator__label">Session</h3>
+      <div class="operator__buttons">
+        <button class="op-action" id="op-begin" type="button" data-action="begin">Begin</button>
+        <button class="op-action" id="op-reveal" type="button" data-action="reveal">Reveal</button>
+        <button class="op-action" id="op-replay" type="button" data-action="replay">Replay last</button>
+        <button class="op-action" id="op-canned" type="button" data-action="canned">Canned take</button>
+      </div>
+      <p class="operator__note">Canned take replays the full pitch through this Mac in about 18 seconds.</p>
     </div>
-  </div>
 
-  <form class="operator__group" id="op-announce">
-    <h3 class="operator__label">Announce to both seats</h3>
-    <label class="sr-only" for="op-announce-preset">Preset announcement</label>
-    <select id="op-announce-preset" class="control mono">
-      <option value="">Choose a preset line</option>
-    </select>
-    <label class="field-label" for="op-announce-text">Message</label>
-    <textarea id="op-announce-text" class="control control--text" rows="2" maxlength="140"></textarea>
-    <button id="op-announce-send" class="op-action" type="submit">Send announcement</button>
-    <p class="operator__note" id="op-announce-status" role="status"></p>
-  </form>
-
-  <div class="operator__group">
-    <h3 class="operator__label">Preset</h3>
-    <div class="field-row">
-      <label class="sr-only" for="op-preset">Preset</label>
-      <select id="op-preset" class="control mono">
-        <option value="Pitch">Pitch</option>
-        <option value="Party">Party</option>
-        <option value="Meeting">Meeting</option>
-        <option value="Custom">Custom</option>
+    <form class="operator__group" id="op-announce">
+      <h3 class="operator__label">Announce to both seats</h3>
+      <label class="field-label" for="op-announce-preset">Preset line</label>
+      <select id="op-announce-preset" class="control">
+        <option value="">Choose a preset line</option>
       </select>
-      <button class="op-action" id="op-set-preset" type="button">Set</button>
+      <label class="field-label" for="op-announce-text">Message</label>
+      <textarea id="op-announce-text" class="control control--text" rows="2" maxlength="140"></textarea>
+      <button id="op-announce-send" class="op-action op-action--solid" type="submit">Send announcement</button>
+      <p class="operator__note" id="op-announce-status" role="status"></p>
+    </form>
+
+    <div class="operator__group">
+      <h3 class="operator__label">Preset</h3>
+      <div class="field-row">
+        <label class="sr-only" for="op-preset">Preset</label>
+        <select id="op-preset" class="control">
+          <option value="Pitch">Pitch</option>
+          <option value="Party">Party</option>
+          <option value="Meeting">Meeting</option>
+          <option value="Custom">Custom</option>
+        </select>
+        <button class="op-action op-action--fit" id="op-set-preset" type="button">Set</button>
+      </div>
+      <label class="field-label" for="op-context">Context, sent with the preset when filled</label>
+      <textarea id="op-context" class="control control--text" rows="2" spellcheck="false" placeholder="Pitch outline, slide order, judge seating"></textarea>
     </div>
-    <label class="field-label" for="op-context">Context (sent with the preset when filled)</label>
-    <textarea id="op-context" class="control control--text mono" rows="2" spellcheck="false"></textarea>
-  </div>
 
-  <div class="operator__group">
-    <h3 class="operator__label">Inject a signal</h3>
-    <div class="field-row">
-      <label class="sr-only" for="op-seat">Sending seat</label>
-      <select id="op-seat" class="control mono">
-        <option value="A">Seat A</option>
-        <option value="B">Seat B</option>
-      </select>
-      <label class="sr-only" for="op-signal">Signal</label>
-      <select id="op-signal" class="control mono"></select>
-      <button class="op-action" id="op-inject" type="button">Inject</button>
+    <div class="operator__group">
+      <h3 class="operator__label">Inject a signal</h3>
+      <div class="field-row">
+        <label class="sr-only" for="op-seat">Sending seat</label>
+        <select id="op-seat" class="control control--fit">
+          <option value="A">Seat A</option>
+          <option value="B">Seat B</option>
+        </select>
+        <label class="sr-only" for="op-signal">Signal</label>
+        <select id="op-signal" class="control"></select>
+        <button class="op-action op-action--fit" id="op-inject" type="button">Inject</button>
+      </div>
+    </div>
+
+    <div class="operator__group">
+      <h3 class="operator__label">Reset session</h3>
+      <p class="operator__note">Clears the log, the seats and the bits. The reveal lives in memory only.</p>
+      <button class="op-action op-action--danger" id="op-reset" type="button" aria-describedby="op-reset-note">Reset</button>
+      <span class="operator__note" id="op-reset-note"></span>
     </div>
   </div>
 
-  <div class="operator__group operator__group--danger">
-    <h3 class="operator__label">Reset session</h3>
-    <p class="operator__note">Clears the log, the seats and the bits. The reveal is in memory only.</p>
-    <button class="op-action op-action--danger" id="op-reset" type="button" aria-describedby="op-reset-note">Reset</button>
-    <span class="mono micro" id="op-reset-note"></span>
-  </div>
-
-  <p class="operator__status mono" id="op-status" role="status" aria-live="polite">standing by</p>
+  <p class="operator__status" id="op-status" role="status" aria-live="polite">Standing by</p>
 </aside>
 
 <script type="module" src="./stage.mjs"></script>
