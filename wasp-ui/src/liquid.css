@@ -9,6 +9,7 @@ body.wasp-liquid {
   --line-2: #e4edff2e;
   --glass-solid: #192331;
   --glass: #192331e6;
+  --glass-filter: saturate(145%) blur(19px);
   --glass-edge: #e4edff38;
   --glass-shadow: 0 16px 50px #0006, inset 0 1px 0 #ffffff16;
   --press: 85ms;
@@ -20,6 +21,11 @@ body.wasp-liquid {
   background: var(--base);
 }
 
+body.wasp-liquid[data-solid-surfaces] {
+  --glass: var(--glass-solid);
+  --glass-filter: none;
+}
+
 .wasp-liquid :is(.masthead, .live-nav, .nav) {
   background-color: var(--glass-solid);
   border-color: var(--glass-edge);
@@ -29,8 +35,8 @@ body.wasp-liquid {
 @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
   .wasp-liquid :is(.masthead, .live-nav, .nav) {
     background-color: var(--glass);
-    -webkit-backdrop-filter: saturate(145%) blur(19px);
-    backdrop-filter: saturate(145%) blur(19px);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
   }
 }
 
@@ -50,6 +56,39 @@ body.wasp-liquid {
   outline-offset: 3px;
 }
 .wasp-liquid button:disabled { cursor: not-allowed; }
+.wasp-liquid .appearance-setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  color: var(--fg);
+}
+.wasp-liquid .appearance-setting__input {
+  position: relative;
+  max-inline-size: 100%;
+}
+.wasp-liquid .appearance-setting__input::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: 13px;
+  inset-block-start: calc(50% - 5px);
+  inline-size: 7px;
+  block-size: 7px;
+  border-inline-end: 1px solid var(--fg-2);
+  border-block-end: 1px solid var(--fg-2);
+  transform: rotate(45deg);
+  pointer-events: none;
+}
+.wasp-liquid .appearance-setting select {
+  appearance: none;
+  min-block-size: 44px;
+  max-inline-size: 100%;
+  padding-inline: 12px 30px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+}
 
 .wasp-liquid[data-surface="phone"] .app { background: var(--base); }
 .wasp-liquid[data-surface="phone"] .masthead {

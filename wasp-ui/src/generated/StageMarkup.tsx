@@ -2,6 +2,7 @@
 import { StageRoomConsole } from '../StageRoomConsole';
 import { StageRevealHeader } from '../StageRevealHeader';
 import { StageAnnouncement } from '../StageAnnouncement';
+import { AppearanceControl } from '../AppearanceControl';
 import { ChannelMonitor } from '../ChannelMonitor';
 
 export function StageMarkup() {
@@ -310,6 +311,8 @@ export function StageMarkup() {
               <button className="op-action op-action--fit" id="op-inject" type="button">Inject</button>
             </div>
           </div>
+
+          <AppearanceControl className="operator__group" />
 
           <div className="operator__group">
             <h3 className="operator__label">Reset session</h3>

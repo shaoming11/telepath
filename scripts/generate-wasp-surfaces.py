@@ -223,6 +223,22 @@ def generated(component, source):
         )
         if replacements != 1:
             raise ValueError("Expected one Live screen with separate navigation.")
+        markup, replacements = re.subn(
+            r'(^([ \t]*)<header[^>]*><h2>Settings</h2><span[^>]* id="settings-context"></span></header>)',
+            r'\1\n\2<AppearanceControl />',
+            markup,
+            flags=re.M,
+        )
+    else:
+        markup, replacements = re.subn(
+            r'^([ \t]*)(<div className="operator__group">\n[ \t]*<h3 className="operator__label">Reset session</h3>)',
+            r'\1<AppearanceControl className="operator__group" />\n\n\1\2',
+            markup,
+            flags=re.M,
+        )
+    if replacements != 1:
+        raise ValueError("Expected one appearance settings slot.")
+    imports += "import { AppearanceControl } from '../AppearanceControl';\n"
     monitor = r'<section className="(channel-monitor(?: channel-monitor--phone)?)" id="((?:phone|lobby|stage)-monitor)" aria-label="Live audio and context"></section>'
     markup, replacements = re.subn(monitor, r'<ChannelMonitor id="\2" className="\1" />', markup)
     if replacements != (1 if component == "PhoneMarkup" else 2):

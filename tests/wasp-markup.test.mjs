@@ -76,6 +76,17 @@ test('the channel monitor renders supplied state in React and announces phase ra
   assert.match(controller, /dispatchEvent\(new CustomEvent\('telepathy:channel-monitor'/);
 });
 
+test('Wasp offers the same independent appearance preference on Phone Settings and the Operator dock', async () => {
+  const phone = await text('wasp-ui/src/generated/PhoneMarkup.tsx');
+  const stage = await text('wasp-ui/src/generated/StageMarkup.tsx');
+  const component = await text('wasp-ui/src/AppearanceControl.tsx');
+  const css = await text('wasp-ui/src/liquid.css');
+  assert.match(phone, /id="screen-settings"[\s\S]*<AppearanceControl \/>/);
+  assert.match(stage, /<aside[^>]+id="operator"[\s\S]*<AppearanceControl className="operator__group" \/>/);
+  assert.match(component, /<label className="appearance-setting">[\s\S]*<select value=/);
+  assert.match(css, /body\.wasp-liquid\[data-solid-surfaces\] \{[^}]*--glass-filter: none/);
+});
+
 test('the Wasp calibration panel separates raw browser events from the validated trial status', async () => {
   const controller = await text('public/calibrate.mjs');
   const component = await text('wasp-ui/src/CalibrationTrial.tsx');
