@@ -23,6 +23,54 @@ test('recorded cue words do not count as confirmed browser playback', () => {
   assert.deepEqual(stage.revealSummary(state), { messages: 1, words: 3, playbackStarts: 0, playbackWords: 0 });
 });
 
+test('the Stage pair omits private, replay and signal events and rejects mismatched evidence', () => {
+  const message = { kind: 'message', messageId: 'one', text: 'Show the demo.', seat: 'B', to: 'A',
+    signal: 'R1', source: 'operator', at: 1000 };
+  const log = [
+    { kind: 'signal', text: 'Raw input', seat: 'A' },
+    { kind: 'draft', text: 'Private draft', seat: 'A' },
+    { kind: 'pitch_help', text: 'Private cue', seat: 'A' },
+    { kind: 'replay', messageId: 'one', seat: 'B', to: 'A', text: 'Replay' },
+    message,
+    { kind: 'receipt', messageId: 'another', seat: 'A', to: 'B' },
+  ];
+  const raw = { phase: 'live', seats: { A: { online: false }, B: { online: true, questionMode: true } }, log };
+  const connected = value => stage.pairView(stage.normalizeState(value));
+  const sent = connected(raw);
+  assert.equal(sent.cards[0].status, 'Offline');
+  assert.equal(sent.cards[0].current, null);
+  assert.equal(sent.cards[1].status, 'Question Mode on');
+  assert.equal(sent.cards[1].current.signal, 'Operator');
+  assert.equal(sent.cards[1].current.detail, 'Playback unconfirmed');
+  assert.equal(sent.evidence.length, 1);
+  assert.equal(stage.pairAnnouncement(null, sent), '');
+
+  message.playedAt = 1100;
+  log.push({ kind: 'receipt', messageId: 'one', seat: 'B', to: 'A' });
+  const started = connected(raw);
+  assert.equal(started.cards[0].current.label, 'Playback started');
+  assert.equal(started.cards[1].current.label, 'Sent to Seat A');
+});
+
+test('crossing cues use playback order per seat, while recorded cues remain recorded on both plates', () => {
+  const log = [
+    { kind: 'message', messageId: 'one', seat: 'B', to: 'A', text: 'Slow down', at: 1000, playedAt: 1700,
+      signal: 'R1', messageKind: 'fixed', source: 'seat' },
+    { kind: 'message', messageId: 'two', seat: 'A', to: 'B', text: 'The judge is ready', at: 1200,
+      playedAt: 1600, messageKind: 'smart', source: 'seat' },
+  ];
+  const raw = { phase: 'live', online: { A: true, B: true }, log };
+  const live = stage.pairView(stage.normalizeState(raw));
+  assert.deepEqual(live.cards.map(card => card.current.id), ['one', 'two']);
+  assert.equal(live.cards[0].previous.signal, '');
+  assert.equal(live.cards[1].previous.signal, 'Single');
+  const same = stage.pairView(stage.normalizeState({ ...raw, room: { transcript: ['New speech'] } }));
+  assert.deepEqual(same, live);
+  const recorded = stage.pairView(stage.normalizeState({ ...raw, canned: true }));
+  assert.ok(recorded.cards.every(card => card.status === 'Recorded' && card.current.tone === 'recorded' && !card.current.signal));
+  assert.equal(recorded.evidence.length, 2);
+});
+
 test('operator room status distinguishes a local mic from an accepted ElevenLabs stream', () => {
   const waiting = stage.normalizeState({ seats: { A: { online: true, listening: true, transcription: 'recovering' } } });
   const live = stage.normalizeState({ seats: { A: { online: true, listening: true, transcription: 'live' } } });

@@ -239,6 +239,18 @@ def generated(component, source):
     if replacements != 1:
         raise ValueError("Expected one appearance settings slot.")
     imports += "import { AppearanceControl } from '../AppearanceControl';\n"
+    if component == "StageMarkup":
+        markup, context_count = re.subn(r'^[ \t]*<p className="live__context" id="live-context"></p>\n', '', markup, flags=re.M)
+        markup, pair_count = re.subn(
+            r'^([ \t]*)(<section className="channel-monitor" id="stage-monitor"[^>]*></section>[\s\S]*?)'
+            r'^[ \t]*(<div className="actionbar">[\s\S]*?</div>)(?=\s*</section>)',
+            r'\1\3\n\n\1<StagePair />\n\1<p className="live__context" id="live-context"></p>\n\1\2',
+            markup,
+            flags=re.M,
+        )
+        if context_count != 1 or pair_count != 1:
+            raise ValueError("Expected one Stage Live layout.")
+        imports += "import { StagePair } from '../StagePair';\n"
     monitor = r'<section className="(channel-monitor(?: channel-monitor--phone)?)" id="((?:phone|lobby|stage)-monitor)" aria-label="Live audio and context"></section>'
     markup, replacements = re.subn(monitor, r'<ChannelMonitor id="\2" className="\1" />', markup)
     if replacements != (1 if component == "PhoneMarkup" else 2):
