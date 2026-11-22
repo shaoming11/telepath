@@ -11,6 +11,7 @@ type RoomView = {
   tone: string;
   label: string;
   notice: string;
+  reviewing: boolean;
   waiting: boolean;
   turns: RoomTurn[];
   speakers: Speaker[];
@@ -20,7 +21,7 @@ type RoomView = {
 
 const OFF: RoomView = {
   wanted: false, canStart: false, devices: [], tone: 'off', label: 'Off',
-  notice: 'Start listening and allow microphone access.', waiting: false,
+  notice: 'Start listening and allow microphone access.', reviewing: false, waiting: false,
   turns: [], speakers: [], speakersDisabled: true, canClear: false,
 };
 
@@ -55,12 +56,14 @@ function RoomInputMeter({ wanted }: { wanted: boolean }) {
 export function StageRoomConsole() {
   const [state, setState] = useState(OFF);
   const [device, setDevice] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const start = useRef<HTMLButtonElement>(null);
   const stop = useRef<HTMLButtonElement>(null);
   const focusAction = useRef<'start' | 'stop' | null>(null);
   const transcript = useRef<HTMLUListElement>(null);
   const stickToBottom = useRef(true);
   const turnKey = JSON.stringify(state.turns);
+  const latest = state.turns.at(-1);
 
   useLayoutEffect(() => {
     const receive = (event: Event) => setState((event as CustomEvent<RoomView>).detail);
@@ -80,10 +83,11 @@ export function StageRoomConsole() {
 
   useLayoutEffect(() => {
     if (stickToBottom.current && transcript.current) transcript.current.scrollTop = transcript.current.scrollHeight;
-  }, [turnKey]);
+  }, [turnKey, expanded, state.reviewing]);
 
   return (
-    <section className="room-console" id="room-microphone-panel" aria-labelledby="room-mic-title" data-state={state.tone} data-room-owner="react">
+    <section className="room-console" id="room-microphone-panel" aria-labelledby="room-mic-title" data-state={state.tone}
+      data-expanded={expanded} data-room-owner="react">
       <header className="room-console__head">
         <div>
           <h2 id="room-mic-title">Room microphone</h2>
@@ -91,6 +95,8 @@ export function StageRoomConsole() {
         </div>
         <div className="room-console__actions">
           <span className="room-console__state" id="room-mic-state" aria-hidden="true">{state.label}</span>
+          <button className="room-console__disclosure" type="button" aria-expanded={expanded}
+            aria-controls="room-mic-details room-review" onClick={() => setExpanded(value => !value)}>Device and transcript</button>
           <button className="room-console__start" id="room-mic-start" type="button" ref={start}
             disabled={!state.canStart} hidden={state.wanted} onClick={() => {
               if (document.activeElement === start.current) focusAction.current = 'stop';
@@ -102,8 +108,8 @@ export function StageRoomConsole() {
           }}>Stop listening</button>
         </div>
       </header>
-      <div className="room-console__input">
-        <div className="room-console__device">
+      <div className="room-console__input" id="room-mic-details" hidden={!expanded && !state.wanted}>
+        <div className="room-console__device" hidden={!expanded}>
           <label className="kicker" htmlFor="room-mic-device">Input device</label>
           <select id="room-mic-device" disabled={state.wanted}
             value={state.devices.some(item => item.id === device) ? device : ''} onChange={event => setDevice(event.currentTarget.value)}>
@@ -113,8 +119,13 @@ export function StageRoomConsole() {
         </div>
         <RoomInputMeter wanted={state.wanted} />
       </div>
-      <p className="room-console__notice" id="room-mic-status" role="status">{state.notice}</p>
-      <div className="room-console__transcript" aria-labelledby="room-transcript-title">
+      <p className="room-console__notice" id="room-mic-status" role="status"
+        hidden={!expanded && ['off', 'live'].includes(state.tone)}>{state.notice}</p>
+      {!expanded && !state.reviewing && latest && (
+        <p className="room-console__latest" key={latest.label + ':' + latest.text}><b>{latest.label}.</b> <span>{latest.text}</span></p>
+      )}
+      <div className="room-console__transcript" id="room-review" aria-labelledby="room-transcript-title"
+        hidden={!expanded && !state.reviewing}>
         <div className="room-console__transcript-head">
           <h3 className="kicker" id="room-transcript-title">Room transcript</h3>
           <button id="room-transcript-clear" className="room-console__clear" type="button" hidden={!state.canClear}

@@ -272,6 +272,48 @@ body.wasp-liquid {
 
 .wasp-liquid .room-console { border-radius: 17px; overflow: hidden; }
 .wasp-liquid :is(.room-console, .reference-panel) :is(button, select) { border-radius: 10px; }
+.wasp-liquid .room-console__head { padding-block: 11px; }
+.wasp-liquid .room-console__head h2 { font-size: clamp(19px, 2.1cqi, 24px); }
+.wasp-liquid .room-console__actions button { min-block-size: 44px; }
+.wasp-liquid .room-console__state::before { border-radius: 50%; }
+.wasp-liquid .room-console__disclosure[aria-expanded=true] {
+  border-color: var(--glass-edge);
+  background-color: var(--glass-solid);
+}
+.wasp-liquid .room-console[data-expanded=false] .room-console__head { border-bottom: 0; }
+.wasp-liquid .room-console[data-expanded=false] .room-console__input {
+  grid-template-columns: minmax(0, 1fr);
+  padding-block: 0 10px;
+}
+.wasp-liquid .room-console[data-expanded=false] .room-console__signal {
+  display: grid;
+  grid-template-columns: minmax(94px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.wasp-liquid .room-console[data-expanded=false] .room-console__meter-head { margin: 0; }
+.wasp-liquid .room-console[data-expanded=false] .room-console__meter-head label { margin: 0; }
+.wasp-liquid .room-console[data-expanded=false] .room-console__meter {
+  min-block-size: 16px;
+  padding: 3px;
+  border-radius: 4px;
+}
+.wasp-liquid .room-console__latest {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin: 0 var(--console-gutter);
+  padding-block: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-2);
+  font-size: .8125rem;
+  animation: liquid-enter 190ms var(--glide) both;
+}
+.wasp-liquid .room-console__latest b { flex: none; color: var(--fg); font-weight: 500; }
+.wasp-liquid .room-console__latest span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.wasp-liquid .room-console[data-expanded=true] :is(.room-console__input, .room-console__transcript) {
+  animation: liquid-enter 210ms var(--glide) both;
+}
 .wasp-liquid .operator:not([hidden]) {
   transform-origin: top right;
   animation: liquid-panel 240ms var(--glide) both;
@@ -400,6 +442,8 @@ body.wasp-liquid {
   .wasp-liquid[data-surface="stage"] .nav { margin: 8px 12px 0; padding-inline: 12px; }
   .wasp-liquid .reveal__head { grid-template-columns: minmax(0, 1fr); }
   .wasp-liquid .reveal__head .score { justify-self: start; inline-size: min(100%, 28rem); }
+  .wasp-liquid .room-console__actions { flex-wrap: wrap; justify-content: flex-start; gap: 7px; }
+  .wasp-liquid .room-console__actions button { white-space: normal; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .wasp-liquid :is(.masthead, .live-nav, .nav, .op-toggle, #question-mode) {

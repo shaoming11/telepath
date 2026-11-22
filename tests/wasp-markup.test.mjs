@@ -30,7 +30,8 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
       const announce = (await text('wasp-ui/src/StageAnnouncement.tsx')).split('<p className="sr-only"', 1)[0];
       const replaced = jsx.replace('<StageRoomConsole />', rendered).replace('<StageRevealHeader />', reveal)
         .replace('<StageAnnouncement />', announce);
-      const dynamic = new Set(['data-state:off', 'data-room-owner:react', 'data-reveal-owner:react', 'data-announce-owner:react']);
+      const dynamic = new Set(['data-state:off', 'data-room-owner:react', 'data-reveal-owner:react', 'data-announce-owner:react',
+        'aria-controls:room-mic-details room-review', 'id:room-mic-details', 'id:room-review']);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
         hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
       assert.match(room, /data-state=\{state\.tone\}/);
@@ -87,6 +88,9 @@ test('the Stage console separates live meter frames from room state and keeps ac
     assert.ok(component.includes(event));
   }
   assert.match(component, /function RoomInputMeter/);
+  assert.match(component, /aria-expanded=\{expanded\}/);
+  assert.match(component, /id="room-mic-details" hidden=\{!expanded && !state.wanted\}/);
+  assert.match(component, /!expanded && !state.reviewing && latest/);
   assert.doesNotMatch(component, /getUserMedia|WebSocket/);
 });
 
