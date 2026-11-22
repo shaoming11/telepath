@@ -2,6 +2,7 @@
 import { StageRoomConsole } from '../StageRoomConsole';
 import { StageRevealHeader } from '../StageRevealHeader';
 import { StageAnnouncement } from '../StageAnnouncement';
+import { ChannelMonitor } from '../ChannelMonitor';
 
 export function StageMarkup() {
   return (
@@ -141,7 +142,7 @@ export function StageMarkup() {
               </div>
             </div>
 
-            <section className="channel-monitor" id="lobby-monitor" aria-label="Live audio and context"></section>
+            <ChannelMonitor id="lobby-monitor" className="channel-monitor" />
             <section className="reference-panel" id="reference-setup" aria-labelledby="reference-title">
               <h2 className="kicker" id="reference-title">{"TEAM BRIEF & REFERENCES"}</h2>
               <p>Add documents so the coach can find supported answers to live questions. Answers are previewed privately and require a tap to send.</p>
@@ -190,7 +191,7 @@ export function StageMarkup() {
               </dl>
             </div>
 
-            <section className="channel-monitor" id="stage-monitor" aria-label="Live audio and context"></section>
+            <ChannelMonitor id="stage-monitor" className="channel-monitor" />
 
             <div className="board">
               <div className="board__seats" id="live-seats"></div>

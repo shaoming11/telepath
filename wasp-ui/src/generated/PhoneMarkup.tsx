@@ -1,6 +1,7 @@
 // Generated from public/index.html. Run python3 scripts/generate-wasp-surfaces.py after edits.
 import { PhonePitchControls } from '../PhonePitchControls';
 import { CalibrationTrial } from '../CalibrationTrial';
+import { ChannelMonitor } from '../ChannelMonitor';
 
 export function PhoneMarkup() {
   return (
@@ -203,7 +204,7 @@ export function PhoneMarkup() {
             </dl>
 
             <PhonePitchControls />
-            <section className="channel-monitor channel-monitor--phone" id="phone-monitor" aria-label="Live audio and context"></section>
+            <ChannelMonitor id="phone-monitor" className="channel-monitor channel-monitor--phone" />
 
             <div className="lock-controls" id="lock-controls" hidden>
               <button id="lock-controls-toggle" type="button" aria-pressed="false">Enable lock-screen controls</button>

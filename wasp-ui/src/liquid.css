@@ -292,6 +292,39 @@ body.wasp-liquid {
 .wasp-liquid :is(.room-console, .operator, .reference-panel, .channel-monitor, .board-seat, .stream) {
   background-color: var(--panel);
 }
+.wasp-liquid .channel-monitor[data-channel-owner=react] .channel-seat { border-radius: 13px; align-content: start; }
+.wasp-liquid[data-surface=stage] .screen--live {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.wasp-liquid[data-surface=stage] .screen--live :is(.live__head, #stage-monitor, .actionbar) { flex-shrink: 0; }
+.wasp-liquid[data-surface=stage] .screen--live .board { min-block-size: 240px; }
+.wasp-liquid[data-surface=stage] .screen--live .actionbar { position: sticky; bottom: 0; z-index: 2; }
+.wasp-liquid[data-surface=stage] #stage-monitor {
+  margin: 0 var(--pad) 12px;
+  border-radius: 17px;
+  gap: 9px;
+}
+.wasp-liquid .channel-monitor__shared-room {
+  display: grid;
+  min-inline-size: 0;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--base);
+}
+.wasp-liquid .channel-seat__meters { display: grid; gap: 10px; }
+.wasp-liquid .channel-seat__meters[data-room=true] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.wasp-liquid .channel-meter__wave i {
+  border-radius: 3px;
+  transition: height 160ms var(--glide), background-color 170ms ease;
+}
+.wasp-liquid .channel-monitor__phase { transition: color 190ms ease, border-color 190ms ease; }
+.wasp-liquid .channel-monitor--phone .channel-meter__head { gap: 3px 6px; }
+@media (max-width: 340px) {
+  .wasp-liquid .channel-monitor--phone .channel-seat__meters[data-room=true] { grid-template-columns: minmax(0, 1fr); }
+}
 
 .wasp-liquid .room-console { border-radius: 17px; overflow: hidden; }
 .wasp-liquid :is(.room-console, .reference-panel) :is(button, select) { border-radius: 10px; }

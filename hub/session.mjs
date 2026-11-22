@@ -240,11 +240,11 @@ export class Session {
   publish() {
     if (this.closed) return;
     this.syncCacheGenerations();
-    this.publishMonitor();
     this.emitStage({ type: 'state', state: this.snapshot() });
     for (const seat of SEATS) {
       if (this.seats[seat].online) this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
     }
+    this.publishMonitor();
   }
 
   publishMonitor() {

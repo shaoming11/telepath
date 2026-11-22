@@ -9,9 +9,12 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
   test(name + ' preserves legacy controller IDs and state attributes as React markup', async () => {
     const html = await text('public/' + filename + '.html');
     const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1];
-    const jsx = await text('wasp-ui/src/generated/' + name + '.tsx');
+    const generated = await text('wasp-ui/src/generated/' + name + '.tsx');
+    const jsx = generated.replace(/<ChannelMonitor id="([^"]+)" className="[^"]+" \/>/g,
+      '<section id="$1" aria-label="Live audio and context"></section>');
     assert.ok(body);
     assert.match(jsx, new RegExp('export function ' + name + '\\('));
+    assert.equal((generated.match(/<ChannelMonitor /g) ?? []).length, filename === 'index' ? 1 : 2);
     const hooks = source => Array.from(source.matchAll(/\s(id|role|aria-[a-z-]+|data-[a-z-]+)="([^"]*)"/g), match => [match[1], match[2]]);
     if (filename === 'index') {
       const pitch = await text('wasp-ui/src/PhonePitchControls.tsx');
@@ -51,6 +54,15 @@ test('the Wasp question rail delegates actions to the hub controller and animate
   }
   assert.match(component, /disabled=\{!state\.live \|\| !state\.connected\}/);
   assert.match(component, /prefers-reduced-motion: reduce/);
+});
+
+test('the channel monitor renders supplied state in React and announces phase rather than meter frames', async () => {
+  const component = await text('wasp-ui/src/ChannelMonitor.tsx');
+  const controller = await text('public/channel-monitor.mjs');
+  assert.match(component, /data-channel-owner="react"/);
+  assert.match(component, /className="channel-monitor__phase" role="status"/);
+  assert.match(component, /addEventListener\('telepathy:channel-monitor'/);
+  assert.match(controller, /dispatchEvent\(new CustomEvent\('telepathy:channel-monitor'/);
 });
 
 test('the Wasp calibration panel separates raw browser events from the validated trial status', async () => {

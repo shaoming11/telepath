@@ -2,9 +2,55 @@ const BAR_COUNT = 12;
 const AUDIO_PHASE = { idle: 'Quiet', queued: 'Queued', playing: 'Playing', paused: 'Paused' };
 const AGENT_PHASE = { idle: 'Waiting for context', evaluating: 'Reading context', drafting: 'Preparing a cue', ready: 'Context updated', error: 'Review unavailable' };
 
-function node(tag, class_name, text) {
+function meterView(label, values, status, active) {
+  const samples = values?.slice(-BAR_COUNT) ?? [];
+  const bars = Array.from({ length: BAR_COUNT }, (_, index) => {
+    const sample = samples[index - BAR_COUNT + samples.length];
+    const height = Number.isFinite(sample) ? Math.min(1, Math.sqrt(Math.max(0, sample)) * 1.7) : 0;
+    return Math.round(height * 100);
+  });
+  return { label, status, active, bars };
+}
+
+export function channelMonitorView(seatIds, snapshot, output) {
+  const agent = snapshot?.agent;
+  const sharedRoom = snapshot?.sharedRoom ?? null;
+  const seats = seatIds.map(seat => {
+    const value = snapshot?.seats?.[seat];
+    const playback = output?.[seat] ?? value?.output;
+    const micStatus = value?.transcription === 'unavailable' ? 'Transcription unavailable'
+      : value?.listening ? value.transcription === 'live' ? 'Transcribing' : 'Mic listening'
+      : sharedRoom || value?.online ? 'Mic off' : 'Waiting for seat';
+    const input = value?.context;
+    const summary = [input?.count ? input.count + (input.count === 1 ? ' line read' : ' lines read') : '', value?.situation]
+      .filter(Boolean).join(' · ');
+    const showRoom = seatIds.length === 1 || sharedRoom == null || sharedRoom === seat;
+    return {
+      seat,
+      title: 'Seat ' + seat + (value?.name && value.name !== 'Seat ' + seat ? ' · ' + value.name : ''),
+      mic: showRoom ? meterView(sharedRoom ? 'Shared Mac microphone' : 'Room input', value?.input,
+        !sharedRoom && value?.source === 'companion' && value.listening ? 'Room mic · ' + micStatus : micStatus, Boolean(value?.listening)) : null,
+      output: meterView(seatIds.length === 1 ? 'This phone’s audio' : 'Audio output',
+        playback?.bars, AUDIO_PHASE[playback?.phase] ?? 'Quiet', playback?.phase === 'playing'),
+      audioTitle: playback?.title ?? '',
+      recent: showRoom ? value?.recentRuns ?? [] : [],
+      partial: showRoom && value?.partial ? 'Live · ' + value.partial : '',
+      summary: showRoom ? summary || 'No context update yet' : '',
+      excerpt: showRoom && input?.excerpt ? 'Context read · ' + input.excerpt : '',
+    };
+  });
+  return {
+    mode: agent?.phase ?? 'idle',
+    phase: AGENT_PHASE[agent?.phase] ?? AGENT_PHASE.idle,
+    description: [agent?.summary, agent?.preset, agent?.mode].filter(Boolean).join(' · ') || 'Context agent standing by',
+    sharedRoom,
+    seats,
+  };
+}
+
+function node(tag, className, text) {
   const element = document.createElement(tag);
-  if (class_name) element.className = class_name;
+  if (className) element.className = className;
   if (text) element.textContent = text;
   return element;
 }
@@ -16,8 +62,9 @@ function write(element, value) {
 function meter(label) {
   const container = node('div', 'channel-meter');
   const header = node('div', 'channel-meter__head');
+  const title = node('b', null, label);
   const state = node('span', 'channel-meter__state');
-  header.append(node('b', null, label), state);
+  header.append(title, state);
   const waveform = node('div', 'channel-meter__wave');
   waveform.setAttribute('aria-hidden', 'true');
   const bars = Array.from({ length: BAR_COUNT }, () => node('i'));
@@ -25,15 +72,15 @@ function meter(label) {
   container.append(header, waveform);
   return {
     container,
-    update(values, description, active = false) {
-      write(state, description);
-      container.dataset.active = String(active);
-      const samples = values?.slice(-BAR_COUNT) ?? [];
-      for (let i = 0; i < BAR_COUNT; i++) {
-        const value = samples[i - BAR_COUNT + samples.length] ?? 0;
-        const height = Math.min(1, Math.sqrt(Math.max(0, value)) * 1.7);
-        bars[i].style.height = 'max(2px, ' + Math.round(height * 100) + '%)';
-      }
+    update(view) {
+      container.hidden = !view;
+      if (!view) return;
+      write(title, view.label);
+      write(state, view.status);
+      container.dataset.active = String(view.active);
+      bars.forEach((bar, index) => {
+        bar.style.height = 'max(2px, ' + view.bars[index] + '%)';
+      });
     },
   };
 }
@@ -44,67 +91,66 @@ function seatLane(seat) {
   const heading = node('h3', 'channel-seat__title', 'Seat ' + seat);
   const mic = meter('Room input');
   const output = meter('Audio output');
-  const audio_title = node('p', 'channel-seat__output');
+  const audioTitle = node('p', 'channel-seat__output');
   const speech = node('ol', 'channel-seat__speech');
   const partial = node('p', 'channel-seat__context');
   const context = node('p', 'channel-seat__context');
   const excerpt = node('p', 'channel-seat__excerpt');
-  let last_speech;
-  lane.append(heading, mic.container, output.container, audio_title, speech, partial, context, excerpt);
+  let lastSpeech;
+  lane.append(heading, mic.container, output.container, audioTitle, speech, partial, context, excerpt);
   return {
     lane,
-    update(value, local_output, show_room) {
-      const playback = local_output ?? value?.output;
-      write(heading, 'Seat ' + seat + (value?.name && value.name !== 'Seat ' + seat ? ' · ' + value.name : ''));
-      const mic_status = value?.listening ? value.transcription === 'live' ? 'Transcribing'
-        : value.transcription === 'unavailable' ? 'Unavailable' : 'Mic listening'
-        : value?.online ? 'Mic off' : 'Waiting for seat';
-      mic.update(value?.input, value?.source === 'companion' && value.listening ? 'Room mic · ' + mic_status : mic_status, Boolean(value?.listening));
-      output.update(playback?.bars, AUDIO_PHASE[playback?.phase] ?? 'Quiet', playback?.phase === 'playing');
-      write(audio_title, playback?.title ?? '');
-      mic.container.hidden = speech.hidden = partial.hidden = context.hidden = excerpt.hidden = !show_room;
-      const recent = value?.recentRuns ?? [];
-      const speech_key = JSON.stringify(recent);
-      if (speech_key !== last_speech) {
-        last_speech = speech_key;
-        speech.replaceChildren(...recent.map(run => {
+    update(view) {
+      write(heading, view.title);
+      mic.update(view.mic);
+      output.update(view.output);
+      write(audioTitle, view.audioTitle);
+      const speechKey = JSON.stringify(view.recent);
+      if (speechKey !== lastSpeech) {
+        lastSpeech = speechKey;
+        speech.replaceChildren(...view.recent.map(run => {
           const item = node('li');
           item.append(node('b', null, run.label), node('span', null, run.text));
           return item;
         }));
       }
-      const inputs = value?.context;
-      write(partial, value?.partial ? 'Live · ' + value.partial : '');
-      const summary = [inputs?.count ? inputs.count + (inputs.count === 1 ? ' line read' : ' lines read') : '', value?.situation]
-        .filter(Boolean).join(' · ');
-      write(context, summary || 'No context update yet');
-      write(excerpt, inputs?.excerpt ? 'Context read · ' + inputs.excerpt : '');
+      write(partial, view.partial);
+      write(context, view.summary);
+      write(excerpt, view.excerpt);
     },
   };
 }
 
 export function mountChannelMonitor(host, seatIds) {
   if (!host) return null;
+  if (host.dataset.channelOwner === 'react') {
+    let previous = '';
+    return {
+      update(snapshot, output) {
+        const view = channelMonitorView(seatIds, snapshot, output);
+        const state = JSON.stringify(view);
+        if (state === previous) return;
+        previous = state;
+        host.dispatchEvent(new CustomEvent('telepathy:channel-monitor', { detail: view }));
+      },
+    };
+  }
   const heading = node('div', 'channel-monitor__head');
   const title = node('h2', 'channel-monitor__title', 'Live monitor');
   const phase = node('span', 'channel-monitor__phase');
   heading.append(title, phase);
   const agent = node('p', 'channel-monitor__agent');
   const lanes = node('div', 'channel-monitor__lanes');
-  const components = seatIds.map(id => [id, seatLane(id)]);
-  lanes.append(...components.map(([, item]) => item.lane));
+  const components = seatIds.map(seatLane);
+  lanes.append(...components.map(item => item.lane));
   host.replaceChildren(heading, agent, lanes);
   return {
     update(snapshot, output) {
-      const current = snapshot?.agent;
-      host.dataset.agent = current?.phase ?? 'idle';
-      write(phase, AGENT_PHASE[current?.phase] ?? AGENT_PHASE.idle);
-      const description = [current?.summary, current?.preset, current?.mode].filter(Boolean).join(' · ');
-      write(agent, description || 'Context agent standing by');
-      for (const [seat, component] of components) {
-        component.update(snapshot?.seats?.[seat], output?.[seat],
-          seatIds.length === 1 || snapshot?.sharedRoom == null || snapshot.sharedRoom === seat);
-      }
+      const view = channelMonitorView(seatIds, snapshot, output);
+      host.dataset.agent = view.mode;
+      write(phase, view.phase);
+      write(agent, view.description);
+      components.forEach((component, index) => component.update(view.seats[index]));
     },
   };
 }
