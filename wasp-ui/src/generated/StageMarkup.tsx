@@ -3,6 +3,7 @@ import { StageRoomConsole } from '../StageRoomConsole';
 import { StageRevealHeader } from '../StageRevealHeader';
 import { StageAnnouncement } from '../StageAnnouncement';
 import { AppearanceControl } from '../AppearanceControl';
+import { StagePair } from '../StagePair';
 import { ChannelMonitor } from '../ChannelMonitor';
 
 export function StageMarkup() {
@@ -183,7 +184,6 @@ export function StageMarkup() {
               <div className="live__title">
                 <h1 className="kicker" id="live-title">LIVE BOARD</h1>
                 <p className="live__preset" id="live-preset">—</p>
-                <p className="live__context" id="live-context"></p>
               </div>
               <dl className="stats">
                 <div className="stat stat--lead"><dt>Bits tapped</dt><dd className="bits__value" id="bits-value">—</dd></div>
@@ -192,6 +192,16 @@ export function StageMarkup() {
               </dl>
             </div>
 
+            <div className="actionbar">
+              <p className="actionbar__note">Keep the deck on the projector until the pitch ends.</p>
+              <button className="begin" id="reveal-button" type="button">
+                <span className="begin__label">Reveal</span>
+                <span className="begin__arrow" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" /></svg></span>
+              </button>
+            </div>
+
+            <StagePair />
+            <p className="live__context" id="live-context"></p>
             <ChannelMonitor id="stage-monitor" className="channel-monitor" />
 
             <div className="board">
@@ -203,13 +213,7 @@ export function StageMarkup() {
               </div>
             </div>
 
-            <div className="actionbar">
-              <p className="actionbar__note">Keep the deck on the projector until the pitch ends.</p>
-              <button className="begin" id="reveal-button" type="button">
-                <span className="begin__label">Reveal</span>
-                <span className="begin__arrow" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4" /></svg></span>
-              </button>
-            </div>
+
           </section>
 
 

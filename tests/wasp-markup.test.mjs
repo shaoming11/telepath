@@ -42,8 +42,12 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
         .replace('<StageAnnouncement />', announce);
       const dynamic = new Set(['data-state:off', 'data-room-owner:react', 'data-reveal-owner:react', 'data-announce-owner:react',
         'aria-controls:room-mic-details room-review', 'id:room-mic-details', 'id:room-review']);
+      const expected = hooks(body).filter(pair => !dynamic.has(pair.join(':')));
+      const reveal_button = expected.splice(expected.findIndex(([, value]) => value === 'reveal-button'), 2);
+      const live_context = expected.splice(expected.findIndex(([, value]) => value === 'live-context'), 1);
+      expected.splice(expected.findIndex(([, value]) => value === 'stage-monitor'), 0, ...reveal_button, ...live_context);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
-        hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
+        expected);
       assert.match(room, /data-state=\{state\.tone\}/);
     }
     assert.doesNotMatch(jsx, /<(?:script|iframe)\b|dangerouslySetInnerHTML/);
@@ -121,6 +125,15 @@ test('stage preserves inline SVG definitions, joins, and room mic controls', asy
   const room = await text('wasp-ui/src/StageRoomConsole.tsx');
   assert.match(room, /<label[^>]*htmlFor="room-mic-device"/);
   assert.match(room, /<meter[^>]*id="room-mic-level"[^>]*max="1"/);
+});
+
+test('the Wasp Stage places the paired cue activity before the original diagnostics', async () => {
+  const stage = await text('wasp-ui/src/generated/StageMarkup.tsx');
+  const pair = await text('wasp-ui/src/StagePair.tsx');
+  const styles = await text('wasp-ui/src/StagePair.css');
+  assert.match(stage, /id="reveal-button"[\s\S]*<StagePair \/>[\s\S]*id="stage-monitor"[\s\S]*id="stream-list"/);
+  assert.match(pair, /id="stage-pair"[^>]*tabIndex=\{-1\}[^>]*aria-label="Two-seat cue activity"/);
+  assert.doesNotMatch(pair + styles, /setTimeout|setInterval|animation-iteration-count|backdrop-filter|infinite|signal_ack/);
 });
 
 test('the Stage console separates live meter frames from room state and keeps actions on the capture controller', async () => {

@@ -101,6 +101,9 @@ function normalizeEvent(value) {
   const source = firstText(value.source, value.via, value.origin);
   return {
     id: firstText(value.id, value.messageId),
+    messageId: firstText(value.messageId),
+    messageKind: firstText(value.messageKind),
+    source,
     kind: firstText(value.kind, value.type),
     seat: seatKey(value.seat ?? value.from),
     to: seatKey(value.to),
@@ -175,6 +178,7 @@ function normalizeSeat(key, value, onlineMap) {
     sim: asBool(seat.sim) ?? false,
     mode: asNumber(seat.mode),
     drafts: asBool(seat.drafts),
+    questionMode: seat.questionMode === true,
     listening: asBool(seat.listening),
     transcription: firstText(seat.transcription),
     voice: firstText(seat.voice),
@@ -432,6 +436,61 @@ export function revealSummary(state) {
   return { messages: messages.length, words: wordCount(messages), playbackStarts: started.length, playbackWords: wordCount(started) };
 }
 
+export function pairView(state) {
+  const seats = Object.fromEntries(SEATS.map(seat => [seat, []]));
+  const receipts = new Map(state.log.filter(entry => entry.kind === 'receipt' && entry.messageId && !entry.canned)
+    .map(entry => [JSON.stringify([entry.messageId, entry.seat, entry.to]), entry]));
+  const evidence = [];
+  for (const message of state.log) {
+    const { messageId: id, text, seat, to } = message;
+    if (message.kind !== 'message' || !id || !text || !SEATS.includes(seat) || !SEATS.includes(to) || seat === to) continue;
+    const recorded = Boolean(state.canned || message.canned);
+    const played = Number.isFinite(message.playedAt);
+    const receipt = receipts.get(JSON.stringify([id, to, seat]));
+    const acknowledged = played && Boolean(receipt);
+    const signal = message.source === 'operator' ? 'Operator'
+      : message.source === 'seat' && message.messageKind === 'fixed' && message.signal !== 'OUT'
+        ? SIGNAL_LABELS[message.signal] ?? '' : '';
+    const sent = { id, text, direction: 'Out', signal: recorded ? '' : signal, at: message.at ?? 0,
+      tone: recorded ? 'recorded' : acknowledged ? 'acknowledged' : played ? 'sent' : 'waiting',
+      label: recorded ? 'Recorded' : acknowledged ? 'Seat ' + to + ' acknowledged' : 'Sent to Seat ' + to,
+      detail: recorded || played ? '' : state.seats[to].online ? 'Waiting for playback' : 'Playback unconfirmed' };
+    seats[seat].push(sent);
+    evidence.push({ id: id + ':sent', at: sent.at, text: recorded ? 'Recorded cue from Seat ' + seat + '. ' + text
+      : 'Seat ' + seat + ' sent ' + text + ' to Seat ' + to + '.' });
+    if (!recorded && !played) continue;
+    seats[to].push({ id, text, direction: 'In', signal: '', detail: '',
+      at: recorded ? sent.at : message.playedAt,
+      tone: recorded ? 'recorded' : acknowledged ? 'acknowledged' : 'started',
+      label: recorded ? 'Recorded' : acknowledged ? 'Acknowledged' : 'Playback started' });
+    if (recorded) continue;
+    evidence.push({ id: id + ':started', at: message.playedAt, text: 'Playback started on Seat ' + to + '. ' + text });
+    if (acknowledged) {
+      evidence.push({ id: id + ':acknowledged', at: receipt.at ?? message.playedAt,
+        text: 'Seat ' + to + ' acknowledged ' + text + '.' });
+    }
+  }
+
+  const cards = SEATS.map(seat => {
+    const data = state.seats[seat];
+    const status = state.canned ? 'Recorded' : !data.online ? 'Offline'
+      : data.pending ? data.pending.kind === 'preset' ? 'Preset suggestion' : 'Draft pending'
+      : data.questionMode ? 'Question Mode on' : 'Online';
+    const ordered = seats[seat].toSorted((a, b) => a.at - b.at);
+    const current = ordered.at(-1) ?? null;
+    const previous = ordered.at(-2) ?? null;
+    return { seat, name: data.name, status, current,
+      previous: previous?.tone === 'waiting' ? { ...previous, detail: 'Playback unconfirmed' } : previous };
+  });
+  return { cards, evidence };
+}
+
+export function pairAnnouncement(previous, next) {
+  if (!previous) return '';
+  const known = new Set(previous.evidence.map(event => event.id));
+  return next.evidence.filter(event => !known.has(event.id)).toSorted((a, b) => a.at - b.at).at(-1)?.text ?? '';
+}
+
 export function announcementNote(progress) {
   const heard = asList(progress.heard).filter(seat => SEATS.includes(seat));
   const targets = asList(progress.targets).filter(seat => SEATS.includes(seat));
@@ -565,6 +624,7 @@ function boot() {
     revealWords: byId('reveal-words'), revealLanes: byId('reveal-lanes'), revealNote: byId('reveal-message-note'),
     revealKicker: byId('reveal-kicker'), revealHead: byId('reveal-head'), revealWordLabel: byId('reveal-word-label'),
     liveMessages: byId('live-messages'), liveWords: byId('live-words'),
+    stagePair: byId('stage-pair'),
     readout: { A: byId('readout-a'), B: byId('readout-b'), An: byId('readout-a-name'), Bn: byId('readout-b-name'),
       preset: byId('readout-preset'), cache: byId('readout-cache') },
     diagram: byId('lobby-diagram'), diaHost: byId('dia-host'), diaAgent: byId('dia-agent'), diaRoomNotice: byId('lobby-room-notice'),
@@ -599,6 +659,10 @@ function boot() {
   let streamKeys = [];
   let announcementRenderKey = '';
   let revealFingerprint = '';
+  let pair_previous = null;
+  let pair_key = '';
+  let pair_needs_snapshot = true;
+  let pair_entering = false;
   const seat_fingerprints = new Map();
   const live_panels = new Map();
   let lastFocus = null;
@@ -917,6 +981,7 @@ function boot() {
   /* renders */
 
   function renderChrome() {
+    const focus_pair = pair_entering && state.phase === 'live' && !state.canned && document.activeElement === ui.begin;
     body.dataset.phase = state.phase;
     body.dataset.link = linkState;
     ui.session.textContent = state.sessionId ? 'Session ' + state.sessionId : 'No session';
@@ -941,6 +1006,7 @@ function boot() {
       ui.announce.textContent = 'Stage phase: ' + state.phase;
       const active = ui.screens[state.phase];
       if (active) active.scrollTop = 0;
+      if (focus_pair) ui.stagePair?.focus({ preventScroll: true });
       if (enteredReveal && body.dataset.surface === 'stage') {
         window.scrollTo(0, 0);
         if (wasp_operator && !ui.operator.hidden) setOperator(false, { restore_focus: false });
@@ -1049,7 +1115,7 @@ function boot() {
     if (state.bits === null) ui.bits.textContent = '—';
     else {
       ui.bits.textContent = String(Math.round(state.bits * 100) / 100);
-      if (state.bits !== lastBits) {
+      if (!ui.stagePair && state.bits !== lastBits) {
         ui.bits.removeAttribute('data-tick');
         void ui.bits.offsetWidth;
         ui.bits.setAttribute('data-tick', '');
@@ -1059,6 +1125,7 @@ function boot() {
     const { messages, words } = revealSummary(state);
     if (ui.liveMessages) ui.liveMessages.textContent = String(messages);
     if (ui.liveWords) ui.liveWords.textContent = String(words);
+    renderPair();
 
     for (const key of SEATS) {
       const seat = state.seats[key];
@@ -1075,6 +1142,26 @@ function boot() {
       if (log) log.scrollTop = log.scrollHeight;
     }
     renderStream();
+  }
+
+  function renderPair() {
+    if (!ui.stagePair || pair_needs_snapshot) return;
+    const next = pairView(state);
+    const key = JSON.stringify(next);
+    if (key === pair_key && !pair_entering) return;
+    const cards = next.cards.map((card, index) => {
+      const current = card.current;
+      const previous = pair_previous?.cards[index].current;
+      const animate = pair_previous != null && current != null
+        && (current.id !== previous?.id || current.tone !== previous?.tone);
+      return { ...card, animate };
+    });
+    ui.stagePair.dispatchEvent(new CustomEvent('telepathy:pair', {
+      detail: { cards, entrance: pair_entering, announcement: pairAnnouncement(pair_previous, next) },
+    }));
+    pair_previous = next;
+    pair_key = key;
+    pair_entering = false;
   }
 
   function boardSeat(seat, transcriptLines) {
@@ -1105,7 +1192,10 @@ function boot() {
     }
 
     const list = node('dl', 'readout');
-    list.append(readoutRow('Last in', describe(seat.lastIn, 'nothing yet'), seat.lastIn ? 'ok' : 'wait'));
+    const inbound = ui.stagePair && seat.lastIn && !seat.lastIn.canned && !Number.isFinite(seat.lastIn.playedAt)
+      ? describe(seat.lastIn, 'cue') + ' · Playback unconfirmed' : describe(seat.lastIn, 'nothing yet');
+    const observed = seat.lastIn && (!ui.stagePair || seat.lastIn.canned || Number.isFinite(seat.lastIn.playedAt));
+    list.append(readoutRow('Last in', inbound, observed ? 'ok' : 'wait'));
     list.append(readoutRow('Last out', describe(seat.lastOut, 'nothing yet'), seat.lastOut ? 'ok' : 'wait'));
     panel.append(list);
 
@@ -1675,6 +1765,17 @@ function boot() {
     }
     if (frame.type === 'state') {
       const next = normalizeState(isObject(frame.state) ? frame.state : frame);
+      const same_session = next.hubId === state.hubId && next.sessionId === state.sessionId;
+      if (ui.stagePair) {
+        pair_entering = same_session && next.phase === 'live' && !next.canned
+          && (pair_entering || !pair_needs_snapshot && state.phase === 'lobby');
+        if (pair_needs_snapshot || !same_session || next.phase !== 'live' || Boolean(next.canned) !== Boolean(state.canned)
+            || state.startedAt !== next.startedAt) {
+          pair_previous = null;
+          pair_key = '';
+        }
+        pair_needs_snapshot = false;
+      }
       if (next.hubId !== state.hubId || next.sessionId !== state.sessionId || next.phase === 'reveal' || next.canned
           || roomAccepted && !next.room.listeningRequested) stopRoomCapture(false);
       if (state.canned && (!next.canned || next.hubId !== state.hubId || next.sessionId !== state.sessionId
@@ -1726,6 +1827,8 @@ function boot() {
       return;
     }
     socket = next;
+    pair_needs_snapshot = true;
+    pair_entering = false;
     setLink('connecting');
     next.addEventListener('open', () => {
       if (socket !== next) return;

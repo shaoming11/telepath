@@ -4,6 +4,7 @@ import { Session } from '../hub/session.mjs';
 import { createCodec } from '../hub/codec.mjs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { parseReferences } from '../hub/references.mjs';
+import { normalizeState, pairAnnouncement, pairView } from '../public/stage.mjs';
 
 const EMPTY_CODEC = { evaluate: async () => ({}) };
 
@@ -326,6 +327,36 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, setti
   assert.equal(state().phase, 'live');
   return { session, state, seatFrames, audioFrames, ack, act, advance: ms => { now += ms; } };
 }
+
+test('the Stage pair follows a real dispatch, playback clock report and matching acknowledgement', async t => {
+  const { session, state, act, advance } = await createLiveSession();
+  t.after(() => session.close());
+  const current = () => pairView(normalizeState(state()));
+  const empty = current();
+  await act('B', { type: 'signal', signal: 'R2' });
+  const sent = current();
+  assert.equal(sent.cards[0].current, null);
+  assert.equal(sent.cards[1].current.signal, 'Double');
+  assert.equal(sent.cards[1].current.label, 'Sent to Seat A');
+  assert.equal(sent.cards[1].current.detail, 'Waiting for playback');
+  assert.match(pairAnnouncement(empty, sent), /Seat B sent One minute left to Seat A/);
+
+  advance(200);
+  const messageId = sent.cards[1].current.id;
+  await act('A', { type: 'heard', messageId });
+  const started = current();
+  assert.equal(started.cards[0].current.label, 'Playback started');
+  assert.equal(started.cards[1].current.detail, '');
+  assert.match(pairAnnouncement(sent, started), /Playback started on Seat A/);
+
+  advance(200);
+  await act('A', { type: 'signal', signal: 'R1', receiptId: messageId });
+  const acknowledged = current();
+  assert.equal(acknowledged.cards[0].current.label, 'Acknowledged');
+  assert.equal(acknowledged.cards[1].current.label, 'Seat A acknowledged');
+  assert.match(pairAnnouncement(started, acknowledged), /Seat A acknowledged One minute left/);
+  assert.equal(pairAnnouncement(acknowledged, current()), '');
+});
 
 test('the companion room mic stays active in phone-input mode while the phone sends signals and ignores phone PCM', async t => {
   const chunks = [];
