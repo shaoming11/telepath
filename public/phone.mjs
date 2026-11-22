@@ -92,10 +92,12 @@ let last_output_phase;
 let last_output_at = 0;
 const gesture_scopes = new Map();
 const awaiting_signal_ack = new Map();
+const last_touch_at = new Map();
 const privateCueAudio = new Map();
 const reactPitch = Boolean(document.querySelector('[data-pitch-owner="react"]'));
 let lastPitchRender = '';
 const SIGNAL_ACK_MS = 1800;
+const TOUCH_REPEAT_MS = 320;
 
 const keepalive = $('keepalive');
 
@@ -289,6 +291,8 @@ function show_note(text) {
 
 function clear_signal_tracking() {
   gesture_scopes.clear();
+  last_touch_at.clear();
+  clearTimeout(ui.receipt_timer);
   for (const timer of awaiting_signal_ack.values()) clearTimeout(timer);
   awaiting_signal_ack.clear();
 }
@@ -304,6 +308,7 @@ function gesture_scope() {
     cacheId: state?.cacheId ?? null,
     pitchHelp: state?.phase === 'live' && state.pitchHelp === true,
     draftId: drafts.can_approve(pending) ? pending.id : null,
+    visibleDraftId: drafts.visible(pending) ? pending.id : null,
     previewWaiting: drafts.visible(pending) && pending.heardAt == null,
     receiptId: receipt && (ui.receipt_deadline ?? 0) >= performance.now() ? receipt.messageId : null,
   };
@@ -337,7 +342,7 @@ function on_media_play() {
   void audio.resume();
 }
 
-function on_signal(signal, trace, toggle_question_mode = false, draft_id = null) {
+function on_signal(signal, trace, { toggle_question_mode = false, draft_id, receipt_id, explicit_signal = false } = {}) {
   diag('signal', { signal, calibrating: calibration.active() });
   if (calibration.active()) {
     calibration.note_signal(signal);
@@ -353,19 +358,21 @@ function on_signal(signal, trace, toggle_question_mode = false, draft_id = null)
   }
   const first = trace?.[0];
   const scope = (first && gesture_scopes.get(first.action + ':' + first.at)) ?? gesture_scope();
-  if (signal === 'R1' && scope.previewWaiting && !scope.receiptId) {
+  if (signal === 'R1' && !explicit_signal && scope.previewWaiting && !scope.receiptId) {
     show_note('Wait for the preview before sending.');
     return;
   }
   const pitch_help = scope.pitchHelp && ui.state?.phase === 'live' && ui.state.pitchHelp
     && (signal === 'LR' || signal === 'R1' && first && !scope.draftId && !scope.receiptId);
+  const discard = signal === 'L1' || settings.mode === 1 && signal === 'R2';
   const question_mode = pitch_help && ui.state.questionModeAvailable && (toggle_question_mode || signal === 'R1');
   if (pitch_help) signal = 'LR';
   flash_signal(signal);
   ui.signal_count += 1;
   const id = ui.seat + '-' + Date.now().toString(36) + '-' + ui.signal_count;
-  const { previewWaiting, pitchHelp, ...intent } = scope;
-  if (draft_id) intent.draftId = draft_id;
+  const { previewWaiting, pitchHelp, visibleDraftId, ...intent } = scope;
+  intent.draftId = explicit_signal || receipt_id ? null : draft_id ?? (discard ? visibleDraftId : scope.draftId);
+  intent.receiptId = explicit_signal ? null : receipt_id ?? scope.receiptId;
   if (!send({ type: 'signal', signal, id, ...intent, ...(pitch_help && { purpose: question_mode ? 'question_mode' : 'pitch_help' }) })) {
     audio.play_cue('error');
     show_note('Signal did not reach the hub.');
@@ -400,7 +407,12 @@ function flash_signal(signal) {
 }
 
 function touch_signal(signal) {
-  if (['R1', 'LR'].includes(signal) && ui.state?.pitchHelp && ui.state.phase === 'live') return on_signal(signal);
+  if (signal !== 'OUT' && signal !== 'BACK') {
+    const now = performance.now();
+    if (now - (last_touch_at.get(signal) ?? -Infinity) < TOUCH_REPEAT_MS) return;
+    last_touch_at.set(signal, now);
+    return on_signal(signal, undefined, { explicit_signal: true });
+  }
   if (signal === 'BACK') resume_anchor();
   touch_emulator.configure(touch_profile());
   touch_emulator.signal(signal, settings.mode);
@@ -410,7 +422,12 @@ function touch_draft(approve) {
   const pending = my_state()?.pending;
   if (!drafts.visible(pending) || (approve && !drafts.can_approve(pending))) return;
   const signal = approve ? 'R1' : settings.mode === 1 ? 'R2' : 'L1';
-  on_signal(signal, undefined, false, pending.id);
+  on_signal(signal, undefined, { draft_id: pending.id });
+}
+
+function touch_receipt() {
+  const { receiptId } = gesture_scope();
+  if (receiptId && ui.state?.phase === 'live') on_signal('R1', undefined, { receipt_id: receiptId });
 }
 
 function set_playback_state(state) {
@@ -642,9 +659,10 @@ function on_state(next, source) {
     set_text($('settings-room-status'), '');
   }
   const receipt = my_state()?.receipt;
-  ui.receipt_deadline = receipt
-    ? performance.now() + Math.max(0, receipt.until - (next.serverNow ?? Date.now()))
-    : null;
+  clearTimeout(ui.receipt_timer);
+  const receipt_wait = receipt ? receipt.until - (next.serverNow ?? Date.now()) : 0;
+  ui.receipt_deadline = receipt_wait > 0 ? performance.now() + receipt_wait : null;
+  if (receipt_wait > 0) ui.receipt_timer = setTimeout(schedule_render, receipt_wait + 1);
   drafts.observe(next.seats?.[ui.seat]?.pending ?? null);
   if (next.roomInput === 'mac' && !ui.voice_task && (capture.open || capture.opening || ui.listen_wanted)) stop_mic();
   if (next.phase === 'reveal' && previous?.phase !== 'reveal' || next.canned && !previous?.canned) {
@@ -1508,6 +1526,7 @@ function render_live() {
   render_draft(mine?.pending ?? null);
   render_message('in', mine?.lastIn, 'last_in_id');
   render_message('out', mine?.lastOut, 'last_out_id');
+  $('live-acknowledge').hidden = phase !== 'live' || !gesture_scope().receiptId;
   set_text($('live-note'), cue?.text === ui.note ? '' : ui.note);
   render_signals();
   render_monitor();
@@ -1639,9 +1658,9 @@ function set_earbud_model(model) {
 function bind_events() {
   if (reactPitch) {
     document.addEventListener('telepathy:toggle-question-mode', () => {
-      if (ui.state?.phase === 'live' && ui.state.questionModeAvailable) on_signal('LR', undefined, true);
+      if (ui.state?.phase === 'live' && ui.state.questionModeAvailable) on_signal('LR', undefined, { toggle_question_mode: true });
     });
-  } else $('question-mode').addEventListener('click', () => on_signal('LR', undefined, true));
+  } else $('question-mode').addEventListener('click', () => on_signal('LR', undefined, { toggle_question_mode: true }));
   installDiag({ send, keepalive });
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);
@@ -1736,6 +1755,7 @@ function bind_events() {
   });
   $('draft-send').addEventListener('click', () => touch_draft(true));
   $('draft-discard').addEventListener('click', () => touch_draft(false));
+  $('live-acknowledge').addEventListener('click', touch_receipt);
   $('sim-room').addEventListener('submit', event => {
     event.preventDefault();
     const field = $('sim-text');

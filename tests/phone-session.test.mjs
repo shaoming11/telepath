@@ -270,6 +270,50 @@ test('a receipt gesture does not become an approval when a new draft appears mid
   assert.equal(signal.receiptId, 'inbound-1');
 });
 
+test('triple Next Track discards the unheard draft captured by the first press', async () => {
+  const now = Date.now();
+  socket.receive({ type: 'state', state: seat_state(draft({ id: 'preview-loading', heardAt: null, expiresAt: now + 5000 })) });
+  await settle();
+  socket.sent.length = 0;
+  media_actions.get('nexttrack')();
+  world.advance(340);
+  media_actions.get('nexttrack')();
+  world.advance(340);
+  media_actions.get('nexttrack')();
+  world.advance(1210);
+  await settle();
+  const signals = socket.sent.filter(frame => frame.type === 'signal');
+  assert.deepEqual(signals.map(frame => [frame.signal, frame.draftId]), [['L1', 'preview-loading']]);
+});
+
+test('the on-screen signal labels, draft approval and acknowledgement act independently', async () => {
+  const now = Date.now();
+  const state = seat_state(draft({ id: 'preview-heard', heardAt: now, expiresAt: now + 6000 }));
+  state.seats.A.receipt = { messageId: 'private-in', until: now + 4500 };
+  socket.receive({ type: 'state', state });
+  await settle();
+  const click_signal = signal => get_element('signals').listeners.click[0]({
+    target: { closest: () => ({ disabled: false, dataset: { signal } }) },
+  });
+  socket.sent.length = 0;
+  click_signal('R1');
+  click_signal('L1');
+  click_signal('L1');
+  assert.equal(get_element('live-acknowledge').hidden, false);
+  get_element('live-acknowledge').listeners.click[0]();
+  get_element('draft-send').listeners.click[0]();
+  const frames = () => socket.sent.filter(frame => frame.type === 'signal');
+  const before = frames().map(frame => [frame.signal, frame.draftId, frame.receiptId]);
+  assert.deepEqual(before, [
+    ['R1', null, null], ['L1', null, null], ['R1', null, 'private-in'], ['R1', 'preview-heard', 'private-in'],
+  ]);
+  world.advance(4501);
+  await settle();
+  assert.equal(get_element('live-acknowledge').hidden, true);
+  get_element('live-acknowledge').listeners.click[0]();
+  assert.equal(frames().length, 4);
+});
+
 test('a tap without a hub acknowledgement gets a local buzz and is never retried', async () => {
   socket.receive({ type: 'state', state: seat_state(null) });
   socket.sent.length = 0;
