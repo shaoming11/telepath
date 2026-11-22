@@ -215,6 +215,25 @@ test('the stage broadcasts one bundled system clip to both seats and sees both p
   assert.ok(a.frames.every(frame => frame.state?.announcement == null));
 });
 
+test('an announcement records which original seat disconnected when the other times out', async context => {
+  const { base } = await hubFixture(context, { settings: { announcementPlaybackMs: 400 } });
+  const stage = await open(base, { role: 'stage' });
+  const a = await open(base, { role: 'seat', seat: 'A', sim: '1' });
+  const b = await open(base, { role: 'seat', seat: 'B', sim: '1' });
+  const { state } = await stage.take(frame => frame.state?.online.A && frame.state?.online.B);
+  stage.send({ type: 'operator', action: 'announce', text: 'Thirty seconds left.',
+    sessionId: state.sessionId, hubId: state.hubId });
+  await Promise.all([a, b].map(seat => seat.take(frame => frame.kind === 'announcement')));
+  b.socket.close();
+  await stage.take(frame => frame.state?.announcement?.disconnected.includes('B'));
+  const replacement = await open(base, { role: 'seat', seat: 'B', sim: '1' });
+  await replacement.take(stateFrame);
+  const failed = await stage.take(frame => frame.state?.announcement?.reason === 'playback_timeout');
+  assert.deepEqual(failed.state.announcement.disconnected, ['B']);
+  assert.deepEqual(failed.state.announcement.heard, []);
+  assert.equal(failed.state.online.B, true);
+});
+
 test('the pitch coach sends a reviewed cue through the real two-seat transport', async context => {
   const live = process.env.TELEPATHY_VERIFY_MARITIME === '1';
   const env = live ? {
