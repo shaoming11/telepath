@@ -1,6 +1,7 @@
 import { openRealtimePitch } from './realtime-pitch.mjs';
 import { spawn } from 'node:child_process';
 import { QUESTION_INSTRUCTIONS, QUESTION_SCHEMA, validateAnswer } from './questions.mjs';
+import { SCENARIO_INSTRUCTIONS, validateSocialCue } from './coach-scenarios.mjs';
 
 const PRESETS = ['Pitch', 'Party', 'Meeting'];
 const SEATS = ['A', 'B'];
@@ -118,7 +119,7 @@ const PITCH_HELP_INSTRUCTIONS = [
   'Otherwise return unsupported with empty answer and sources. Return an empty responseQuote in either case.',
 ].join(' ');
 
-async function fromOpenAI(env, fetch_impl, input, signal, question = false) {
+async function fromOpenAI(env, fetch_impl, input, signal, question = false, helpInstructions = PITCH_HELP_INSTRUCTIONS) {
   const api_base = env.TELEPATHY_OPENAI_BASE_URL ?? 'https://api.openai.com/v1';
   const response = await fetch_impl(api_base.replace(/\/$/, '') + '/responses', {
     method: 'POST',
@@ -128,7 +129,7 @@ async function fromOpenAI(env, fetch_impl, input, signal, question = false) {
       model: env.TELEPATHY_OPENAI_MODEL ?? 'gpt-4.1-mini',
       store: false,
       max_output_tokens: question === 'pitch_help' ? 230 : question ? 1000 : 160,
-      instructions: question === 'pitch_help' ? PITCH_HELP_INSTRUCTIONS : question ? QUESTION_INSTRUCTIONS : INSTRUCTIONS + ' Shared room speech is from a room microphone; do not assign it to a particular person.',
+      instructions: question === 'pitch_help' ? helpInstructions : question ? QUESTION_INSTRUCTIONS : INSTRUCTIONS + ' Shared room speech is from a room microphone; do not assign it to a particular person.',
       input,
       text: { format: { type: 'json_schema', name: question ? 'telepathy_answer' : 'telepathy_room', strict: true, schema: question ? QUESTION_SCHEMA : SCHEMA } },
     }),
@@ -177,10 +178,11 @@ export function createCodec({ env = process.env, fetchImpl = fetch, localPath, W
       try { return openRealtimePitch({ env, signal, WebSocketImpl, instructions }); }
       catch { return null; }
     },
-    async pitchHelp({ signal, passages, ...context }) {
+    async pitchHelp({ signal, passages, scenario = 'pitch', ...context }) {
       if (mode !== 'openai' || !env.OPENAI_API_KEY) return null;
-      const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, 'pitch_help');
-      return validateAnswer(raw, passages, context.turns);
+      const instructions = SCENARIO_INSTRUCTIONS[scenario];
+      const raw = await fromOpenAI(env, fetchImpl, JSON.stringify({ ...context, passages }), signal, 'pitch_help', instructions);
+      return scenario === 'social' ? validateSocialCue(raw, passages) : validateAnswer(raw, passages, context.turns);
     },
     async answer({ signal, passages, ...context }) {
       if (mode !== 'openai' || !env.OPENAI_API_KEY) throw new Error('Document answers require the OpenAI text provider.');

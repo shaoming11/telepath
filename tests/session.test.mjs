@@ -1685,3 +1685,105 @@ test('a corpus swap discards a prewarmed cue and retrieves relevant older speech
   await eventually(() => observed.length === 2);
   assert.match(observed[1].passages[0].text, /eight weeks/);
 });
+
+function scenarioCodec(onRequest, answer) {
+  return createCodec({ env: { OPENAI_API_KEY: 'fake' }, fetchImpl: async (url, request) => {
+    const body = JSON.parse(request.body);
+    const input = JSON.parse(body.input);
+    onRequest(body, input);
+    return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(answer(input)) }] }] });
+  } });
+}
+
+test('social scenario whispers an ungrounded conversation prompt without any uploaded documents', async t => {
+  const spoken = 'Ask what got them into climbing.';
+  let instructions, modelInput;
+  const codec = scenarioCodec((body, input) => { instructions = body.instructions; modelInput = input; },
+    () => ({ status: 'answer', question: '', answer: spoken, sources: [{ id: 'made-up', quote: 'An invented source quote.' }], responseQuote: '' }));
+  const { session, act, state, audioFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac', coachScenario: 'social' }, codec,
+    audio: { speech: async (seat, text) => { assert.equal(text, spoken); return '/assets/social.mp3'; } },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('Telepathy uses the MacBook microphone.').toString('base64') }]);
+  session.room.transcript = [{ at: session.now(), text: 'I spent the weekend climbing in Squamish.' }];
+  await act('A', { type: 'signal', signal: 'LR', id: 'social', purpose: 'pitch_help' });
+  assert.match(instructions, /shy or awkward/);
+  assert.deepEqual(modelInput.passages, []);
+  assert.equal(modelInput.project, undefined);
+  assert.equal(audioFrames('A', 'sent').filter(frame => frame.kind === 'pitch_help').at(-1)?.text, spoken);
+  const entry = state().log.find(item => item.kind === 'pitch_help');
+  assert.equal(entry.scenario, 'social');
+  assert.equal(entry.ungrounded, true);
+  assert.deepEqual(entry.sources, []);
+  assert.equal(state().coachScenario, 'social');
+});
+
+test('interview scenario only retrieves uploaded persona documents and keeps cues grounded', async t => {
+  const quote = 'Cut end-to-end audio latency from 220 ms to 90 ms.';
+  const spoken = 'Lead with the Lumen latency win. 220 to 90 milliseconds.';
+  let instructions, modelInput;
+  const codec = scenarioCodec((body, input) => { instructions = body.instructions; modelInput = input; }, input => ({
+    status: 'answer', question: 'Hardest problem?', answer: spoken,
+    sources: [{ id: input.passages.find(passage => passage.text.includes(quote)).id, quote }], responseQuote: '',
+  }));
+  const { session, act, state, audioFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac' }, codec,
+    audio: { speech: async () => '/assets/interview.mp3' },
+  });
+  t.after(() => session.close());
+  await session.handleStage({ action: 'coach_scenario', scenario: 'interview' });
+  assert.equal(state().coachScenario, 'interview');
+  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('Telepathy cut latency with a MacBook hub.').toString('base64') }]);
+  session.references = await parseReferences([{ name: 'persona.md', data: Buffer.from(quote).toString('base64') }]);
+  session.room.transcript = [{ at: session.now(), text: 'What is the hardest latency problem you solved?' }];
+  await act('A', { type: 'signal', signal: 'LR', id: 'interview', purpose: 'pitch_help' });
+  assert.match(instructions, /being interviewed/);
+  assert.ok(modelInput.passages.length > 0);
+  assert.ok(modelInput.passages.every(passage => passage.name.startsWith('persona.md')));
+  assert.equal(audioFrames('A', 'sent').filter(frame => frame.kind === 'pitch_help').at(-1)?.text, spoken);
+  const entry = state().log.find(item => item.kind === 'pitch_help');
+  assert.equal(entry.scenario, 'interview');
+  assert.equal(entry.ungrounded, undefined);
+  assert.equal(entry.sources[0].quote, quote);
+});
+
+test('interview scenario stays quiet with a fallback when no persona documents are uploaded', async t => {
+  let called = false;
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { coachScenario: 'interview' },
+    codec: { pitchHelp: async () => { called = true; return null; } },
+    audio: { speech: async () => null },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('Telepathy brief.').toString('base64') }]);
+  await act('A', { type: 'signal', signal: 'LR', id: 'empty', purpose: 'pitch_help' });
+  assert.equal(called, false);
+  assert.ok(seatFrames.A.some(frame => frame.type === 'pitch_help_status' && frame.text === 'Ask what success looks like in this role.'));
+});
+
+test('social Question Mode whispers after a spoken question and keeps the cue when chatter follows', async t => {
+  let room;
+  const spoken = 'Answer briefly. Then ask where they grew up.';
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, coachScenario: 'social' },
+    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
+      speech: async () => '/assets/social.mp3' },
+    codec: {
+      openPitchRealtime: () => assert.fail('social mode must not open the pitch Realtime session'),
+      pitchHelp: async input => {
+        assert.equal(input.scenario, 'social');
+        assert.deepEqual(input.passages, []);
+        return { status: 'answer', suggestionKind: 'answer', question: '', answer: spoken, sources: [], responseQuote: '', ungrounded: true };
+      },
+    },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('Telepathy brief.').toString('base64') }]);
+  await session.setRoomListening(true);
+  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
+  room.committed('So what do you do for fun?');
+  room.committed('Um, I mostly just play bass in a little jazz group.');
+  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
+  assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').text, spoken);
+});

@@ -127,7 +127,7 @@ export function createHub({
     audio: speech,
     codec: language,
     coach: maritime,
-    settings: { roomInput: env.TELEPATHY_ROOM_INPUT ?? 'mac', ...settings },
+    settings: { roomInput: env.TELEPATHY_ROOM_INPUT ?? 'mac', coachScenario: env.TELEPATHY_COACH_SCENARIO, ...settings },
   });
   let info = {};
   let project;
