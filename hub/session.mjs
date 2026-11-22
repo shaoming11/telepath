@@ -631,6 +631,8 @@ export class Session {
         this.append('back', { seat, to: partnerOf(seat), signal });
         this.cue(partnerOf(seat), 'back');
       }
+    } else if (signal === 'R1' && this.preset === 'Pitch' && this.roomInput === 'mac' && !state.sim) {
+      await this.requestPitchHelp(seat, { oneShot: true });
     } else if (signal === 'LR') {
       this.publish();
       if (['answer_room_question', 'question_mode'].includes(frame.purpose) && this.preset === 'Pitch' && this.roomInput === 'mac') {
@@ -1126,14 +1128,15 @@ export class Session {
   async requestPitchHelp(seat, { oneShot = false } = {}) {
     const state = this.seats[seat];
     const began = this.now();
-    if (!state.online || (state.pitchHelp && !state.pitchHelp.signal.aborted)
-        || began - state.lastPitchHelpAt < this.settings.pitchHelpRepeatMs) return;
+    if (!state.online || (!oneShot && ((state.pitchHelp && !state.pitchHelp.signal.aborted)
+        || began - state.lastPitchHelpAt < this.settings.pitchHelpRepeatMs))) return;
     const notify = text => this.emitSeat(seat, { type: 'pitch_help_status', text });
     if (state.sim) {
       notify('Live pitch help requires a real seat.');
       return;
     }
     state.lastPitchHelpAt = began;
+    if (oneShot) state.pitchHelp?.abort();
     const controller = new AbortController();
     state.pitchHelp = controller;
     const lifecycle = AbortSignal.any([controller.signal, this.liveScope([seat])]);
@@ -1146,26 +1149,40 @@ export class Session {
     try {
       const reply = await withDeadline(async signal => {
         if (oneShot) {
-          if (!resolved.roomTranscript.length) {
-            notify('No room transcript yet. Start listening on the Mac.');
-            return null;
-          }
           const result = await withDeadline(deadline => this.codec?.pitchHelp?.({
             signal: deadline, roomTranscript: resolved.roomTranscript, project: resolved.project,
             passages: resolved.passages,
           }), this.settings.pitchRaceMs, signal).catch(() => null);
-          const known = this.coachScenario === 'pitch' && resolved.questionHint
-            ? sourcedProjectCue(resolved.questionHint, resolved.passages, resolved.frontendStack) : null;
-          const answer = result?.status === 'answer' ? result : known;
-          const cue = answer ? validateAnswer(answer, resolved.passages, resolved.roomTranscript) : null;
-          if (!cue) return null;
+          signal.throwIfAborted();
+          let cue;
+          let source = 'openai';
+          if (result?.status === 'answer') {
+            try { cue = validateAnswer(result, resolved.passages, resolved.roomTranscript, { allowLongAnswer: true }); }
+            catch {}
+          } else if (result?.status === 'advice' && Array.isArray(result.sources) && result.sources.length === 0
+            && typeof result.answer === 'string' && result.answer.trim()) {
+            cue = { answer: result.answer.trim(), sources: [], ungrounded: true };
+          }
+          if (!cue && this.coachScenario === 'pitch' && resolved.questionHint) {
+            const known = sourcedProjectCue(resolved.questionHint, resolved.passages, resolved.frontendStack);
+            if (known) {
+              cue = validateAnswer(known, resolved.passages, resolved.roomTranscript, { allowLongAnswer: true });
+              source = 'project-reference';
+            }
+          }
+          if (!cue) {
+            const answer = resolved.questionHint
+              ? 'Let me show you how it behaves in the live demo. I can follow up on anything it doesn’t cover.'
+              : 'Let me show you what Telepath does. My teammate can send me a private cue without interrupting the conversation.';
+            cue = { answer, sources: [], ungrounded: true };
+            source = 'local-fallback';
+          }
           notify(cue.answer);
           surfacedCue = true;
           state.lastPitchCue = { text: cue.answer, points: [] };
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
           const url = await this.speakPitchCue(seat, cue.answer, signal);
-          return { ...cue, url, source: answer === known ? 'project-reference' : 'openai',
-            timing: { hubMs: Math.round(performance.now() - started) } };
+          return { ...cue, url, source, timing: { hubMs: Math.round(performance.now() - started) } };
         }
         const cue = await this.racePitchCue(resolved, started, signal).catch(() => null)
           ?? { answer: this.fallbackCue(question), source: 'local-fallback', sources: [], timing: {} };
@@ -1185,10 +1202,7 @@ export class Session {
         } };
       }, this.settings.pitchRaceMs + this.settings.pitchSpeechMs, lifecycle);
       if (lifecycle.aborted) return;
-      if (!reply) {
-        if (oneShot && resolved.roomTranscript.length && !surfacedCue) notify('No supported cue for that question.');
-        return;
-      }
+      if (!reply) return;
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
         scenario: this.coachScenario, ...(reply.draftedBy && { draftedBy: reply.draftedBy }), ...(reply.ungrounded && { ungrounded: true }),
@@ -1699,7 +1713,9 @@ export class Session {
     const state = this.seats[seat];
     const lifecycle = this.liveScope([seat]);
     const preset = this.preset;
-    const text = codebookReadout(preset, state.mode);
+    const text = preset === 'Pitch' && this.roomInput === 'mac' && !state.sim
+      ? 'Single, Cue now. Double, One minute left. Triple, Show the demo now. Out, Wrap it up now.'
+      : codebookReadout(preset, state.mode);
     try {
       const url = toUrl(await withDeadline(signal => this.audio.speech(seat, text, {
         voice: null, sim: state.sim, role: 'codebook', signal,

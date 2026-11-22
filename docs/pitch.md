@@ -15,9 +15,9 @@
 | Beat | Presenter A | Coach B | MacBook operator |
 | --- | --- | --- | --- |
 | Hook | “What if your teammate could steer your pitch without interrupting it?” | Watch the timer. | Keep the deck up. |
-| Fixed whisper | Speed up slightly, then slow down when the whisper arrives. Reply with Single after hearing it. | Tap **Single** on Live to send **Slow down**. Listen for the receipt. | Check that the Live board logs a playback start and a receipt. |
+| Fixed whisper | Acknowledge the time cue on the phone after hearing it. | Send **One minute left** from Live. Listen for the receipt. | Check that the Live board logs a playback start and a receipt. |
 | Time cue | Move from setup into the live exchange. | Double sends **One minute left**. | Near the wrap, use **Thirty seconds left** if both people need the same cue. |
-| Private question | Have someone ask why Telepath uses the MacBook. Use two next-track events or a Pro double squeeze. Hear the cue and answer aloud in your own words. | Keep listening. The answer goes to the presenter’s seat. | Check answer evidence on Stage after the cue. A manual rehearsal can use the **What should I say?** button. |
+| Private question | Have someone ask why Telepath uses the MacBook. Use one AirPods double-tap or one Pro squeeze. Hear the cue and answer aloud in your own words. | Keep listening. The answer goes to the presenter’s seat. | Check answer evidence on Stage after the cue. A manual rehearsal can use the **What should I say?** button. |
 | Wrap | End the pitch on the Out whisper. | Use the Out button to send **Wrap it up now**. | After playback, choose **Reveal** and put the stage on the projector. |
 
 Show the actual messages and bit count from this run. The private coaching cue is outside the seat-to-seat bit count. The canned example still demonstrates the preview-and-confirm sequence and its **7 bits**.

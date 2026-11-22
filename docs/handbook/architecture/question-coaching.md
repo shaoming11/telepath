@@ -1,6 +1,6 @@
 # Question coaching
 
-The Mac streams room audio to ElevenLabs. After a judge asks something, the presenter double-squeezes AirPods Pro, sends two Next Track events on AirPods 1, or taps **Cue now**. The hub sends OpenAI the complete room transcript so far, adding any fresh partial text. It uses assigned diarization labels when available. OpenAI chooses the latest genuine question from that conversation and writes a short answer backed by the supplied evidence. The hub issues one request per accepted gesture.
+The Mac streams room audio to ElevenLabs. After a judge asks something, the presenter squeezes AirPods Pro once, double-taps AirPods 1 once, or taps **Cue now**. The hub sends OpenAI the complete room transcript so far, adding any fresh partial text. It uses assigned diarization labels when available. OpenAI chooses the latest genuine question from that conversation and writes an answer backed by the supplied evidence, or suggests what to say next when it cannot verify an answer. The hub issues one request per accepted gesture.
 
 ## Retrieval and citations
 

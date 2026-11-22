@@ -20,12 +20,13 @@ export const questionKey = text => String(text ?? '').toLowerCase().replace(/[^\
 const normalized = text => text.replace(/\s+/g, ' ').trim();
 const withoutEmphasis = text => text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
 
-export function validateAnswer(value, passages, turns = []) {
+export function validateAnswer(value, passages, turns = [], { allowLongAnswer = false } = {}) {
   if (!value || !['none', 'waiting', 'resolved', 'unsupported', 'answer', 'advice'].includes(value.status)) throw new Error('Invalid answer response.');
   const question = normalized(String(value.question ?? '')).slice(0, 400);
   if (!['answer', 'advice'].includes(value.status)) return { status: value.status, question, answer: '', sources: [] };
   const answer = normalized(String(value.answer ?? ''));
-  if (!question || !answer || answer.length > 180 || answer.split(/\s+/).length > 25 || !Array.isArray(value.sources) || !value.sources.length || value.sources.length > 4) {
+  if (!question || !answer || (!allowLongAnswer && (answer.length > 180 || answer.split(/\s+/).length > 25))
+    || !Array.isArray(value.sources) || !value.sources.length || value.sources.length > 4) {
     throw new Error('Answer lacks usable evidence.');
   }
   const sources = value.sources.map(source => {

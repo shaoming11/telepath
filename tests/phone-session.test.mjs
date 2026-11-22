@@ -316,7 +316,7 @@ test('a receipt binds its press time to the first media event before recognition
 
 test('Single begun during a teammate chime does not send a signal when recognition finishes', async () => {
   const serverNow = Date.now();
-  const settings = { pitchHelp: true, roomQuestionAvailable: true, roomInput: 'mac', sessionId: 'chime', serverNow };
+  const settings = { pitchHelp: true, roomQuestionAvailable: false, roomInput: 'mac', sessionId: 'chime', serverNow };
   const base = seat_state(null, settings);
   socket.receive({ type: 'state', state: base });
   await settle();
@@ -522,7 +522,7 @@ test('keyboard clicker signals work on focused buttons while the phone mic stays
   assert.equal(mic.readyState, 'live');
 });
 
-test('both AirPods profiles request a one-shot answer with a double gesture and retain Single approval', async () => {
+test('one AirPods gesture sends Cue now while onscreen approval and acknowledgement still work', async () => {
   const settings = { pitchHelp: true, roomQuestionAvailable: true, roomInput: 'mac', sessionId: '2' };
   const base = seat_state(null, settings);
   const sent = () => socket.sent.filter(frame => frame.type === 'signal');
@@ -533,8 +533,8 @@ test('both AirPods profiles request a one-shot answer with a double gesture and 
   world.advance(1200);
   await settle();
   assert.equal(sent().length, 1);
-  assert.equal(sent()[0].signal, 'R1');
-  assert.equal(sent()[0].purpose, undefined);
+  assert.equal(sent()[0].signal, 'LR');
+  assert.equal(sent()[0].purpose, 'answer_room_question');
   socket.sent.length = 0;
   media_actions.get('nexttrack')();
   world.advance(260);
@@ -542,11 +542,12 @@ test('both AirPods profiles request a one-shot answer with a double gesture and 
   world.advance(1200);
   await settle();
   assert.equal(sent().length, 1);
-  assert.equal(sent()[0].purpose, 'answer_room_question');
+  assert.equal(sent()[0].signal, 'R2');
+  assert.equal(sent()[0].purpose, undefined);
 
   pro_radio.change();
   socket.sent.length = 0;
-  media_actions.get('nexttrack')();
+  media_actions.get('pause')();
   assert.equal(sent()[0]?.purpose, 'answer_room_question');
   media_actions.get('previoustrack')();
   assert.equal(sent().at(-1)?.signal, 'L1');
@@ -554,13 +555,13 @@ test('both AirPods profiles request a one-shot answer with a double gesture and 
 
   base.seats.A.receipt = { messageId: 'receipt-help', until: Date.now() + 4000 };
   socket.receive({ type: 'state', state: base });
-  media_actions.get('play')();
+  get_element('live-acknowledge').listeners.click[0]();
   assert.equal(sent().at(-1)?.receiptId, 'receipt-help');
   assert.equal(sent().at(-1)?.purpose, undefined);
 
   const pending = draft({ id: 'pitch-approved', heardAt: Date.now(), expiresAt: Date.now() + 6000 });
   socket.receive({ type: 'state', state: seat_state(pending, settings) });
-  media_actions.get('pause')();
+  get_element('draft-send').listeners.click[0]();
   assert.equal(sent().at(-1)?.draftId, 'pitch-approved');
   assert.equal(sent().at(-1)?.purpose, undefined);
 });
@@ -568,7 +569,7 @@ test('both AirPods profiles request a one-shot answer with a double gesture and 
 test('Single follows the newest playback while the explicit draft action stays independent', async () => {
   const serverNow = Date.now();
   const receipt = { messageId: 'incoming-whisper', openedAt: serverNow - 300, until: serverNow + 3700 };
-  const settings = { pitchHelp: true, roomQuestionAvailable: true, roomInput: 'mac', sessionId: '2', serverNow };
+  const settings = { pitchHelp: true, roomQuestionAvailable: false, roomInput: 'mac', sessionId: '2', serverNow };
   const sample = heardAt => {
     const state = seat_state(draft({ id: 'overlapping-draft', heardAt, expiresAt: serverNow + 5500 }), settings);
     state.seats.A.receipt = receipt;

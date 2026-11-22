@@ -46,7 +46,7 @@ export function PhonePitchControls() {
     <div className="pitch-panel" data-pitch-owner="react" hidden={!state.available && !state.cue}>
       <div className="pitch-panel__controls" hidden={!state.available}>
         <button id="cue-now" className="pitch-panel__request" type="button" aria-label="Get a private cue now"
-          disabled={!state.live || !state.connected || state.preparing}
+          disabled={!state.live || !state.connected}
           onClick={() => document.dispatchEvent(new Event('telepathy:request-pitch-cue'))}>
           Cue now
         </button>

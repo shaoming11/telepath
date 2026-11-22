@@ -71,7 +71,7 @@ test('the Wasp cue panel offers one cue action with actual room and playback sta
     assert.ok(controller.includes(event));
     assert.ok(component.includes(event));
   }
-  assert.match(component, /disabled=\{!state\.live \|\| !state\.connected \|\| state\.preparing\}/);
+  assert.match(component, /disabled=\{!state\.live \|\| !state\.connected\}/);
   assert.match(component, /state\.roomLive \? state\.gestureHint : 'Waiting for room mic'/);
   assert.match(component, /started \? 'Voice started'/);
   assert.match(component, /className="pitch-panel__status" role="status"/);

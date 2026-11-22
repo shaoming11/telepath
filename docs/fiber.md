@@ -16,6 +16,6 @@ Research runs off the whisper path, with one task at a time, 15 seconds between 
 
 ## When coaching speaks
 
-A double gesture or **Cue now** sends one OpenAI request with the full room transcript and retrieved evidence. Research stays in the background and cannot trigger a private answer. Separately, automatic teammate draft previews retain their quiet-period and approval rules.
+One AirPods double-tap, a single Pro squeeze, or **Cue now** sends one OpenAI request with the full room transcript and retrieved evidence. Research stays in the background and cannot trigger a private answer. Separately, automatic teammate draft previews retain their quiet-period and approval rules.
 
 API contracts: [Fiber person lookup](https://api.fiber.ai/ai-docs/KitchenSinkProfile.md), [Fiber company lookup](https://api.fiber.ai/ai-docs/kitchenSinkCompany.md), [OpenAI web search](https://developers.openai.com/api/docs/guides/tools-web-search).

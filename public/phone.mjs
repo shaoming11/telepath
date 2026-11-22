@@ -378,16 +378,18 @@ function on_signal(signal, trace, { draft_id, receipt_id, explicit_signal = fals
   }
   const first = trace?.[0];
   const scope = (first && gesture_scopes.get(first.action + ':' + first.at)) ?? gesture_scope();
-  if (signal === 'R1' && first && !explicit_signal && scope.incomingChime) {
+  const oneShot = !is_sim() && ui.state?.roomQuestionAvailable;
+  const singleCue = oneShot && signal === 'R1' && first && !explicit_signal;
+  if (!singleCue && signal === 'R1' && first && !explicit_signal && scope.incomingChime) {
     show_note('Wait for the whisper before acknowledging.');
     return;
   }
-  if (signal === 'R1' && !explicit_signal && scope.previewWaiting && !scope.receiptId) {
+  if (!singleCue && signal === 'R1' && !explicit_signal && scope.previewWaiting && !scope.receiptId) {
     show_note('Wait for the preview before sending.');
     return;
   }
   const pitch_help = scope.pitchHelp && ui.state?.phase === 'live' && ui.state.pitchHelp
-    && (signal === 'LR' || signal === 'R2' && first && !explicit_signal && ui.state.roomQuestionAvailable);
+    && (signal === 'LR' || singleCue);
   const discard = signal === 'L1' || settings.mode === 1 && signal === 'R2';
   if (pitch_help) signal = 'LR';
   flash_signal(signal);
@@ -1442,8 +1444,8 @@ function render_message(prefix, entry, key) {
 
 function render_signals() {
   const codebook = ui.state?.codebook ?? {};
-  const inlineCue = reactPitch && !is_sim() && Boolean(ui.state?.roomQuestionAvailable);
-  const order = SIGNAL_ORDER[settings.mode].filter(signal => !inlineCue || signal !== 'LR');
+  const inlineCue = !is_sim() && Boolean(ui.state?.roomQuestionAvailable);
+  const order = SIGNAL_ORDER[settings.mode].filter(signal => !inlineCue || !['R1', 'LR'].includes(signal));
   const host = $('signals');
   const pitch_help = ui.state?.pitchHelp === true;
   const key = settings.mode + settings.gesture_model + String(pitch_help) + String(ui.state?.roomQuestionAvailable) + String(inlineCue) + JSON.stringify(codebook);
@@ -1517,7 +1519,7 @@ function renderPitchControls(state, phase, cue) {
   const available = Boolean(state?.roomQuestionAvailable) && !is_sim();
   if (reactPitch) {
     const detail = { available, live: phase === 'live' && !state?.canned, connected: is_online(),
-      gestureHint: settings.gesture_model === 'pro' ? 'Double squeeze to answer' : 'Two Next Track events',
+      gestureHint: settings.gesture_model === 'pro' ? 'Single squeeze to answer' : 'Double-tap once to answer',
       roomLive: state?.room?.transcription === 'live', preparing: ui.note === PITCH_PREPARING_NOTE, cue: cue ?? null };
     const fingerprint = JSON.stringify(detail);
     if (fingerprint !== lastPitchRender) {
@@ -1626,8 +1628,11 @@ function render_codebook() {
     pattern.textContent = is_sim() ? PATTERN_LABELS[settings.mode][signal]
       : !count ? 'On-screen control'
         : settings.gesture_model === 'pro' ? SIGNAL_LABELS[signal] + ' squeeze' : 'Next Track × ' + count;
-    if (ui.state?.roomQuestionAvailable && signal === 'R2') pattern.textContent = 'On-screen fixed cue. The earbud double gesture requests an AI answer.';
-    if (ui.state?.roomQuestionAvailable && signal === 'LR') pattern.textContent = 'Cue now or use the earbud double gesture.';
+    if (!is_sim() && ui.state?.roomQuestionAvailable && signal === 'R1') {
+      name.textContent = 'Cue now';
+      meaning.textContent = 'Hear one AI answer';
+      pattern.textContent = settings.gesture_model === 'pro' ? 'Single squeeze' : 'One AirPods double-tap';
+    }
     row.append(name, meaning, pattern);
     return row;
   }));

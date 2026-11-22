@@ -25,7 +25,7 @@ Connect AirPods to the Mac, and set the Mac's sound input to **MacBook Microphon
 1. **Stage:** open http://127.0.0.1:5780/stage. Pick the **Coaching scenario**, upload any files under **Team brief & references**, and click **Start Mac microphone**.
 2. **Seat A (the wearer):** open http://127.0.0.1:5780/ in a second tab. Pick **A** with **Earbuds**, then choose **Use the premade voice** → **Continue** → **Skip and use defaults** → **Ready**.
 3. **Seat B:** open a third tab. Pick **Simulated**, then **B**, and go through the same steps.
-4. Click **Begin session** on the stage, then press **Question mode** on Seat A. **What should I say?** asks for a cue at any time.
+4. Click **Begin session** on the stage, then press **Cue now** on Seat A when you want a private answer.
 5. To switch scenarios, click **Reset** on the stage, pick the new one, and upload again.
 
 ## The three scenarios

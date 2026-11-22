@@ -6,7 +6,7 @@ A teammate in the audience sees a judge looking lost, hears a question the prese
 
 ## The live demo
 
-Seat A presents Telepath. Seat B listens and can send a silent signal. A third person runs the MacBook. Start by demonstrating a fixed signal and its playback receipt. Then ask a real question about the product. The presenter arms Question Mode with one AirPods 1 next-track event or one AirPods Pro stem squeeze. OpenAI starts drafting while the judge speaks and a short cue plays privately in the presenter’s earbuds after the question commits. “What should I say?” is the on-screen manual request. The presenter answers aloud. At the reveal, show the two-seat exchange and the context view on the Mac.
+Seat A presents Telepath. Seat B listens and can send a silent signal. A third person runs the MacBook. Start by demonstrating a fixed signal and its playback receipt. Then ask a real question about the product. The presenter double-taps AirPods 1 once, squeezes AirPods Pro once, or taps **Cue now** after the judge asks. OpenAI reads the full transcript and project evidence, and ElevenLabs whispers what to say next to the presenter. The presenter answers aloud. At the reveal, show the two-seat exchange and the context view on the Mac.
 
 A fixed cue uses cached ElevenLabs audio, which is available immediately after setup. The live answer uses fresh room context and takes time for model inference and speech synthesis. A private coaching cue goes to the requester. A drafted seat-to-seat message goes to the partner only after a separate confirmation. The stage also lets an operator send a neutral announcement to both seats.
 

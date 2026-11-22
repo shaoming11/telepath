@@ -115,7 +115,7 @@ test('Evidence packing preserves judge-answer facts inside a smaller grounding p
     ['Why won’t an old socket message change a new session?', /scope frames and prevent stale commands/i],
     ['Does OpenAI receive the raw mic recording?', /ElevenLabs alone receives raw mic audio/i],
     ['How do you verify the citation?', /cited IDs (?:were supplied )?and supporting quotes appear/i],
-    ['What does a double gesture do after a judge question?', /a double gesture asks for an answer/i],
+    ['What does one AirPods double-tap do after a judge question?', /double-tap or one Pro squeeze asks for an answer/i],
     ['What is the default OpenAI answer model?', /gpt-4\.1-mini/i],
     ['How do iPhones connect wirelessly?', /hotspot using HTTPS and WebSockets/i],
     ['How is AirPods 1 timing trained?', /two successful doubles and two successful triples/i],

@@ -2,7 +2,7 @@
 
 ## Project overview
 
-Telepath helps two teammates in the same room give each other discreet feedback without interrupting a conversation. The demo is a pitch about Telepath itself. A presenter and a coach each wear earbuds paired to their own phone. Cached cues let them steer pace and timing. A Mac operator can send an announcement to both seats. A double earbud gesture requests a private answer grounded in the room conversation and project references. The presenter speaks their own answer. These are two-seat hackathon workflows, without user accounts.
+Telepath helps two teammates in the same room give each other discreet feedback without interrupting a conversation. The demo is a pitch about Telepath itself. A presenter and a coach each wear earbuds paired to their own phone. Cached cues let them steer pace and timing. A Mac operator can send an announcement to both seats. One earbud gesture requests a private answer grounded in the room conversation and project references. The presenter speaks their own answer. These are two-seat hackathon workflows, without user accounts.
 
 ## How we built the project
 
@@ -10,7 +10,7 @@ The implementation connects Safari earbud controls, a Mac hub, and private cues 
 
 ## Phone client, AirPods and control routing
 
-Safari or Chrome renders the phone UI and handles Media Session events. AirPods 1 converts a configured double-tap into a next-track event. Its recognizer counts one, two or three next-track events using a calibrated window. Calibration uses two successful doubles and two successful triples; failures retry. AirPods Pro maps single squeeze to play or pause, double to next track, triple to previous track. Browser media events do not identify which earbud produced them. In a Mac room pitch, a double gesture asks for an answer. Single still handles pending approvals or receipts before sending its fixed cue. The UI has touch fallbacks. Sources: public/input.mjs, public/earbuds/airpods-1/input.mjs, public/earbuds/airpods-pro/input.mjs, public/phone.mjs.
+Safari or Chrome renders the phone UI and handles Media Session events. AirPods 1 converts a configured double-tap into a next-track event. Its recognizer counts one, two or three next-track events using a calibrated window. Calibration uses two successful doubles and two successful triples; failures retry. AirPods Pro maps single squeeze to play or pause, double to next track, triple to previous track. Browser media events do not identify which earbud produced them. In a Mac room pitch, one AirPods 1 double-tap or one Pro squeeze asks for an answer. Draft approval and receipts have their own screen controls. The UI has touch fallbacks. Sources: public/input.mjs, public/earbuds/airpods-1/input.mjs, public/earbuds/airpods-pro/input.mjs, public/phone.mjs.
 
 ## Hub, WebSockets and private routing
 
@@ -22,7 +22,7 @@ Only the Mac Stage owns the default room microphone. Moving room recording off t
 
 ## On-demand coaching
 
-Double-squeeze on AirPods Pro, send two Next Track events on AirPods 1, or use **Cue now**. The hub sends the entire room transcript so far, the project overview, and selected passages to OpenAI Responses. OpenAI infers the most recent genuine question and writes one short answer. The default answer model is gpt-4.1-mini. ElevenLabs alone receives raw mic audio; OpenAI receives transcript snapshots and project evidence. ElevenLabs whispers the answer only to the requesting seat. Sources: hub/session.mjs, hub/codec.mjs, hub/audio.mjs.
+Squeeze AirPods Pro once, double-tap AirPods 1 once, or use **Cue now**. The hub sends the entire room transcript so far, the project overview, and selected passages to OpenAI Responses. OpenAI infers the most recent genuine question and writes one short answer. The default answer model is gpt-4.1-mini. ElevenLabs alone receives raw mic audio; OpenAI receives transcript snapshots and project evidence. ElevenLabs whispers the answer only to the requesting seat. Sources: hub/session.mjs, hub/codec.mjs, hub/audio.mjs.
 
 ## Retrieval, grounding and document ingestion
 

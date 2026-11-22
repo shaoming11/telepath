@@ -1589,6 +1589,35 @@ test('a single room-answer gesture sends the full transcript and hybrid evidence
   assert.equal(calls.length, 1);
 });
 
+test('Cue now plays a long sourced answer and gives useful speech if the model cannot answer', async t => {
+  const longAnswer = 'Our buyer is the sales team lead. We built this demo to illustrate how a presenter can get useful context without stopping the conversation. Let me show you what a presenter actually hears when a question comes up.';
+  let attempts = 0;
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac' },
+    audio: { listen: async () => ({ listening: true }) },
+    codec: { pitchHelp: async ({ passages }) => {
+      if (++attempts === 1) return { status: 'answer', question: 'Who is the buyer?', answer: longAnswer,
+        sources: [{ id: passages.find(passage => passage.name === 'brief.md').id, quote: 'The buyer is the sales team lead.' }] };
+      if (attempts === 2) return { status: 'unsupported', answer: '', sources: [] };
+      return { status: 'advice', answer: 'Could you clarify which part you want me to show?', sources: [] };
+    } },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is the sales team lead.').toString('base64') }]);
+  await session.setRoomListening(true);
+  session.addTranscript('room', 'Who is the buyer?');
+  const request = id => act('A', { type: 'signal', signal: 'R1', id });
+  await request('long');
+  await request('unsupported');
+  await request('advice');
+  const cues = seatFrames.A.filter(frame => frame.kind === 'pitch_help');
+  assert.equal(cues.length, 3);
+  assert.equal(cues[0].text, longAnswer);
+  assert.match(cues[1].text, /show you how it behaves/);
+  assert.equal(cues[2].text, 'Could you clarify which part you want me to show?');
+  assert.ok(!seatFrames.A.some(frame => frame.text?.includes('No supported cue')));
+});
+
 test('a sourced but generic grounding line is replaced with a concrete cue', async t => {
   let room;
   const { session, act, seatFrames } = await createLiveSession({
