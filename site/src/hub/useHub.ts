@@ -250,3 +250,5 @@ const monitorSnapshot = () => monitor;
 export function useHubMonitor(): MonitorSnapshot | null {
   return useSyncExternalStore(subscribeMonitor, monitorSnapshot, monitorSnapshot);
 }
+
+if (import.meta.hot) import.meta.hot.dispose(disconnect);

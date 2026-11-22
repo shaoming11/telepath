@@ -49,6 +49,7 @@
   font-size: var(--st-small);
 }
 .stage[data-embedded="true"] .st-bar { position: static; }
+.stage[data-embedded="true"] .st-bar__brand { visibility: hidden; }
 .st-bar__brand { font-weight: 600; font-size: var(--st-text); letter-spacing: -0.01em; }
 .st-phases { display: flex; gap: clamp(20px, 2.4vw, 44px); }
 .st-phases li { color: var(--ink-tertiary); font-weight: 500; transition: color var(--slow) var(--ease-out); }
