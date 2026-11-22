@@ -1312,7 +1312,7 @@ export class Session {
   async speakPitchCue(seat, text, signal) {
     try {
       return toUrl(await withDeadline(deadline => this.audio.speech(seat, text, {
-        voice: null, sim: false, role: 'assistant', signal: deadline, whisper: true,
+        voice: null, sim: false, role: 'assistant', signal: deadline,
       }), this.settings.pitchSpeechMs, signal));
     } catch { return null; }
   }

@@ -110,7 +110,6 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
   let context = null;
   let cue_gain = null;
   let voice_gain = null;
-  let pitch_gain = null;
   let output_analyser = null;
   let output_samples = null;
   let levels = { ...volumes };
@@ -127,9 +126,6 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
     context = new Context({ latencyHint: 'interactive' });
     cue_gain = context.createGain();
     voice_gain = context.createGain();
-    pitch_gain = context.createGain();
-    pitch_gain.gain.value = 0.65;
-    pitch_gain.connect(voice_gain);
     if (typeof context.createAnalyser === 'function') {
       output_analyser = context.createAnalyser();
       output_analyser.fftSize = 256;
@@ -392,7 +388,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
       const rate = Number.isFinite(frame.rate) ? Math.max(0.8, Math.min(1.2, frame.rate)) : 1;
       const speech_meta = cue_audible && frame.messageId && !meta.preview && !meta.announcement
         ? { ...meta, incoming_chime_at: cue_at } : meta;
-      speech_source = start_source(speech, meta.pitch_help ? pitch_gain : voice_gain, speech_at, rate, speech_meta);
+      speech_source = start_source(speech, voice_gain, speech_at, rate, speech_meta);
       cursor += speech.duration / rate;
     }
     if (serial) playhead = cursor + QUEUE_TAIL_S;
