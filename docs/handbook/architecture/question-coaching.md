@@ -10,7 +10,7 @@ The room transcript lives in session memory and is cleared on reset. The vector 
 
 ## Playback
 
-After the answer is validated, ElevenLabs synthesizes a whisper. Cue now plays as soon as the phone decodes the whisper. It uses the same Voice volume as teammate messages. Only the requesting seat receives the answer. If playback fails, the written answer stays visible. Cues require another gesture, so the presenter chooses when to hear one.
+After the answer is validated, ElevenLabs synthesizes one whisper. In Pitch Q&A, either wearer can request it and both get the same audio. In Stranger Interview, only the requesting seat receives the cue. The phone plays it as soon as it can decode the audio. If playback fails, the written cue stays visible.
 
 ## Stranger Interview
 

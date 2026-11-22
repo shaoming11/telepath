@@ -159,6 +159,7 @@ export class Session {
   }
 
   initialize(connections = {}) {
+    this.sharedPitchRequest = null;
     this.monitor.reset();
     this.generation += 1;
     this.sessionId = String(this.generation);
@@ -258,7 +259,7 @@ export class Session {
       ...(viewer == null && { coach: { available: Boolean(this.coach), ...this.coachState } }),
       log: viewer == null
         ? this.log.slice()
-        : this.log.filter(entry => entry.seat === viewer || entry.to === viewer),
+        : this.log.filter(entry => entry.seat === viewer || entry.to === viewer || entry.targets?.includes(viewer)),
       bits: this.bits,
     };
   }
@@ -726,10 +727,11 @@ export class Session {
     if (!entry) return;
     state.awaitingHeard.delete(frame.messageId);
     const playedAt = this.now();
-    entry.playedAt = playedAt;
-    entry.playbackLatencyMs = Math.max(0, playedAt - entry.at);
+    entry.playedAt ??= playedAt;
+    entry.playbackLatencyMs ??= Math.max(0, playedAt - entry.at);
     if (entry.kind === 'pitch_help') {
-      entry.requestToPlaybackMs = Math.max(0, playedAt - entry.requestedAt);
+      entry.requestToPlaybackMs ??= Math.max(0, playedAt - entry.requestedAt);
+      if (entry.targets) (entry.playedBy ??= []).push(seat);
       this.publish();
       return;
     }
@@ -1169,24 +1171,31 @@ export class Session {
     const began = this.now();
     if (!state.online || (!oneShot && ((state.pitchHelp && !state.pitchHelp.signal.aborted)
         || began - state.lastPitchHelpAt < this.settings.pitchHelpRepeatMs))) return;
+    const shared = oneShot && this.coachScenario === 'pitch';
+    const recipients = shared ? SEATS.filter(person => this.seats[person].online && !this.seats[person].sim) : [seat];
     const notify = text => this.emitSeat(seat, { type: 'pitch_help_status', text });
     if (state.sim) {
       notify('Live pitch help requires a real seat.');
       return;
     }
+    if (shared && this.sharedPitchRequest && !this.sharedPitchRequest.signal.aborted) return;
     state.lastPitchHelpAt = began;
     if (oneShot) state.pitchHelp?.abort();
     const controller = new AbortController();
     state.pitchHelp = controller;
+    if (shared) this.sharedPitchRequest = controller;
+    const show = cue => {
+      for (const person of recipients) {
+        this.seats[person].lastPitchCue = cue;
+        this.emitSeat(person, { type: 'state', state: this.snapshot(person) });
+      }
+    };
     const lifecycle = AbortSignal.any([controller.signal, this.liveScope([seat])]);
     const requireRoomSpeech = oneShot && this.coachScenario !== 'social';
     let resolved, question, roomSpeech;
     const started = performance.now();
     let surfacedCue = false;
-    if (oneShot) {
-      state.lastPitchCue = null;
-      this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
-    }
+    if (oneShot) show(null);
     this.publishMonitor();
     try {
       if (requireRoomSpeech) {
@@ -1201,7 +1210,8 @@ export class Session {
           return;
         }
       }
-      resolved = oneShot ? this.roomQuestionContext(seat, this.now()) : this.pitchContext(seat, began);
+      const wearer = shared && recipients.includes('A') ? 'A' : seat;
+      resolved = oneShot ? this.roomQuestionContext(wearer, this.now()) : this.pitchContext(seat, began);
       question = resolved.recent.at(-1)?.text ?? '';
       notify('Preparing a private pitch cue…');
       const reply = await withDeadline(async signal => {
@@ -1266,8 +1276,7 @@ export class Session {
           const synthesisStarted = performance.now();
           notify(cue.answer);
           surfacedCue = true;
-          state.lastPitchCue = { text: cue.answer, points: [] };
-          this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
+          show({ text: cue.answer, points: [] });
           const url = await this.speakPitchCue(seat, cue.answer, signal);
           return { ...cue, url, source, timing: {
             speechMs: Math.round(performance.now() - synthesisStarted), hubMs: Math.round(performance.now() - started),
@@ -1292,17 +1301,21 @@ export class Session {
       }, this.settings.pitchRaceMs + this.settings.pitchSpeechMs, lifecycle);
       if (lifecycle.aborted) return;
       if (!reply) return;
-      if (roomSpeech) state.lastRoomCueSpeech = roomSpeech;
+      const targets = recipients.filter(person => this.seats[person].online);
+      if (roomSpeech) for (const person of targets) this.seats[person].lastRoomCueSpeech = roomSpeech;
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
         scenario: this.coachScenario, ...(reply.draftedBy && { draftedBy: reply.draftedBy }), ...(reply.ungrounded && { ungrounded: true }),
-        timing: reply.timing, requestedAt: began, messageId });
-      if (messageId) {
-        state.awaitingHeard.set(messageId, entry);
-        if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
-        this.cue(seat, oneShot ? null : 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
-      } else {
-        this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
+        timing: reply.timing, requestedAt: began, messageId, ...(shared && { targets, playedBy: [] }) });
+      for (const person of targets) {
+        if (messageId) {
+          const { awaitingHeard } = this.seats[person];
+          awaitingHeard.set(messageId, entry);
+          if (awaitingHeard.size > 32) awaitingHeard.delete(awaitingHeard.keys().next().value);
+          this.cue(person, oneShot ? null : 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: this.settings.pitchPlaybackMs });
+        } else {
+          this.emitSeat(person, { type: 'pitch_help_audio_failed' });
+        }
       }
       if (reply.verify && state.lastPitchCue) {
         const shown = state.lastPitchCue;
@@ -1336,6 +1349,7 @@ export class Session {
     } catch {
       if (!lifecycle.aborted && !surfacedCue) notify(oneShot ? 'Cue took too long. Try Cue now.' : this.fallbackCue(question));
     } finally {
+      if (this.sharedPitchRequest === controller) this.sharedPitchRequest = null;
       if (state.pitchHelp === controller) state.pitchHelp = null;
       if (!lifecycle.aborted) this.publish();
     }

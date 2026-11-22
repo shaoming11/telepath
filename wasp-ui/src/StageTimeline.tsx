@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import './StageTimeline.css';
 
-type Entry = { id: string; kind: string; seat?: string; to?: string; text?: string; signal?: string; at: number; playedAt?: number; messageId?: string; draftId?: string; source?: string; sources?: Array<{ name?: string }> };
+type Entry = { id: string; kind: string; seat?: string; to?: string; text?: string; signal?: string; at: number; playedAt?: number; messageId?: string; draftId?: string; source?: string; targets?: string[]; playedBy?: string[]; sources?: Array<{ name?: string }> };
 type Clip = { messageId: string; url: string };
 type RoomRun = { text: string; label: string; speaker?: string; seat?: 'A' | 'B' | null };
 type RoomTurn = { at: number; text: string; speakers?: RoomRun[] };
@@ -175,10 +175,13 @@ export function StageTimeline() {
               const clipId = entry.messageId || entry.draftId;
               const clip = clipId && entry.kind !== 'draft' ? clips.get(clipId) : undefined;
               const isWhisper = liveKinds.has(entry.kind) || entry.kind === 'draft';
-              const status = entry.kind === 'draft' ? 'Private preview · approval required' : entry.source === 'canned' ? 'Scripted' : entry.playedAt != null ? 'Playback confirmed' : isWhisper ? entry.messageId ? 'Sent · awaiting playback' : 'Text cue · no audio' : kinds[entry.kind];
+              const both = (entry.targets?.length ?? 0) > 1;
+              const status = entry.kind === 'draft' ? 'Private preview · approval required' : entry.source === 'canned' ? 'Scripted'
+                : both && entry.messageId ? 'Playback started on ' + (entry.playedBy?.length ?? 0) + ' of ' + entry.targets?.length + ' phones'
+                : entry.playedAt != null ? 'Playback confirmed' : isWhisper ? entry.messageId ? 'Sent · awaiting playback' : 'Text cue · no audio' : kinds[entry.kind];
               return <li key={entry.id} className={'demo-event ' + (isWhisper ? 'demo-whisper' : 'demo-gesture')} data-ai={entry.kind === 'pitch_help'}>
                 <span className="demo-avatar" data-seat={entry.seat}>{entry.kind === 'pitch_help' ? '✦' : entry.seat || 'T'}</span>
-                <div className="demo-event-content"><div className="demo-event-meta"><strong>{entry.kind === 'pitch_help' ? 'Telepath → ' + name(entry.seat) : entry.to ? name(entry.seat) + ' → ' + name(entry.to) : name(entry.seat)}</strong><span>{kinds[entry.kind]}</span><time>{new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time></div>
+                <div className="demo-event-content"><div className="demo-event-meta"><strong>{entry.kind === 'pitch_help' ? 'Telepath → ' + (both ? 'Both seats' : name(entry.seat)) : entry.to ? name(entry.seat) + ' → ' + name(entry.to) : name(entry.seat)}</strong><span>{kinds[entry.kind]}</span><time>{new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time></div>
                   <p>{entry.kind === 'draft' ? 'Awaiting approval on the sender’s phone.' : entry.text || gestures[entry.signal || ''] || kinds[entry.kind]}</p>
                   {isWhisper && <div className="demo-event-footer"><span>{status}{entry.signal ? ' · ' + (gestures[entry.signal] || entry.signal) : ''}</span>{clip ? <button className="demo-play" disabled={link !== 'live'} aria-label={(playing === clip.messageId ? 'Stop' : 'Replay') + ' whisper: ' + entry.text} onClick={() => void play(clip)}><span aria-hidden="true">{playing === clip.messageId ? '■' : '▶'}</span> {playing === clip.messageId ? 'Playing' : 'Hear it'}</button> : <span>Replay unavailable</span>}</div>}
                 </div>

@@ -1552,7 +1552,7 @@ test('a voice change while the partner is offline still rebuilds the cache on re
   assert.notEqual(state().cacheId, oldCache);
 });
 
-test('a single room-answer gesture sends the full transcript and hybrid evidence only once', async t => {
+test('either seat requests the same pitch whisper with one model call and separate playback receipts', async t => {
   const calls = [];
   const whispers = [];
   const { session, act, seatFrames } = await createLiveSession({
@@ -1576,7 +1576,7 @@ test('a single room-answer gesture sends the full transcript and hybrid evidence
   assert.equal(calls.length, 0);
   assert.equal(session.snapshot().room.transcript.length, 60);
   const gesture = { type: 'signal', signal: 'LR', purpose: 'answer_room_question', id: 'ask' };
-  await act('A', gesture);
+  await Promise.all([act('A', gesture), act('B', { ...gesture, id: 'ask-b' })]);
   await act('A', gesture);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].roomTranscript.length, 68);
@@ -1587,7 +1587,18 @@ test('a single room-answer gesture sends the full transcript and hybrid evidence
   assert.deepEqual(whispers, [{ seat: 'A', text: 'In your own words: The buyer is a sales team lead.', whisper: true }]);
   assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').cue, null);
   assert.equal(seatFrames.A.filter(frame => frame.kind === 'pitch_help').length, 1);
-  assert.equal(seatFrames.B.some(frame => frame.kind === 'pitch_help'), false);
+  const presenter = seatFrames.A.find(frame => frame.kind === 'pitch_help');
+  const coach = seatFrames.B.find(frame => frame.kind === 'pitch_help');
+  assert.equal(coach.text, presenter.text);
+  assert.equal(coach.url, presenter.url);
+  assert.equal(coach.messageId, presenter.messageId);
+  await act('A', { type: 'heard', messageId: presenter.messageId });
+  assert.deepEqual(session.log.find(entry => entry.kind === 'pitch_help').playedBy, ['A']);
+  await act('B', { type: 'heard', messageId: coach.messageId });
+  const cue = session.log.find(entry => entry.kind === 'pitch_help');
+  assert.deepEqual(cue.targets, ['A', 'B']);
+  assert.deepEqual(cue.playedBy, ['A', 'B']);
+  assert.equal(session.snapshot('B').seats.B.lastPitchCue.text, presenter.text);
   session.addTranscript('room', 'Who are your competitors?');
   assert.equal(calls.length, 1);
 });
