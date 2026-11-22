@@ -259,12 +259,12 @@ test('Mac shared-room transcripts reach ordinary coaching and Reveal freezes the
   }, codec: { evaluate: async input => { request = input; return {}; } } });
   t.after(() => session.close());
   await session.setRoomListening(true);
-  callbacks('Show the working demo now.');
+  callbacks.committed('Show the working demo now.');
   await session.sense();
   assert.equal(request.room.transcript[0].text, 'Show the working demo now.');
   assert.equal(request.sim, false);
   await session.handleStage({ action: 'reveal' });
-  callbacks('Late room speech.');
+  callbacks.committed('Late room speech.');
   assert.equal(state().room.listening, false);
   assert.equal(state().room.transcript.length, 1);
 });
@@ -373,8 +373,17 @@ test('the shared mic uses one diarized stream and updates speaker labels without
   const seat_a_monitor = seatFrames.A.findLast(frame => frame.type === 'monitor').monitor;
   assert.deepEqual(Object.keys(seat_a_monitor.seats), ['A']);
   assert.deepEqual(seat_a_monitor.seats.A.speakers, ['Speaker 1', 'Speaker 2']);
+  await session.handleStage({ action: 'room_speaker_assign', stream: 3, speaker: 'speaker_0', seat: 'A' });
+  assert.equal(state().room.transcript[0].speakers[0].label, 'Speaker 1');
+  await session.handleStage({ action: 'room_speaker_assign', stream: 4, speaker: 'speaker_0', seat: 'A' });
+  await session.handleStage({ action: 'room_speaker_assign', stream: 4, speaker: 'speaker_1', seat: 'B' });
+  await session.handleStage({ action: 'room_speaker_assign', stream: 4, speaker: 'speaker_0', seat: 'B' });
+  assert.deepEqual(state().room.transcript[0].speakers.map(run => run.label), ['Seat B', 'Seat A']);
   callbacks.merged({ from_speaker_id: 'speaker_0', to_speaker_id: 'speaker_1' }, 4);
   assert.equal(state().room.transcript[0].speakers[0].speaker, 'speaker_1');
+  await session.handleStage({ action: 'room_transcript_clear' });
+  assert.deepEqual(state().room.transcript, []);
+  assert.equal(state().room.listening, true);
 });
 
 test('a verified voice preview goes only to its owner as speaking audio', async t => {

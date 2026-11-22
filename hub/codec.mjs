@@ -36,7 +36,9 @@ function digest({ preset, context, seats, requestedSeat, room }) {
     preset,
     context: text(context, 650),
     requestedSeat: requestedSeat ?? '',
-    sharedRoomSpeech: (room?.transcript ?? []).slice(-8).map(entry => text(entry.text, 200)),
+    sharedRoomSpeech: (room?.transcript ?? []).slice(-8).map(entry => entry.speakers?.length
+      ? entry.speakers.map(run => text(run.label, 40) + ': ' + text(run.text, 200)).join(' ').slice(0, 400)
+      : text(entry.text, 200)),
     seats: Object.fromEntries(SEATS.map(seat => {
       const state = seats[seat] ?? {};
       return [seat, {

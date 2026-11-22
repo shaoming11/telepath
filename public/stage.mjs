@@ -591,7 +591,34 @@ function boot() {
       : roomWanted ? `${labels[state.room.transcription] ?? 'Listening'} · ${roomCapture.deviceLabel || 'selected microphone'}`
       : 'Microphone is off. Start it and allow browser access.');
     const turns = asList(state.room.transcript);
-    fill(byId('room-transcript'), (state.phase === 'reveal' ? turns : turns.slice(-12)).map(turn => node('li', null, turn.text)));
+    byId('room-transcript-clear').disabled = !turns.length || state.phase === 'reveal' || Boolean(state.canned) || linkState !== 'live';
+    const visible = state.phase === 'reveal' ? turns : turns.slice(-12);
+    const speakers = new Map(turns.filter(turn => turn.streamId === state.room.speakerStream)
+      .flatMap(turn => turn.speakers ?? []).filter(run => run.speaker).map(run => [run.speaker, run]));
+    const panel = byId('room-speakers');
+    const key = JSON.stringify([state.room.speakerStream, state.phase, state.canned, [...speakers].map(([id, run]) => [id, run.label])]);
+    if (panel.dataset.key !== key) {
+      panel.dataset.key = key;
+      fill(panel, [...speakers].map(([speaker, run]) => {
+        const label = node('label', null, run.label + ' ');
+        const select = node('select');
+        for (const [value, title] of [['', 'Unassigned'], ['A', 'Seat A'], ['B', 'Seat B']]) {
+          const option = node('option', null, title);
+          option.value = value;
+          select.append(option);
+        }
+        select.value = run.seat ?? '';
+        select.disabled = state.phase === 'reveal' || Boolean(state.canned);
+        select.addEventListener('change', () => sendRoomFrame({
+          type: 'operator', action: 'room_speaker_assign', stream: state.room.speakerStream, speaker, seat: select.value || null,
+        }));
+        label.append(select);
+        return label;
+      }));
+    }
+    fill(byId('room-transcript'), visible.flatMap(turn => turn.speakers?.length
+      ? turn.speakers.map(run => node('li', null, run.label + ' · ' + run.text))
+      : [node('li', null, turn.text)]));
   }
 
   function renderReferences() {
@@ -1301,6 +1328,7 @@ function boot() {
     ui.begin.addEventListener('click', () => send('begin'));
     byId('reference-upload').addEventListener('click', () => void uploadReferences());
     byId('reference-clear').addEventListener('click', () => void uploadReferences(true));
+    byId('room-transcript-clear').addEventListener('click', () => sendRoomFrame({ type: 'operator', action: 'room_transcript_clear' }));
     byId('room-mic-start').addEventListener('click', () => void startRoomCapture());
     byId('room-mic-stop').addEventListener('click', () => { roomMessage = ''; stopRoomCapture(); });
     ui.reveal.addEventListener('click', () => send('reveal'));

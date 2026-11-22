@@ -176,7 +176,7 @@ export class Session {
       roomInput: this.roomInput,
       room: { listening: this.room.listening, listeningRequested: this.room.listeningRequested,
         transcription: this.room.transcription, level: this.room.level,
-        ...(viewer == null && { transcript: this.room.transcript.slice() }) },
+        ...(viewer == null && { transcript: this.room.transcript.slice(), speakerStream: this.room.speakerStream }) },
       codebook: BOOKS[this.preset],
       calibration: this.calibration,
       online: Object.fromEntries(SEATS.map(seat => [seat, this.seats[seat].online])),
@@ -738,6 +738,7 @@ export class Session {
       at: this.now(), text,
       ...(Number.isInteger(meta?.segment) && { streamId: meta.streamId, segment: meta.segment }),
     });
+    if (seat === 'room' && state.transcript.length > 60) state.transcript.splice(0, state.transcript.length - 60);
     if (this.phase === 'live' && this.references.length && this.codec?.questionAnswering) {
       const key = questionKey(text);
       const duplicate = this.questionTurns.slice(-4).some(turn => this.now() - turn.at < 2000 && questionKey(turn.text) === key);
@@ -767,17 +768,28 @@ export class Session {
     const bindings = state.speakerBindings;
     if (merged) {
       if (!bindings.merge(message.from_speaker_id, message.to_speaker_id)) return;
-      for (const entry of state.transcript) {
-        if (entry.streamId === streamId && entry.speakers) {
-          entry.speakers = entry.speakers.map(run => ({ text: run.text, ...bindings.describe(run.speaker) }));
-        }
-      }
+      this.refreshSpeakerLabels(state);
     } else {
       const segment = splitDiarizedSegment(message);
       const entry = segment && state.transcript.findLast(item => item.streamId === streamId && item.segment === segment.index);
       if (!entry) return;
       entry.speakers = segment.runs.map(run => ({ text: run.text, ...bindings.describe(run.speaker) }));
     }
+    this.publish();
+  }
+
+  refreshSpeakerLabels(state) {
+    for (const entry of state.transcript) {
+      if (entry.streamId === state.speakerStream && entry.speakers) {
+        entry.speakers = entry.speakers.map(run => ({ text: run.text, ...state.speakerBindings.describe(run.speaker) }));
+      }
+    }
+  }
+
+  assignRoomSpeaker({ stream, speaker, seat }) {
+    if (this.roomInput !== 'mac' || this.canned || this.phase === 'reveal' || !Number.isInteger(stream)
+        || stream !== this.room.speakerStream || !this.room.speakerBindings?.assign(speaker, seat)) return;
+    this.refreshSpeakerLabels(this.room);
     this.publish();
   }
 
@@ -1397,6 +1409,14 @@ export class Session {
         break;
       case 'preset': return this.selectPreset(frame.preset, frame.context);
       case 'announce': return this.announce(frame.text);
+      case 'room_speaker_assign': return this.assignRoomSpeaker(frame);
+      case 'room_transcript_clear':
+        if (this.roomInput !== 'mac' || this.canned || this.phase === 'reveal') return;
+        this.room.transcript = [];
+        this.questionTurns = this.questionTurns.filter(turn => turn.seat !== 'room');
+        this.monitor.updatePartial('room', '');
+        this.cancelAnswers('room_transcript_cleared');
+        break;
       case 'coach_ask': return this.askCoach(frame.beat);
       case 'coach_send': return this.approveCoach(frame.coachId);
       case 'inject':

@@ -4,6 +4,7 @@ import { createCapture } from './capture.mjs';
 import { createCalibration } from './calibrate.mjs';
 import { createAudioEngine, createDraftTracker } from './phone-audio.mjs';
 import { mountChannelMonitor } from './channel-monitor.mjs';
+import { diag, installDiag, registerExtraActions } from './diag.mjs';
 import { AIRPODS_1_PLAYBACK_URL } from './earbuds/airpods-1/input.mjs';
 import {
   APP_TIMING, APP_TIMING_LIMITS, CONSENT_KEY, CONSENT_TEXT, DEFAULT_VOLUMES, PATTERN_LABELS, PRESETS,
@@ -103,7 +104,10 @@ const input = createMediaInput({
   onRaw: on_raw,
   onError: on_pattern_error,
   onPlay: on_media_play,
-  onMediaEvent: action => calibration.note_media_event(action),
+  onMediaEvent: action => {
+    diag('media', { action, mic_open: capture.open, keepalive_paused: keepalive.paused });
+    calibration.note_media_event(action);
+  },
 });
 const emulator = createEmulator({ input, settings: settings.emulator });
 const touch_emulator = createEmulator({ input, settings: touch_profile() });
@@ -317,6 +321,7 @@ function on_media_play() {
 }
 
 function on_signal(signal, trace) {
+  diag('signal', { signal, calibrating: calibration.active() });
   if (calibration.active()) {
     calibration.note_signal(signal);
     return;
@@ -411,6 +416,8 @@ function arm_media() {
   void audio.unlock();
   const media_session = navigator.mediaSession;
   const registered = input.register(media_session);
+  registerExtraActions();
+  diag('arm', { registered, model: settings.gesture_model, input_mode: settings.input_mode });
   if (media_session && globalThis.MediaMetadata) {
     media_session.metadata = new MediaMetadata({
       title: 'Telepathy', artist: ui.seat ? 'Seat ' + ui.seat : 'Seat',
@@ -1543,6 +1550,7 @@ function set_earbud_model(model) {
 }
 
 function bind_events() {
+  installDiag({ send, keepalive });
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);
   keepalive.addEventListener('playing', () => {
