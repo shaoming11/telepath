@@ -1,5 +1,5 @@
 {
-  "revision": 48,
+  "revision": 49,
   "claims": [
     {
       "id": "7a495b1a-73e6-4e33-b245-97e049e85eb6",
@@ -36,6 +36,46 @@
         "tests/stage-view.test.mjs"
       ],
       "claimedAt": "2026-11-22T04:48:26.249Z"
+    },
+    {
+      "id": "ff8f362a-adb7-4524-91b2-4fa6565c7956",
+      "owner": "fireheartjerry",
+      "agent": "codex-maritime-context",
+      "branch": "jerry/airpods-1",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "hub/session.mjs",
+        "hub/maritime.mjs",
+        "hub/pitch-planner.mjs",
+        "hub/server.mjs",
+        "scripts/maritime-deploy.mjs",
+        "maritime/server.mjs",
+        "maritime/policy.mjs",
+        "README.md",
+        "docs/maritime.md",
+        "docs/telepathy-pitch-brief.md",
+        "tests/maritime.test.mjs",
+        "tests/maritime-agent.test.mjs",
+        "tests/session.test.mjs",
+        "tests/transport.test.mjs"
+      ],
+      "paths": [
+        "README.md",
+        "docs/maritime.md",
+        "docs/telepathy-pitch-brief.md",
+        "hub/maritime.mjs",
+        "hub/pitch-planner.mjs",
+        "hub/server.mjs",
+        "hub/session.mjs",
+        "maritime/policy.mjs",
+        "maritime/server.mjs",
+        "scripts/maritime-deploy.mjs",
+        "tests/maritime-agent.test.mjs",
+        "tests/maritime.test.mjs",
+        "tests/session.test.mjs",
+        "tests/transport.test.mjs"
+      ],
+      "claimedAt": "2026-11-22T04:50:03.512Z"
     }
   ]
 }
