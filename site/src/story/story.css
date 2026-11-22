@@ -1,7 +1,7 @@
 .story { background: var(--void); }
 
 .story-bar {
-  position: fixed;
+  position: absolute;
   inset: 0 0 auto;
   z-index: 30;
   display: flex;
@@ -9,7 +9,6 @@
   align-items: center;
   padding: var(--space-5) clamp(20px, 3.4vw, 48px);
   pointer-events: none;
-  mix-blend-mode: difference;
 }
 .story-mark { font-size: var(--body); font-weight: 600; letter-spacing: -0.01em; }
 .story-skip {

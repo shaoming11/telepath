@@ -25,7 +25,9 @@ export function StoryPage() {
   const track = useRef<HTMLDivElement>(null);
   const progress = useRef<HTMLDivElement>(null);
   const hint = useRef<HTMLParagraphElement>(null);
+  const sticky = useRef<HTMLDivElement>(null);
   const [webgl] = useState(hasWebGL);
+  const [visible, setVisible] = useState(true);
   const reduced = useMemo(() => matchMedia("(prefers-reduced-motion: reduce)").matches, []);
 
   const timeAtScroll = () => Math.min(FILM_SECONDS, Math.max(0, (window.scrollY - (track.current?.offsetTop ?? 0)) / PX_PER_SECOND));
@@ -46,6 +48,13 @@ export function StoryPage() {
     if (progress.current) progress.current.style.transform = "scaleX(" + (clock.current / FILM_SECONDS).toFixed(4) + ")";
     if (hint.current) hint.current.style.opacity = String(Math.max(0, 1 - clock.current / 1.5));
   }, [reduced]);
+
+  useEffect(() => {
+    if (!sticky.current) return;
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(sticky.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const step = (direction: 1 | -1, reveal = false) => {
@@ -91,15 +100,14 @@ export function StoryPage() {
 
   return (
     <main className="story">
-      <header className="story-bar">
-        <span className="story-mark">Telepathy</span>
-        <a className="story-skip" href="#live">Live stage</a>
-      </header>
-
       {webgl ? (
         <div className="story-track" ref={track} style={{ height: `calc(${FILM_PX}px + 100vh)` }}>
-          <div className="story-sticky">
-            <Film clock={clock} onFrame={onFrame} />
+          <div className="story-sticky" ref={sticky}>
+            <Film clock={clock} onFrame={onFrame} paused={!visible} />
+            <header className="story-bar">
+              <span className="story-mark">Telepathy</span>
+              <a className="story-skip" href="#live">Live stage</a>
+            </header>
             <p className="story-hint" ref={hint}>Scroll, or press space</p>
             <div className="story-progress" aria-hidden><div ref={progress} /></div>
           </div>

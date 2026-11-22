@@ -9,9 +9,16 @@ import { PULSES, REVEAL_PULSES, SEAT_A, SEAT_B, easeOut, ramp } from "./choreo";
 type Clock = { current: number };
 
 // Renders the frame for a moment in time. Pass `t` for a fixed frame or `clock` to drive it every frame.
-type Props = { t?: number; clock?: Clock; copy?: boolean; onFrame?: (delta: number) => void; onReady?: () => void };
+type Props = {
+  t?: number;
+  clock?: Clock;
+  copy?: boolean;
+  paused?: boolean;
+  onFrame?: (delta: number) => void;
+  onReady?: () => void;
+};
 
-export function Film({ t, clock, copy = true, onFrame, onReady }: Props) {
+export function Film({ t, clock, copy = true, paused = false, onFrame, onReady }: Props) {
   const own = useRef(0);
   const source = clock ?? own;
   if (t !== undefined && !clock) own.current = t;
@@ -52,6 +59,7 @@ export function Film({ t, clock, copy = true, onFrame, onReady }: Props) {
     <div className="film" data-film>
       <Canvas
         className="film-canvas"
+        frameloop={paused ? "never" : "always"}
         dpr={[1, 2]}
         camera={{ fov: 30, near: 0.1, far: 80, position: [0, 0, 13] }}
         gl={{ antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true }}
