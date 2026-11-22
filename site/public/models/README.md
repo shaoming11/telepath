@@ -4,7 +4,7 @@
 
 Classic stem AirPods (1st/2nd gen shape), earbuds only, no case.
 
-- Source: `public/Airpods.glb` from the GitHub repo `foasho/r3f-wireless-earphones` (Blender glTF export, no author or licence metadata in the file). Re-oriented, re-centred, re-scaled and given new materials here; geometry is otherwise unchanged. Personal, non-commercial use.
+- Source: `public/Airpods.glb` from the GitHub repo `foasho/r3f-wireless-earphones` (Blender glTF export, no author or licence metadata in the file). Re-oriented, re-centred, re-scaled, given new materials, and smoothed with two levels of Loop subdivision here so the silhouette holds in a close-up (about 151k triangles per bud, 747 KB on disk). Personal, non-commercial use.
 - Compression: Draco (`KHR_draco_mesh_compression`), so the loader needs a `DRACOLoader` (drei's `useGLTF` sets one up by default). No textures.
 - Top-level nodes: `AirPodLeft` and `AirPodRight`, one mesh each, no parent group. The two are mirror images of each other.
 - Materials: `AirPodWhite` (glossy white, clearcoat), `SpeakerMesh` (dark grilles and sensor windows), `Chrome` (stem tip ring).
