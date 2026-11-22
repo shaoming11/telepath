@@ -347,6 +347,9 @@ test('the private chime precedes speech and the receipt follows the speech start
   assert.deepEqual(heard, []);
   world.advance(250);
   assert.deepEqual(heard, ['private-cue']);
+  engine.play(fixed('A:Pitch:R1', 'regular-message'));
+  await world.flush();
+  assert.equal(speech.destination, context().sources.at(-1).destination);
 });
 
 test('an incoming whisper exposes the audible chime and gap until actual speech starts', async () => {
