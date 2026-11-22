@@ -1,19 +1,4 @@
 {
-  "revision": 137,
-  "claims": [
-    {
-      "id": "86a66ef4-ef75-4578-87ef-caba6f89bbb0",
-      "owner": "influxtion",
-      "agent": "codex-precision-line-endings",
-      "branch": "codex/wasp-precision-ui",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "scripts/.gitattributes"
-      ],
-      "paths": [
-        "scripts/.gitattributes"
-      ],
-      "claimedAt": "2026-11-22T09:43:49.061Z"
-    }
-  ]
+  "revision": 138,
+  "claims": []
 }
