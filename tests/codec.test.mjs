@@ -12,6 +12,23 @@ test('quote validation accepts omitted document emphasis and rejects altered wor
   assert.throws(() => validateAnswer(result, [{ ...passage, text: passage.text.replace('before', 'after') }]), /source does not match/);
 });
 
+test('room cue evidence numbers resolve to an exact excerpt provided by the hub', async () => {
+  const question = 'What happens if the phone disconnects?';
+  const answer = 'Explain that the phone rejoins the current take.';
+  const passages = [{ id: 'reconnect', name: 'Guide', text: 'If a phone disconnects, it rejoins the current take.' }];
+  const codec = createCodec({ env: { OPENAI_API_KEY: 'test-only' }, fetchImpl: async (_url, request) => {
+    const body = JSON.parse(request.body);
+    assert.equal(body.text.format.name, 'telepath_cue');
+    const { passages: excerpts } = JSON.parse(body.input);
+    assert.equal(excerpts[0].evidence, 1);
+    return Response.json({ status: 'completed', output: [{ content: [{
+      type: 'output_text', text: JSON.stringify({ question, answer, evidence: 1 }),
+    }] }] });
+  } });
+  const draft = await codec.pitchHelp({ passages, roomTranscript: [{ text: question }], questionHint: question });
+  assert.equal(validateAnswer(draft, passages).answer, answer);
+});
+
 test('the pitch text fallback keeps a complete short lead from an overlong draft', async () => {
   const lead = 'Leave Safari open and wait for Live and Cached before sending more cues.';
   const codec = createCodec({ env: { OPENAI_API_KEY: 'test-only' }, fetchImpl: async () => Response.json({

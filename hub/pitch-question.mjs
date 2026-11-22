@@ -1,4 +1,5 @@
 import { questionKey } from './questions.mjs';
+import { packReferenceEvidence } from './references.mjs';
 
 const QUESTION = /(?:^|[.!?]\s+)(?:(?:so|and|okay|but)\s*[, ]\s*)?(?:why|how|what|where|when|who|which|can you|could you|would you|do you|are you|does (?:it|that)|is (?:there|it|this)|tell (?:me|us)|walk (?:me|us) through|explain)\b/i;
 export const BUILD_STORY_CUE = 'Safari catches the AirPods gesture. The Mac routes messages and listens to the room. ElevenLabs transcribes, OpenAI drafts, and ElevenLabs whispers back.';
@@ -65,6 +66,54 @@ export function isUsefulPitchCue(cue, question) {
 export function looksLikeQuestion(text) {
   const words = questionKey(text).split(' ').length;
   return text.includes('?') ? words >= 2 : words >= 3 && QUESTION.test(text);
+}
+
+const QUESTION_TOPICS = [
+  [/\b(?:disconnect\w*|reconnect\w*|drops? out|lost connection)\b/i,
+    'Mention that the phone rejoins the same take. Wait for Live and Cached before sending another cue.',
+    'The phone rejoins the current take.'],
+  [/\b(?:backend|back end|server architecture|node hub)\b/i,
+    'Explain the Node hub: it holds session state, routes WebSocket signals, and calls the speech and AI providers.',
+    'The Mac hub runs Node.js 22.13+ using standard HTTP/HTTPS, the ws package, and in-memory session state.'],
+  [/\b(?:rag|retrieval|vector (?:database|search|store)|grounding)\b/i,
+    'Explain how lexical and SQLite vector search retrieve project evidence for the current question.',
+    'lexical and exact-code retrieval run alongside cosine search over hashed token vectors'],
+  [/\b(?:connect|hotspot|wifi|wi fi)\b.*\b(?:phone|mac|hub)|\b(?:phone|mac|hub)\b.*\b(?:connect|hotspot|wifi|wi fi)/i,
+    'Mention that both phones join the Mac on the same hotspot and send signals through WebSockets.',
+    'Both phones join over the same hotspot using HTTPS and WebSockets.'],
+];
+export function roomCueTopicTerms(question) {
+  return QUESTION_TOPICS.find(([pattern]) => pattern.test(question))?.[2] ?? '';
+}
+const FALLBACK_SENTENCES = new Intl.Segmenter('en', { granularity: 'sentence' });
+const topicWords = text => questionKey(text).split(' ').filter(word => word.length > 3
+  && !['what', 'about', 'explain', 'does', 'when', 'with', 'this', 'that', 'works', 'your', 'have', 'would', 'could', 'should', 'their', 'please', 'actually'].includes(word));
+
+export function roomFallbackCue(question, passages, frontendStack, wearerAnswer = '') {
+  if (!question) return { answer: 'Open with the problem. Show a teammate sending you one private cue.', sources: [] };
+  if (!wearerAnswer) {
+    const known = sourcedProjectCue(question, passages, frontendStack);
+    if (known) return known;
+    for (const [pattern, answer, quote] of QUESTION_TOPICS) {
+      if (!pattern.test(question)) continue;
+      const passage = passages.find(item => item.text.includes(quote));
+      if (passage) return { answer, sources: [{ id: passage.id, name: passage.name, quote }] };
+    }
+  }
+  const uttered = questionKey(wearerAnswer);
+  const topics = new Set(topicWords(question));
+  const fact = packReferenceEvidence(passages.filter(passage => passage.kind !== 'code'), question, 6)
+    .flatMap(passage => [...FALLBACK_SENTENCES.segment(passage.text)].map(({ segment }) => ({
+      passage, quote: segment.trim(), words: topicWords(segment),
+    })))
+    .filter(({ quote, words }) => quote.length >= 8 && quote.length <= 160 && !uttered.includes(questionKey(quote))
+      && words.some(word => topics.has(word)))
+    .sort((a, b) => b.words.filter(word => topics.has(word)).length - a.words.filter(word => topics.has(word)).length)[0];
+  if (fact) return { answer: 'Mention this: ' + fact.quote,
+    sources: [{ id: fact.passage.id, name: fact.passage.name, quote: fact.quote }] };
+  const subject = [...topics].slice(-4).join(' ');
+  return { answer: subject ? 'Ask which part of “' + subject + '” they want you to explain.'
+    : 'Ask them to narrow this down to one specific point.', sources: [] };
 }
 
 export function sameQuestion(partial, final) {

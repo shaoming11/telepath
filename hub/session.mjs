@@ -1,5 +1,5 @@
 import { createResearch } from './research.mjs';
-import { BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, sourcedProjectCue } from './pitch-question.mjs';
+import { BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isFrontendStackQuestion, isUsefulPitchCue, looksLikeQuestion, roomCueTopicTerms, roomFallbackCue, sourcedProjectCue } from './pitch-question.mjs';
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
@@ -1031,13 +1031,17 @@ export class Session {
     }
     if (this.coachScenario === 'social') return { roomTranscript, recent: roomTranscript.slice(-6), passages: [] };
     const context = this.pitchContext(seat, began);
-    const questionIndex = roomTranscript.findLastIndex(turn => turn.speaker !== 'Wearer' && looksLikeQuestion(turn.text));
-    const questionHint = roomTranscript[questionIndex]?.text ?? '';
+    const questions = roomTranscript.flatMap((turn, index) => turn.speaker === 'Wearer' ? []
+      : [...CUE_SENTENCES.segment(turn.text)].map(({ segment }) => segment.trim())
+        .filter(text => looksLikeQuestion(text) && !/^(?:does that make sense|any questions|okay|right)[.!? ]*$/i.test(text))
+        .map(text => ({ text, index })));
+    const { text: questionHint = '', index: questionIndex = -1 } = questions.at(-1) ?? {};
     const wearerAnswerSoFar = questionIndex < 0 ? '' : roomTranscript.slice(questionIndex + 1)
       .filter(turn => turn.speaker === 'Wearer').map(turn => turn.text).join(' ');
-    const query = [questionHint, ...roomTranscript.slice(-3).map(turn => turn.text)].filter(Boolean).join('\n');
+    const focus = [questionHint, roomCueTopicTerms(questionHint)].filter(Boolean).join(' ');
+    const query = [focus, ...roomTranscript.slice(-3).map(turn => turn.text)].filter(Boolean).join('\n');
     const corpus = [...this.pitchReferences, ...this.referenceCorpus()];
-    const lexical = retrieveProjectReferences(corpus, query, 6, questionHint);
+    const lexical = retrieveProjectReferences(corpus, query, 6, focus);
     const vectors = [this.pitchReferences, this.references, this.researchReferences]
       .flatMap(documents => retrieveVectorReferences(documents, query, 4))
       .sort((a, b) => b.score - a.score).map(result => result.passage);
@@ -1190,20 +1194,13 @@ export class Session {
             if (sentences.length) cue.answer = sentences.join('').trim();
             else cue = null;
           }
-          if (!cue && this.coachScenario === 'pitch' && resolved.questionHint && !resolved.wearerAnswerSoFar) {
-            const known = sourcedProjectCue(resolved.questionHint, resolved.passages, resolved.frontendStack);
-            if (known) {
-              cue = validateAnswer(known, resolved.passages, resolved.roomTranscript, { allowLongAnswer: true });
-              source = 'project-reference';
-            }
-          }
+          if (cue && /\bshow how it works in the demo\b.*\bfollow up on the rest\b/is.test(cue.answer)) cue = null;
           if (!cue) {
-            const answer = this.coachScenario === 'social' ? 'Ask what they’ve been enjoying lately, and what got them into it.'
-              : resolved.questionHint
-              ? 'Restate the question briefly. Show how it works in the demo and offer to follow up on the rest.'
-              : 'Open with the problem. Show a teammate sending you one private cue.';
-            cue = { answer, sources: [], ungrounded: true };
-            source = 'local-fallback';
+            cue = this.coachScenario === 'social'
+              ? { answer: 'Ask what they’ve been enjoying lately, and what got them into it.', sources: [] }
+              : roomFallbackCue(resolved.questionHint, resolved.passages, resolved.frontendStack, resolved.wearerAnswerSoFar);
+            if (!cue.sources.length) cue.ungrounded = true;
+            source = cue.sources.length ? 'project-reference' : 'local-fallback';
           }
           const [first, second] = [...CUE_SENTENCES.segment(cue.answer)].map(item => item.segment.trim());
           let lead = second && questionKey(first + ' ' + second).split(' ').length <= SPOKEN_CUE_TARGET_WORDS

@@ -4,7 +4,7 @@ The Mac streams room audio to ElevenLabs. After a judge asks something, the pres
 
 ## Retrieval and citations
 
-The hub combines its lexical and exact-code index with cosine search in an in-memory SQLite vector store. The store holds hashed token vectors for current project passages, uploads and retained research. The vector scorer can surface passages beyond those in the lexical shortlist. A recent question-shaped turn helps focus retrieval. OpenAI still chooses the question from the complete transcript. The hub sends the project overview and selected excerpts, and checks the model citation against the passage ID and exact wording.
+The hub combines lexical and code retrieval with cosine search in SQLite. OpenAI gets the full transcript, project overview and numbered excerpts. It selects an excerpt number, and the hub attaches the exact text. If the model response is unusable, the hub extracts a talking point from relevant references for that question.
 
 The room transcript lives in session memory and is cleared on reset. The vector store contains reference passages, not room speech. Neither raw microphone audio nor phone-only conversations are included in this request.
 

@@ -1572,13 +1572,15 @@ test('a single room-answer gesture sends the full transcript and hybrid evidence
   for (let turn = 1; turn <= 64; turn++) session.addTranscript('room', 'Setup detail ' + turn);
   session.addTranscript('room', 'Who is the target buyer?');
   session.addTranscript('room', 'Let me pull up the previous slide.');
+  session.addTranscript('room', 'Does that make sense?');
   assert.equal(calls.length, 0);
   assert.equal(session.snapshot().room.transcript.length, 60);
   const gesture = { type: 'signal', signal: 'LR', purpose: 'answer_room_question', id: 'ask' };
   await act('A', gesture);
   await act('A', gesture);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].roomTranscript.length, 67);
+  assert.equal(calls[0].roomTranscript.length, 68);
+  assert.equal(calls[0].questionHint, 'Who is the target buyer?');
   assert.equal(calls[0].roomTranscript[0].text, 'Our first introduction starts here.');
   assert.ok(calls[0].roomTranscript.some(turn => turn.text === 'Who is the target buyer?'));
   assert.ok(calls[0].passages.some(passage => passage.text.includes('sales team lead')));
@@ -1620,11 +1622,28 @@ test('Cue now condenses a long draft and coaches what to say next', async t => {
   const cues = seatFrames.A.filter(frame => frame.kind === 'pitch_help');
   assert.equal(cues.length, 4);
   assert.equal(cues[0].text, 'In your own words: Our buyer is the sales team lead.');
-  assert.match(cues[1].text, /Restate the question briefly/);
+  assert.match(cues[1].text, /buyer is the sales team lead/);
   assert.equal(cues[2].text, 'In your own words: Could you clarify which part you want me to show?');
   assert.equal(cues[3].text, 'Show what the presenter hears next.');
   assert.equal(session.log.filter(entry => entry.kind === 'pitch_help').at(-1).source, 'openai');
   assert.ok(!seatFrames.A.some(frame => frame.text?.includes('No supported cue')));
+});
+
+test('an unusable GPT reply still gives a concrete backend cue', async t => {
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false }, settings: { roomInput: 'mac' },
+    codec: { pitchHelp: async () => ({ status: 'advice', answer: '', sources: [] }) },
+    audio: { listen: async () => ({ listening: true }) },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'backend.md', data: Buffer.from(
+    'The Mac hub runs Node.js 22.13+ using standard HTTP/HTTPS, the ws package, and in-memory session state.',
+  ).toString('base64') }]);
+  await session.setRoomListening(true);
+  session.addTranscript('room', 'How does your backend work?');
+  await act('A', { type: 'signal', signal: 'R1', id: 'backend-fallback' });
+  assert.match(seatFrames.A.find(frame => frame.kind === 'pitch_help')?.text, /Node hub.*WebSocket/i);
+  assert.equal(session.log.find(entry => entry.kind === 'pitch_help')?.source, 'project-reference');
 });
 
 test('a sourced but generic grounding line is replaced with a concrete cue', async t => {
@@ -1654,8 +1673,7 @@ function scenarioCodec(onRequest, answer) {
 test('Stranger Interview sends only the conversation to OpenAI and whispers one follow-up', async t => {
   const requests = [];
   const codec = scenarioCodec((body, input) => requests.push({ body, input }),
-    () => ({ status: 'answer', question: '', answer: 'Ask what got them into outdoor climbing.',
-      sources: [{ id: '1', quote: 'I spent the weekend climbing in Squamish.' }], responseQuote: '' }));
+    () => ({ question: '', answer: 'Ask what got them into outdoor climbing.', evidence: 0 }));
   const { session, act, seatFrames } = await createLiveSession({
     sim: { A: false, B: false }, settings: { roomInput: 'mac', coachScenario: 'social' },
     codec, audio: { listen: async () => ({ listening: true }) },
