@@ -1579,7 +1579,7 @@ test('armed question mode prepares during speech and only plays after the matchi
   room.committed('Who is the target customer?');
   await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
   assert.equal(speechOptions.at(-1).role, 'assistant');
-  assert.notEqual(speechOptions.at(-1).whisper, true);
+  assert.equal(speechOptions.at(-1).whisper, true);
   assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
   assert.equal(calls, 1);
   await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'off' });
@@ -1752,7 +1752,7 @@ test('Question Mode interrupts an overlapping cue and gives only the missing bui
   const { session, act, seatFrames } = await createLiveSession({
     sim: { A: false, B: false }, settings: { roomInput: 'mac', pitchQuestionSettleMs: 5 },
     audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; },
-      speech: async (_, text, options) => { assert.notEqual(options.whisper, true); return '/cue.mp3'; } },
+      speech: async (_, text, options) => { assert.equal(options.whisper, true); return '/cue.mp3'; } },
   });
   t.after(() => session.close());
   const { readFile } = await import('node:fs/promises');

@@ -199,7 +199,7 @@ test('sim speech: exact or normalized text, per voice role, null on miss, zero n
   assert.equal(FakeWS.instances.length, 0, 'sim mic opens no socket');
 });
 
-test('operator announcements use prepared neutral clips offline and Flash for live custom speech', async () => {
+test('operator announcements use prepared clips offline and the assistant whisper voice live', async () => {
   const bankDir = await mkdtemp(path.join(tmpdir(), 'tp-announcement-bank-'));
   const preset = ANNOUNCEMENT_LINES[0];
   await writeFile(path.join(bankDir, 'bank.json'), JSON.stringify({
@@ -212,16 +212,17 @@ test('operator announcements use prepared neutral clips offline and Flash for li
   const audio = createAudio({ env: baseEnv(), fetchImpl, bankDir, whisperModel: 'eleven_v4_turbo' });
   const bundled = { url: '/assets/announcement.mp3', source: 'bank' };
   assert.deepEqual(await audio.announcement(preset, { sim: true }), bundled);
-  assert.deepEqual(await audio.announcement(preset), bundled);
+  assert.equal((await audio.announcement(preset)).source, 'live');
   assert.equal(await audio.announcement('Preset switched.', { sim: true }), null, 'other bank clips are not operator presets');
   assert.equal(await audio.announcement('A custom line with no clip.', { sim: true }), null);
-  assert.equal(fetchImpl.calls.length, 0);
+  assert.equal(fetchImpl.calls.length, 1);
+  assert.equal(fetchImpl.calls[0].json.text, '[whispers] ' + preset);
 
   const custom = await audio.announcement('Coach, ready at the front.');
   assert.equal(custom.source, 'live');
-  assert.equal(fetchImpl.calls[0].path, '/v1/text-to-speech/' + STOCK_VOICES.assistant.id);
-  assert.deepEqual(fetchImpl.calls[0].json, {
-    text: 'Coach, ready at the front.', model_id: 'eleven_flash_v2_5',
+  assert.equal(fetchImpl.calls[1].path, '/v1/text-to-speech/' + STOCK_VOICES.assistant.id);
+  assert.deepEqual(fetchImpl.calls[1].json, {
+    text: '[whispers] Coach, ready at the front.', model_id: 'eleven_v4_turbo',
   });
 
   const override = createAudio({ env: baseEnv({ TELEPATHY_ASSISTANT_VOICE: 'customNeutral' }), fetchImpl, bankDir });
@@ -719,7 +720,8 @@ test('tagged ElevenLabs whisper is used for real seat speech and falls back with
     ['/v1/text-to-speech/coachClone', 'eleven_flash_v2_5', 'Slow down'],
   ]);
   await audio.speech('B', 'Send: Wrap up?', { role: 'assistant' });
-  assert.equal(fetch_impl.calls.at(-1).json.model_id, 'eleven_flash_v2_5');
+  assert.equal(fetch_impl.calls.at(-1).json.model_id, 'eleven_v4_turbo');
+  assert.equal(fetch_impl.calls.at(-1).json.text, '[whispers] Send: Wrap up?');
 });
 
 test('superseding one TTS caller does not cancel a cache build for the same line', async () => {

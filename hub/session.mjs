@@ -793,7 +793,7 @@ export class Session {
     const voice = state.voiceRef;
     const signal = this.liveScope([seat]);
     try {
-      const text = 'Hi, this is my Telepath voice. Take a moment to hear how I sound at a normal speaking volume.';
+      const text = 'Hi, this is my Telepath voice. This is how I’ll sound in your ear.';
       const url = toUrl(await withDeadline(requestSignal => this.audio.speech(seat, text, {
         voice, role: 'voice-preview', signal: requestSignal,
       }), 8000, signal));
@@ -1312,7 +1312,7 @@ export class Session {
   async speakPitchCue(seat, text, signal) {
     try {
       return toUrl(await withDeadline(deadline => this.audio.speech(seat, text, {
-        voice: null, sim: false, role: 'assistant', signal: deadline,
+        voice: null, sim: false, role: 'assistant', signal: deadline, whisper: true,
       }), this.settings.pitchSpeechMs, signal));
     } catch { return null; }
   }

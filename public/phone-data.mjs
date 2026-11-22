@@ -26,7 +26,7 @@ export const APP_TIMING_LIMITS = Object.freeze({
   roomSampleMs: [5000, 120000],
 });
 
-export const DEFAULT_VOLUMES = Object.freeze({ cue: 0.72, voice: 0.58 });
+export const DEFAULT_VOLUMES = Object.freeze({ cue: 0.72, voice: 0.90 });
 
 export const SEAT_NAMES = Object.freeze(['A', 'B']);
 export const PRESETS = Object.freeze(['Pitch', 'Party', 'Meeting', 'Custom']);
