@@ -346,6 +346,24 @@ export function seatReadout(seat) {
   ];
 }
 
+// One plain line per seat for the lobby: where it is in setup.
+export function seatSummary(seat) {
+  if (!seat) return { text: 'Waiting', tone: 'wait', state: 'waiting' };
+  if (seat.ready === true) return { text: 'Ready', tone: 'ok', state: 'ready' };
+  if (!seat.online) return { text: 'Waiting to join', tone: 'wait', state: 'waiting' };
+  if (seat.voice === 'error') return { text: 'Voice failed', tone: 'flag', state: 'setup' };
+  if (seat.voice !== 'ready' && seat.voice !== 'fallback') return { text: 'Setting up voice', tone: 'wait', state: 'setup' };
+  if (seat.earbuds.done !== true) return { text: 'Testing earbuds', tone: 'wait', state: 'setup' };
+  if (seat.calibrated !== true) return { text: 'Calibrating', tone: 'wait', state: 'setup' };
+  return { text: 'Choosing preset', tone: 'wait', state: 'setup' };
+}
+
+// Rough speaking time for a transcript line, used to draw speech on the reveal lanes.
+export function speechSpanMs(text) {
+  const words = text?.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+  return Math.max(600, words * 360);
+}
+
 export function roomStatus(seat) {
   if (seat.sim) return 'Simulated';
   if (!seat.online) return 'Offline';
@@ -431,6 +449,11 @@ function boot() {
     livePreset: byId('live-preset'), liveContext: byId('live-context'), bits: byId('bits-value'),
     liveSeats: byId('live-seats'), stream: byId('stream-list'), streamEmpty: byId('stream-empty'),
     revealBits: byId('reveal-bits'), revealCount: byId('reveal-count'),
+    revealWords: byId('reveal-words'), revealLanes: byId('reveal-lanes'), revealNote: byId('reveal-message-note'),
+    revealKicker: byId('reveal-kicker'), liveMessages: byId('live-messages'), liveWords: byId('live-words'),
+    readout: { A: byId('readout-a'), B: byId('readout-b'), An: byId('readout-a-name'), Bn: byId('readout-b-name'),
+      preset: byId('readout-preset'), cache: byId('readout-cache') },
+    diagram: byId('lobby-diagram'), diaHost: byId('dia-host'), diaAgent: byId('dia-agent'),
     timeline: byId('timeline-list'), timelineEmpty: byId('timeline-empty'), transcripts: byId('reveal-transcripts'),
     announce: byId('phase-announce'),
     operator: byId('operator'), opToggle: byId('op-toggle'), opClose: byId('op-close'), opStatus: byId('op-status'),
@@ -512,11 +535,11 @@ function boot() {
   function renderChrome() {
     body.dataset.phase = state.phase;
     body.dataset.link = linkState;
-    ui.session.textContent = state.sessionId ? 'session ' + state.sessionId : 'session —';
-    ui.link.textContent = linkState === 'live' ? 'hub live' : linkState === 'offline' ? 'hub offline' : 'hub connecting';
+    ui.session.textContent = state.sessionId ? 'Session ' + state.sessionId : 'No session';
+    ui.link.textContent = linkState === 'live' ? 'Hub online' : linkState === 'offline' ? 'Hub offline' : 'Connecting';
     const presetLabel = state.preset ?? '—';
     const pending = state.presetPending && state.presetPending !== state.preset ? ' → ' + state.presetPending : '';
-    ui.preset.textContent = 'preset ' + presetLabel + pending;
+    ui.preset.textContent = 'Preset ' + presetLabel + pending;
 
     for (const step of document.querySelectorAll('[data-phase-step]')) {
       const index = PHASES.indexOf(step.dataset.phaseStep);
@@ -553,10 +576,53 @@ function boot() {
     ui.clock.textContent = formatOffset(Date.now() - state.startedAt);
   }
 
+  function renderDiagram() {
+    const summaries = {};
+    for (const key of SEATS) {
+      const seat = state.seats[key];
+      const summary = seatSummary(seat);
+      summaries[key] = summary;
+      const lower = key.toLowerCase();
+      byId('dia-seat-' + lower)?.setAttribute('data-state', summary.state);
+      const label = byId('dia-' + lower + '-name');
+      if (label) label.textContent = (key + ' · ' + seat.name).toUpperCase();
+      const text = summary.text.toUpperCase();
+      const pill = byId('dia-' + lower + '-state');
+      if (pill) pill.textContent = text;
+      byId('dia-' + lower + '-pill')?.setAttribute('width', String(Math.round(text.length * 6.3 + 16)));
+      const readout = ui.readout[key];
+      if (readout) {
+        readout.textContent = summary.text;
+        readout.dataset.tone = summary.tone;
+      }
+      const name = ui.readout[key + 'n'];
+      if (name) name.textContent = seat.name;
+    }
+    const both = summaries.A.state === 'ready' && summaries.B.state === 'ready';
+    ui.diagram?.setAttribute('data-flow', both || state.phase !== 'lobby' ? 'on' : 'off');
+    const seats = SEATS.map(key => state.seats[key]).filter(seat => seat.online);
+    const listening = seats.some(seat => seat.transcription === 'live');
+    const rehearsal = seats.length > 0 && seats.every(seat => seat.sim);
+    const drafting = seats.some(seat => seat.drafts !== false);
+    if (ui.diaAgent) {
+      ui.diaAgent.textContent = 'AGENT · ' + (listening ? (drafting ? 'LISTENING, DRAFTS ON' : 'LISTENING')
+        : rehearsal ? 'REHEARSAL' : 'STANDING BY');
+    }
+    if (ui.readout.preset) ui.readout.preset.textContent = state.preset ?? '—';
+    if (ui.readout.cache) {
+      const ready = SEATS.every(key => state.seats[key].ready === true);
+      ui.readout.cache.textContent = state.presetPending && state.presetPending !== state.preset ? 'Caching'
+        : ready ? 'Cached' : 'After setup';
+    }
+  }
+
   function renderLobby() {
+    renderDiagram();
     const seats = SEATS.map(key => {
       const seat = state.seats[key];
       const panel = node('section', 'seat');
+      panel.dataset.seat = key;
+      panel.dataset.ready = String(seat.ready === true);
       panel.dataset.online = String(seat.online);
       panel.setAttribute('aria-label', seat.name);
       const head = node('div', 'seat__head');
@@ -579,8 +645,8 @@ function boot() {
     const blocked = state.canBegin === false;
     ui.begin.disabled = blocked;
     ui.beginHint.textContent = blocked
-      ? 'both seats need voice, earbuds, calibration and ready'
-      : state.phase === 'lobby' ? 'starts the live board' : 'session already running';
+      ? 'Begin unlocks when both seats have a voice, tested earbuds, calibration and Ready.'
+      : state.phase === 'lobby' ? 'Starts the live board on both seats.' : 'The session is already running.';
   }
 
   function renderLive() {
@@ -600,6 +666,9 @@ function boot() {
       }
     }
     lastBits = state.bits;
+    const { messages, words } = revealSummary(state);
+    if (ui.liveMessages) ui.liveMessages.textContent = String(messages);
+    if (ui.liveWords) ui.liveWords.textContent = String(words);
 
     for (const key of SEATS) {
       const seat = state.seats[key];
@@ -620,15 +689,16 @@ function boot() {
 
   function boardSeat(seat, transcriptLines) {
     const panel = node('section', 'board-seat' + (seat.pending ? ' board-seat--pending' : ''));
+    panel.dataset.seat = seat.key;
     panel.setAttribute('aria-label', seat.name);
     const head = node('div', 'board-seat__head');
     const title = node('div', 'board-seat__title');
     title.append(node('span', 'seat__id', seat.key), node('span', 'seat__name', seat.name));
     const badges = node('div', 'board-seat__badges');
-    badges.append(badge(seat.online ? 'online' : 'offline', seat.online ? 'on' : null));
+    badges.append(badge(seat.online ? 'Online' : 'Offline', seat.online ? 'on' : null));
     if (seat.online) badges.append(badge(roomStatus(seat), seat.transcription === 'live' ? 'live' : null));
-    if (seat.mode) badges.append(badge(seat.mode === 1 ? '1 bud' : '2 buds'));
-    if (seat.drafts === false) badges.append(badge('drafts off'));
+    if (seat.mode) badges.append(badge(seat.mode === 1 ? '1 earbud' : '2 earbuds'));
+    if (seat.drafts === false) badges.append(badge('Drafts off'));
     head.append(title, badges);
     panel.append(head);
 
@@ -677,6 +747,7 @@ function boot() {
   function streamRow(entry, isNew) {
     const row = node('li', 'stream__row');
     if (entry.kind) row.dataset.kind = entry.kind;
+    if (entry.seat) row.dataset.seat = entry.seat;
     if (entry.canned) row.setAttribute('data-canned', '');
     if (entry.urgent) row.setAttribute('data-urgent', '');
     if (isNew) row.setAttribute('data-new', '');
@@ -711,46 +782,172 @@ function boot() {
     ui.revealBits.textContent = state.bits === null ? '—' : String(Math.round(state.bits * 100) / 100);
     const rows = timelineRows(state);
     const { messages, words, playbackStarts } = revealSummary(state);
+    if (ui.revealWords) ui.revealWords.textContent = String(words);
     ui.revealCount.textContent = messages
       ? messages + (messages === 1 ? ' message' : ' messages') + ' · ' + words + (words === 1 ? ' word' : ' words')
       : rows.length + ' events';
     if (!state.canned && messages && playbackStarts < messages) {
       ui.revealCount.textContent += ' · ' + playbackStarts + ' playback confirmed';
     }
+    if (ui.revealNote) {
+      ui.revealNote.textContent = messages
+        ? messages + ' sent · ' + (state.canned ? messages : playbackStarts) + ' heard'
+        : '';
+    }
+    if (ui.revealKicker) {
+      const base = timelineBase(state);
+      const times = state.log.map(entry => entry.at).filter(Number.isFinite);
+      const span = base !== null && times.length ? Math.max(...times) - base : null;
+      ui.revealKicker.textContent = ['Reveal', state.preset, span ? formatOffset(span) : null].filter(Boolean).join(' · ');
+    }
     ui.timelineEmpty.hidden = rows.length > 0;
+    renderLanes();
 
     fill(ui.timeline, rows.map(row => {
       const item = node('li', 'timeline__row');
       if (row.canned) item.setAttribute('data-canned', '');
+      if (row.urgent) item.setAttribute('data-urgent', '');
+      if (row.seat) item.dataset.seat = row.seat;
       item.append(node('span', 'timeline__at', row.offsetLabel));
-      const track = node('div', 'timeline__track');
-      const mark = node('span', 'timeline__mark');
-      mark.style.left = (row.position * 100).toFixed(2) + '%';
-      track.append(mark);
-      track.setAttribute('aria-hidden', 'true');
-      item.append(track);
-      item.append(node('span', 'timeline__seat', row.seat ?? '·'));
+      item.append(node('span', 'timeline__signal', SIGNAL_LABELS[row.signal] ?? row.signal ?? KIND_LABELS[row.kind] ?? 'event'));
+      const route = node('span', 'timeline__route');
+      if (row.seat) {
+        const from = node('b', null, row.seat);
+        from.dataset.seat = row.seat;
+        route.append(from, row.to ? ' → ' + row.to : '');
+      } else route.textContent = 'Hub';
+      item.append(route);
       const text = node('span', 'timeline__text');
-      const label = SIGNAL_LABELS[row.signal] ?? row.signal;
-      text.append(node('span', null, row.text ?? label ?? (KIND_LABELS[row.kind] ?? 'event')));
-      const meta = [label, row.seat && row.to ? row.seat + ' → ' + row.to : null, row.canned ? 'canned take'
-        : row.kind === 'message' && row.playedAt == null ? 'playback unconfirmed' : null]
-        .filter(Boolean).join(' · ');
+      text.append(node('span', null, row.text ?? SIGNAL_LABELS[row.signal] ?? row.signal ?? KIND_LABELS[row.kind] ?? 'event'));
+      const meta = row.canned ? 'canned take'
+        : row.kind === 'message' && row.playedAt == null ? 'playback unconfirmed' : null;
       if (meta) text.append(node('span', 'timeline__meta', meta));
       item.append(text);
-      item.append(node('span', 'timeline__bits', row.bits === null ? '' : row.bits + ' b'));
+      const bits = node('span', 'timeline__bits');
+      if (row.bits !== null) {
+        const filled = Math.max(0, Math.min(4, Math.round(row.bits)));
+        for (let index = 0; index < filled; index += 1) bits.append(node('i'));
+        bits.append(node('b', null, String(Math.round(row.bits * 100) / 100)));
+        bits.setAttribute('aria-label', row.bits + ' bits');
+      }
+      item.append(bits);
       return item;
     }));
 
     fill(ui.transcripts, SEATS.map(key => {
       const seat = state.seats[key];
+      const heard = state.log.filter(entry => entry.kind === 'message' && entry.to === key);
       const column = node('div');
-      const head = node('h2', 'eyebrow');
-      head.append(node('span', null, seat.name));
-      head.append(node('span', 'mono micro', seat.transcript.length + (seat.transcript.length === 1 ? ' line' : ' lines')));
-      column.append(head, transcript(seat, 0));
+      const head = node('h2', 'section-title');
+      const name = node('span', 'section-title__name', seat.name);
+      const lines = seat.transcript.length + (seat.transcript.length === 1 ? ' line' : ' lines');
+      head.append(name, node('span', null, heard.length ? lines + ' · ' + heard.length + ' heard' : lines));
+      column.append(head, revealTranscript(seat, heard));
       return column;
     }));
+  }
+
+  function revealTranscript(seat, heard) {
+    const container = node('div', 'transcript');
+    container.setAttribute('role', 'log');
+    container.setAttribute('aria-label', seat.name + ' transcript');
+    const base = timelineBase(state);
+    const entries = [
+      ...seat.transcript.map(line => ({ at: line.at, line })),
+      ...heard.map(message => ({ at: message.playedAt ?? message.at, message })),
+    ].sort((left, right) => (left.at ?? 0) - (right.at ?? 0));
+    if (!entries.length) {
+      container.append(node('p', 'empty', 'No transcript'));
+      return container;
+    }
+    for (const entry of entries) {
+      const row = node('div', 'transcript__line');
+      const offset = offsetFrom(base, entry.at);
+      row.append(node('span', 'transcript__at', offset === null ? '—' : formatOffset(offset)));
+      if (entry.line) {
+        row.append(node('span', 'transcript__text', entry.line.text));
+      } else {
+        row.classList.add('transcript__line--heard');
+        if (entry.message.seat) row.dataset.from = entry.message.seat;
+        const text = node('span', 'transcript__text', 'Heard ');
+        text.append(node('b', null, '“' + (entry.message.text ?? entry.message.signal ?? 'a message') + '”'));
+        row.append(text);
+      }
+      container.append(row);
+    }
+    return container;
+  }
+
+  function renderLanes() {
+    if (!ui.revealLanes) return;
+    const section = ui.revealLanes.closest('section');
+    const base = timelineBase(state);
+    const marks = [];
+    for (const key of SEATS) {
+      for (const line of state.seats[key].transcript) {
+        if (Number.isFinite(line.at)) marks.push({ lane: key, type: 'speech', at: line.at, end: line.at + speechSpanMs(line.text) });
+      }
+    }
+    for (const entry of state.log) {
+      if (!Number.isFinite(entry.at) || !SEATS.includes(entry.seat)) continue;
+      if (entry.kind === 'message') {
+        marks.push({ lane: entry.seat, type: 'tap', at: entry.at, label: entry.signal, seat: entry.seat, urgent: entry.urgent });
+        if (SEATS.includes(entry.to)) {
+          marks.push({ lane: entry.to, type: 'heard', at: entry.playedAt ?? entry.at, seat: entry.seat, urgent: entry.urgent });
+        }
+      } else if (entry.kind === 'receipt') {
+        marks.push({ lane: entry.seat, type: 'receipt', at: entry.at, seat: entry.seat });
+      } else if (entry.kind === 'draft') {
+        marks.push({ lane: entry.seat, type: 'draft', at: entry.at, seat: entry.seat });
+      }
+    }
+    if (section) section.hidden = base === null || !marks.length;
+    if (base === null || !marks.length) return;
+    // Start the lanes just before the first event so idle setup time does not squash the exchange.
+    const first = Math.min(...marks.map(mark => mark.at));
+    const start = Math.max(base, first - 1500);
+    const span = Math.max(1000, Math.max(...marks.map(mark => mark.end ?? mark.at)) - start);
+    const ratio = at => Math.min(1, Math.max(0, (at - start) / span)) * 100;
+
+    const axis = node('div', 'lanes__axis');
+    axis.append(node('span'));
+    const ticks = node('div', 'lanes__ticks');
+    const step = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600].find(seconds => span / 1000 / seconds <= 6) ?? 1200;
+    const offset = (start - base) / 1000;
+    for (let seconds = Math.ceil(offset / step) * step; (seconds - offset) * 1000 <= span; seconds += step) {
+      const tick = node('span', null, seconds < 60 ? seconds + 's' : formatOffset(seconds * 1000));
+      tick.style.left = (((seconds - offset) * 1000) / span * 100).toFixed(2) + '%';
+      ticks.append(tick);
+    }
+    axis.append(ticks);
+
+    const lanes = ['B', 'A'].map(key => {
+      const lane = node('div', 'lane');
+      lane.dataset.seat = key;
+      const who = node('div', 'lane__who');
+      who.append(node('span', 'lane__id', key), node('span', null, state.seats[key].name));
+      const track = node('div', 'lane__track');
+      track.setAttribute('aria-hidden', 'true');
+      for (const mark of marks.filter(item => item.lane === key)) {
+        const element = node('i', 'mark mark--' + mark.type);
+        if (mark.seat) element.classList.add(mark.seat === 'A' ? 'seat-a' : 'seat-b');
+        if (mark.urgent) element.classList.add('mark--urgent');
+        element.style.left = ratio(mark.at).toFixed(2) + '%';
+        if (mark.type === 'speech') element.style.width = Math.max(0.4, ratio(mark.end) - ratio(mark.at)).toFixed(2) + '%';
+        if (mark.type === 'tap' && mark.label) element.append(node('span', null, mark.label));
+        track.append(element);
+      }
+      lane.append(who, track);
+      return lane;
+    });
+
+    const legend = node('div', 'lanes__legend');
+    for (const [type, label] of [['speech', 'Speaking'], ['tap', 'Tap sent'], ['heard', 'Whisper heard'], ['receipt', 'Receipt'], ['draft', 'Agent draft']]) {
+      const item = node('span');
+      item.append(node('i', 'mark mark--' + type), label);
+      legend.append(item);
+    }
+    fill(ui.revealLanes, [axis, ...lanes, legend]);
   }
 
   function renderOperator() {
@@ -964,6 +1161,11 @@ function boot() {
     const joinUrl = firstText(info?.joinUrl) ?? location.origin;
     const local_only = info?.lanAvailable === false;
     ui.joinUrl.textContent = local_only ? 'No hotspot address' : joinUrl.replace(/\/$/, '');
+    if (ui.diaHost) {
+      let host = null;
+      try { host = new URL(joinUrl).hostname; } catch { /* a hand-typed address has no host to show */ }
+      ui.diaHost.textContent = local_only || !host ? 'HOTSPOT' : 'HOTSPOT · ' + host;
+    }
     ui.stageUrl.textContent = firstText(info?.stageUrl) ?? location.href.split('?')[0];
     const secure = asBool(info?.secure);
     const loopback = /^http:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/.test(joinUrl);
