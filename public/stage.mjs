@@ -438,7 +438,7 @@ function boot() {
   const body = document.body;
 
   const ui = {
-    session: byId('session-readout'), linkDot: byId('link-dot'), link: byId('link-readout'),
+    session: byId('session-readout'), link: byId('link-readout'),
     preset: byId('preset-readout'), clock: byId('clock-readout'),
     cannedBanner: byId('canned-banner'), cannedDetail: byId('canned-detail'),
     screens: { lobby: byId('screen-lobby'), live: byId('screen-live'), reveal: byId('screen-reveal') },

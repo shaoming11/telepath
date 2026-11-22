@@ -43,3 +43,5 @@ The checked-in speech and chime files are ElevenLabs-generated demo assets. Fixe
 ## Agent coordination
 
 Use the [agent board](https://github.com/fireheartjerry/telepathy/discussions) for updates and handoffs. Check the shared file and UI claims with `npm run board -- list`. The [agent handoff guide](AGENTS.md) explains how to claim or release work from any checkout.
+
+See [Work in parallel](docs/parallel-development.md) for the AirPods 1 and AirPods Pro branches, module ownership, and the shared interface.

@@ -1,3 +1,6 @@
+import { AIRPODS_1_ID, countPattern, createAirPods1Input, fitCountTiming } from './earbuds/airpods-1/input.mjs';
+import { AIRPODS_PRO_ID, createAirPodsProInput } from './earbuds/airpods-pro/input.mjs';
+
 export const DEFAULT_TIMING = Object.freeze({
   closeMs: 1200,
   duplicateMs: 95,
@@ -25,9 +28,6 @@ export const TRACKS = Object.freeze({
   previoustrack: 'L',
 });
 const ONE_EAR_REJECTION_MS = 60;
-export const COUNT_SIGNALS = Object.freeze(['R1', 'R2', 'L1']);
-export const COUNT_CALIBRATION_WINDOW_MS = 2500;
-const PRO_SIGNALS = Object.freeze({ pause: 'R1', play: 'R1', nexttrack: 'R2', previoustrack: 'L1' });
 
 export function seededRandom(seed) {
   let value = seed >>> 0;
@@ -78,11 +78,13 @@ export function createMediaInput({
   let current_mode = mode;
   let current_model = gestureModel;
   let events = [];
-  let count_events = false;
   let timer;
   let removed = false;
   let media_session;
   const registered = [];
+  const airpods1 = createAirPods1Input({ onRaw, onSignal, onError, onPlay, now, setTimer, clearTimer });
+  const airpods_pro = createAirPodsProInput({ onRaw, onSignal, onPlay, now });
+  airpods1.configure(thresholds);
 
   function clear() {
     clearTimer(timer);
@@ -90,16 +92,23 @@ export function createMediaInput({
     events = [];
   }
 
+  function reset() {
+    clear();
+    airpods1.reset();
+    removed = false;
+  }
+
   function flush() {
     if (!events.length) return;
-    const signal = count_events ? COUNT_SIGNALS[events.length - 1] : recognize(events, current_mode, thresholds);
+    const signal = recognize(events, current_mode, thresholds);
     const trace = events;
     clear();
     if (signal) onSignal?.(signal, trace);
     else onError?.(trace);
   }
 
-  function dispatch(action, at, count = false) {
+  function dispatch(action, at) {
+    airpods1.flush();
     const stamp = Number.isFinite(at) ? at : now();
     if (action !== 'pause' && action !== 'play' && !Object.hasOwn(TRACKS, action)) return;
     onRaw?.({ action, at: stamp });
@@ -119,29 +128,24 @@ export function createMediaInput({
       }
       return;
     }
-    const window_ms = count ? thresholds.countWindowMs ?? DEFAULT_TIMING.closeMs : thresholds.closeMs;
-    if (events.length && (count !== count_events || stamp - events.at(-1).at >= window_ms)) flush();
+    if (events.length && stamp - events.at(-1).at >= thresholds.closeMs) flush();
     const previous = events.at(-1);
     const same_track = current_mode === 1 || previous?.action === action;
-    if (previous && same_track && stamp - previous.at < (count ? DEFAULT_TIMING.duplicateMs : thresholds.duplicateMs)) return;
-    count_events = count;
+    if (previous && same_track && stamp - previous.at < thresholds.duplicateMs) return;
     events.push({ action, at: stamp });
     clearTimer(timer);
-    timer = setTimer(flush, window_ms);
+    timer = setTimer(flush, thresholds.closeMs);
   }
 
   function media_action(action) {
     onMediaEvent?.(action);
-    if (current_model === 'next-only') {
-      if (action === 'nexttrack') dispatch(action, undefined, true);
-      if (action === 'play') onPlay?.();
+    if (current_model === AIRPODS_1_ID) {
+      flush();
+      airpods1.receive(action);
       return;
     }
-    if (current_model === 'pro') {
-      const event = { action, at: now(), squeeze: true };
-      onRaw?.(event);
-      if (action === 'play') onPlay?.();
-      onSignal?.(PRO_SIGNALS[action], [event]);
+    if (current_model === AIRPODS_PRO_ID) {
+      airpods_pro.receive(action);
       return;
     }
     dispatch(action);
@@ -168,14 +172,20 @@ export function createMediaInput({
     },
     dispatch,
     configure({ mode: new_mode, timing: new_timing, gestureModel: model } = {}) {
-      if (new_mode && new_mode !== current_mode || model !== undefined && model !== current_model) clear();
+      if (new_mode && new_mode !== current_mode || model !== undefined && model !== current_model) {
+        clear();
+        airpods1.reset();
+      }
       current_mode = new_mode ?? current_mode;
       if (model !== undefined) current_model = model;
-      if (new_timing) thresholds = { ...thresholds, ...new_timing };
+      if (new_timing) {
+        thresholds = { ...thresholds, ...new_timing };
+        airpods1.configure(thresholds);
+      }
     },
-    flush,
-    reset() { clear(); removed = false; },
-    dispose() { clear(); removed = false; unregister(); },
+    flush() { flush(); airpods1.flush(); },
+    reset,
+    dispose() { reset(); unregister(); },
   };
 }
 
@@ -261,8 +271,8 @@ export function tuneCalibration(trials, defaults = {}) {
   let missed = 0;
 
   for (const trial of trials) {
-    const pattern = trial.gestureModel === 'next-only'
-      ? Array.from({ length: COUNT_SIGNALS.indexOf(trial.signal) + 1 }, () => ({ action: 'nexttrack' }))
+    const pattern = trial.gestureModel === AIRPODS_1_ID
+      ? countPattern(trial.signal)
       : patternFor(trial.signal, trial.mode, emulator);
     const received = trial.events.filter(({ action, at }) => Number.isFinite(at) && pattern.some(event => event.action === action)).toSorted((a, b) => a.at - b.at);
     const unique = [];
@@ -290,7 +300,7 @@ export function tuneCalibration(trials, defaults = {}) {
     const exact = unique.length === pattern.length && unique.every((event, index) => event.action === pattern[index].action);
     if (exact && pattern.length > 1) {
       const gaps = unique.slice(1).map(({ at }, index) => at - unique[index].at);
-      if (trial.gestureModel === 'next-only') {
+      if (trial.gestureModel === AIRPODS_1_ID) {
         if (trial.matched !== false) personal_gaps.push(...gaps);
       }
       else if (trial.signal === 'L2' && trial.mode === 1) slow.push(...gaps);
@@ -321,13 +331,7 @@ export function tuneCalibration(trials, defaults = {}) {
     timing.slowMaxMs = Math.round(Math.max(timing.slowMaxMs, timing.slowMinMs, ...slow));
   }
   if (mixed.length) timing.mixedMaxMs = Math.round(Math.max(timing.mixedMaxMs, ...mixed));
-  if (personal_gaps.length) {
-    const typical = median(personal_gaps, DEFAULT_TIMING.closeMs);
-    const sorted = personal_gaps.toSorted((a, b) => a - b);
-    const upper = sorted[Math.ceil(sorted.length * 0.85) - 1];
-    timing.countMedianMs = Math.round(typical);
-    timing.countWindowMs = Math.round(Math.min(COUNT_CALIBRATION_WINDOW_MS, Math.max(350, upper + 220, typical * 1.35)));
-  }
+  Object.assign(timing, fitCountTiming(personal_gaps));
   timing.closeMs = Math.round(Math.max(timing.closeMs, timing.fastMaxMs + 1, timing.slowMaxMs + 1, timing.mixedMaxMs + 1));
   return {
     timing, emulator,
