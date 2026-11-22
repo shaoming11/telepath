@@ -6,7 +6,7 @@ import re
 from html import escape
 from html.parser import HTMLParser
 from pathlib import Path
-from textwrap import dedent
+from textwrap import dedent, indent
 
 ROOT = Path(__file__).resolve().parents[1]
 SURFACES = {"PhoneMarkup": "public/index.html", "StageMarkup": "public/stage.html"}
@@ -190,6 +190,39 @@ def generated(component, source):
         if replacements != 1:
             raise ValueError(f"Expected exactly one generated {name} region.")
         imports += f"import {{ {name} }} from '../{name}';\n"
+    if component == "PhoneMarkup":
+        markup, replacements = re.subn(
+            r'(<section[^>]* id="phone-monitor"[^>]*></section>\s*'
+            r'<div[^>]* id="lock-controls"[^>]*>[\s\S]*?</div>\s*)'
+            r'(<div[^>]* id="live-draft"[^>]*>[\s\S]*?id="draft-discard"[^>]*>[^<]*</button>\s*</div>\s*</div>\s*)',
+            r'\2\1',
+            markup,
+        )
+        if replacements != 1:
+            raise ValueError("Expected one Live draft below the context controls.")
+        markup, replacements = re.subn(
+            r'(<section[^>]* id="phone-monitor"[^>]*></section>[\s\S]*?)'
+            r'(<button[^>]* id="live-acknowledge"[^>]*>[^<]*</button>\s*)',
+            r'\2\1',
+            markup,
+        )
+        if replacements != 1:
+            raise ValueError("Expected one Live acknowledgement below the context controls.")
+
+        def isolate_live_navigation(match):
+            opening, content, navigation = match.groups()
+            padding = re.match(r"[ \t]*", navigation)[0]
+            return (opening + "\n" + padding + '<div className="live-content">\n'
+                    + indent(content, "  ") + padding + "</div>\n" + navigation)
+
+        markup, replacements = re.subn(
+            r'(^[ \t]*<section[^>]* id="screen-live"[^>]*>)\n([\s\S]*?)(^[ \t]*<nav className="live-nav")',
+            isolate_live_navigation,
+            markup,
+            flags=re.M,
+        )
+        if replacements != 1:
+            raise ValueError("Expected one Live screen with separate navigation.")
     monitor = r'<section className="(channel-monitor(?: channel-monitor--phone)?)" id="((?:phone|lobby|stage)-monitor)" aria-label="Live audio and context"></section>'
     markup, replacements = re.subn(monitor, r'<ChannelMonitor id="\2" className="\1" />', markup)
     if replacements != (1 if component == "PhoneMarkup" else 2):

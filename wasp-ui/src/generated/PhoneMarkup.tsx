@@ -193,59 +193,61 @@ export function PhoneMarkup() {
           </section>
 
           <section className="screen screen-live" id="screen-live" data-screen="live" hidden>
-            <div className="live-head">
-              <strong className="live-preset" id="live-preset">Pitch</strong>
-              <span className="live-phase" id="live-phase"></span>
-            </div>
-            <dl className="facts">
-              <div><dt>Partner</dt><dd id="live-partner"></dd></div>
-              <div><dt>Room</dt><dd className="listen" id="live-listen" data-state="off"><i className="dot" aria-hidden="true"></i><span id="live-listen-text"></span></dd></div>
-              <div><dt>Messages</dt><dd id="live-cache"></dd></div>
-            </dl>
-
-            <PhonePitchControls />
-            <ChannelMonitor id="phone-monitor" className="channel-monitor channel-monitor--phone" />
-
-            <div className="lock-controls" id="lock-controls" hidden>
-              <button id="lock-controls-toggle" type="button" aria-pressed="false">Enable lock-screen controls</button>
-              <p className="meta" id="lock-controls-status" role="status"></p>
-            </div>
-
-            <div className="draft" id="live-draft" hidden>
-              <div className="draft-top">
-                <span className="label" id="live-draft-label">Send this?</span>
-                <span className="label draft-time" id="live-draft-time"></span>
+            <div className="live-content">
+              <div className="live-head">
+                <strong className="live-preset" id="live-preset">Pitch</strong>
+                <span className="live-phase" id="live-phase"></span>
               </div>
-              <div className="draft-clock" aria-hidden="true"><i id="live-draft-clock"></i></div>
-              <p id="live-draft-text"></p>
-              <div className="split">
-                <button className="primary" id="draft-send" type="button">Send</button>
-                <button id="draft-discard" type="button">Discard</button>
+              <dl className="facts">
+                <div><dt>Partner</dt><dd id="live-partner"></dd></div>
+                <div><dt>Room</dt><dd className="listen" id="live-listen" data-state="off"><i className="dot" aria-hidden="true"></i><span id="live-listen-text"></span></dd></div>
+                <div><dt>Messages</dt><dd id="live-cache"></dd></div>
+              </dl>
+
+              <PhonePitchControls />
+              <div className="draft" id="live-draft" hidden>
+                <div className="draft-top">
+                  <span className="label" id="live-draft-label">Send this?</span>
+                  <span className="label draft-time" id="live-draft-time"></span>
+                </div>
+                <div className="draft-clock" aria-hidden="true"><i id="live-draft-clock"></i></div>
+                <p id="live-draft-text"></p>
+                <div className="split">
+                  <button className="primary" id="draft-send" type="button">Send</button>
+                  <button id="draft-discard" type="button">Discard</button>
+                </div>
               </div>
+
+              <button id="live-acknowledge" className="quiet" type="button" hidden>Acknowledge whisper</button>
+              <ChannelMonitor id="phone-monitor" className="channel-monitor channel-monitor--phone" />
+
+              <div className="lock-controls" id="lock-controls" hidden>
+                <button id="lock-controls-toggle" type="button" aria-pressed="false">Enable lock-screen controls</button>
+                <p className="meta" id="lock-controls-status" role="status"></p>
+              </div>
+
+              <div className="messages">
+                <article className="message" id="live-in">
+                  <header><span className="label">In</span><time id="live-in-time"></time></header>
+                  <p id="live-in-text"></p>
+                </article>
+                <article className="message" id="live-out">
+                  <header><span className="label">Out</span><time id="live-out-time"></time></header>
+                  <p id="live-out-text"></p>
+                </article>
+              </div>
+
+              <p className="live-note" id="live-note" role="status"></p>
+
+              <div className="signals" id="signals" role="group" aria-label="Send a signal"></div>
+
+              <form className="room-input" id="sim-room" hidden>
+                <label htmlFor="sim-text">Room</label>
+                <input id="sim-text" type="text" maxLength={240} autoComplete="off" enterKeyHint="send" placeholder="Type what the room hears" />
+                <button type="submit">Say</button>
+              </form>
+
             </div>
-
-            <div className="messages">
-              <article className="message" id="live-in">
-                <header><span className="label">In</span><time id="live-in-time"></time></header>
-                <p id="live-in-text"></p>
-              </article>
-              <article className="message" id="live-out">
-                <header><span className="label">Out</span><time id="live-out-time"></time></header>
-                <p id="live-out-text"></p>
-              </article>
-            </div>
-
-            <button id="live-acknowledge" className="quiet" type="button" hidden>Acknowledge whisper</button>
-            <p className="live-note" id="live-note" role="status"></p>
-
-            <div className="signals" id="signals" role="group" aria-label="Send a signal"></div>
-
-            <form className="room-input" id="sim-room" hidden>
-              <label htmlFor="sim-text">Room</label>
-              <input id="sim-text" type="text" maxLength={240} autoComplete="off" enterKeyHint="send" placeholder="Type what the room hears" />
-              <button type="submit">Say</button>
-            </form>
-
             <nav className="live-nav" aria-label="Seat screens">
               <button type="button" data-go="codebook"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 4.5h12M3 9h12M3 13.5h8" /></svg>Codebook</button>
               <button type="button" data-go="log"><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="6.5" /><path d="M9 5.5V9l2.5 1.5" /></svg>Log</button>

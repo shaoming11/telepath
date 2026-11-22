@@ -22,8 +22,14 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
       const replaced = jsx.replace('<PhonePitchControls />', pitch.replaceAll('className="pitch-panel__status" role="status"', 'className="pitch-panel__status"'))
         .replace('<CalibrationTrial />', calibration);
       const dynamic = new Set(['aria-pressed:false', 'data-pitch-owner:react', 'data-calibration-owner:react', 'aria-label:Get a private cue now']);
+      const expected = hooks(body).filter(pair => !dynamic.has(pair.join(':')));
+      const draft_start = expected.findIndex(([, value]) => value === 'live-draft');
+      const draft_end = expected.findIndex(([, value]) => value === 'draft-discard');
+      const draft_hooks = expected.splice(draft_start, draft_end - draft_start + 1);
+      const receipt_hook = expected.splice(expected.findIndex(([, value]) => value === 'live-acknowledge'), 1);
+      expected.splice(expected.findIndex(([, value]) => value === 'phone-monitor'), 0, ...draft_hooks, ...receipt_hook);
       assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
-        hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
+        expected);
       assert.match(pitch, /aria-pressed=\{state\.armed\}/);
     } else {
       const room = await text('wasp-ui/src/StageRoomConsole.tsx');
@@ -86,6 +92,15 @@ test('phone input remains uncontrolled for Media Session and setup controllers',
   assert.match(jsx, /<input[^>]*type="radio"[^>]*name="earbud_mode"[^>]*defaultValue="next-only"/);
   assert.match(jsx, /<input[^>]*name="cal_scope"[^>]*defaultValue="mode" defaultChecked/);
   assert.match(jsx, /<input[^>]+id="settings-room-link"[^>]*readOnly hidden/);
+});
+
+test('timed actions precede passive context and the Live nav has its own row', async () => {
+  const phone = await text('wasp-ui/src/generated/PhoneMarkup.tsx');
+  const css = await text('wasp-ui/src/liquid.css');
+  assert.match(phone, /<PhonePitchControls \/>[\s\S]*id="live-draft"[\s\S]*id="draft-send"[\s\S]*id="live-acknowledge"[\s\S]*<ChannelMonitor id="phone-monitor"/);
+  assert.match(phone, /id="screen-live"[^>]*>\s*<div className="live-content">[\s\S]*<\/div>\s*<nav className="live-nav"/);
+  assert.match(css, /#screen-live > \.live-content \{[^}]*overflow-y: auto/);
+  assert.match(css, /#screen-live > \.live-nav \{[^}]*position: static/);
 });
 
 test('stage preserves inline SVG definitions, joins, and room mic controls', async () => {

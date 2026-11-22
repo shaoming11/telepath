@@ -269,6 +269,26 @@ body.wasp-liquid {
 }
 .wasp-liquid .draft-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .wasp-liquid .draft .draft-time { color: var(--fg-2); font-variant-numeric: tabular-nums; text-align: end; }
+.wasp-liquid #app:has(> .screens > #screen-live:not([hidden])) { block-size: 100dvh; }
+.wasp-liquid #app:has(#screen-live:not([hidden])) > :is(.masthead, .banner) { flex: none; }
+.wasp-liquid .screens:has(> #screen-live:not([hidden])), .wasp-liquid #screen-live { min-block-size: 0; }
+.wasp-liquid #screen-live { padding: 0; gap: 0; }
+.wasp-liquid #screen-live > .live-content {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px var(--gutter) 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.wasp-liquid #screen-live > .live-content > * { flex-shrink: 0; }
+.wasp-liquid #screen-live > .live-nav {
+  flex: none;
+  position: static;
+  margin: 0 0 calc(env(safe-area-inset-bottom) * -1);
+}
 
 .wasp-liquid[data-surface="stage"] {
   --outer: #05070b;
