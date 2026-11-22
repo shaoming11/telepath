@@ -1,5 +1,5 @@
 {
-  "revision": 7,
+  "revision": 8,
   "claims": [
     {
       "id": "2ce9afb4-600c-46c6-a4cc-56d0e77cb750",
@@ -44,6 +44,22 @@
         "tests"
       ],
       "claimedAt": "2026-11-22T01:34:56.869Z"
+    },
+    {
+      "id": "9aed406b-dc97-4bfb-a03a-9377f0218016",
+      "owner": "fireheartjerry",
+      "agent": "codex-hardware",
+      "branch": "telepathy-demo",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "docs/rehearsal.md",
+        "docs/report.md"
+      ],
+      "paths": [
+        "docs/rehearsal.md",
+        "docs/report.md"
+      ],
+      "claimedAt": "2026-11-22T01:47:11.062Z"
     }
   ]
 }
