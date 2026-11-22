@@ -92,7 +92,9 @@ let last_output_phase;
 let last_output_at = 0;
 const gesture_scopes = new Map();
 const awaiting_signal_ack = new Map();
-const privateCueAudio = new Set();
+const privateCueAudio = new Map();
+const reactPitch = Boolean(document.querySelector('[data-pitch-owner="react"]'));
+let lastPitchRender = '';
 const SIGNAL_ACK_MS = 1800;
 
 const keepalive = $('keepalive');
@@ -118,11 +120,16 @@ const audio = createAudioEngine({
   timing: settings.app,
   on_status: ({ key, text }) => set_issue(key, text),
   on_heard: message_id => {
+    const text = privateCueAudio.get(message_id);
     if (privateCueAudio.delete(message_id)) {
-      const notes = $('live-pitch-notes');
-      notes.classList.remove('cue-started');
-      void notes.offsetWidth;
-      notes.classList.add('cue-started');
+      if (reactPitch) {
+        document.dispatchEvent(new CustomEvent('telepathy:pitch-speech-start', { detail: { id: message_id, text } }));
+      } else {
+        const notes = $('live-pitch-notes');
+        notes.classList.remove('cue-started');
+        void notes.offsetWidth;
+        notes.classList.add('cue-started');
+      }
     }
     return send({ type: 'heard', messageId: message_id });
   },
@@ -576,8 +583,8 @@ function handle_frame(frame, source) {
       if (source.synced && is_stale_frame(frame)) return;
       if (['announcement', 'pitch_help'].includes(frame.kind) && (!source.synced || ui.state?.canned || ui.state?.phase === 'reveal')) return;
       if (frame.kind === 'pitch_help' && frame.messageId) {
-        privateCueAudio.add(frame.messageId);
-        if (privateCueAudio.size > 32) privateCueAudio.delete(privateCueAudio.values().next().value);
+        privateCueAudio.set(frame.messageId, frame.text);
+        if (privateCueAudio.size > 32) privateCueAudio.delete(privateCueAudio.keys().next().value);
       }
       return audio.play(frame);
     case 'signal_ack': {
@@ -1380,13 +1387,6 @@ function render_signals() {
   const order = SIGNAL_ORDER[settings.mode];
   const host = $('signals');
   const pitch_help = ui.state?.pitchHelp === true;
-  const mode_button = $('question-mode');
-  const armed = my_state()?.questionMode === true;
-  mode_button.hidden = !ui.state?.questionModeAvailable || is_sim();
-  mode_button.setAttribute('aria-pressed', String(armed));
-  set_text(mode_button.querySelector('b'), armed ? 'Question mode on' : 'Question mode');
-  set_text(mode_button.querySelector('span'), armed ? 'Listening for questions. Tap to stop.' : 'Prepare while the judge speaks');
-
   const key = settings.mode + settings.gesture_model + String(pitch_help) + String(ui.state?.questionModeAvailable) + JSON.stringify(codebook);
   if (ui.signals_key !== key) {
     ui.signals_key = key;
@@ -1440,16 +1440,26 @@ function render_draft(shown) {
   clock.style.transform = 'scaleX(0)';
 }
 
-function render_live() {
-  const state = ui.state;
-  const mine = my_state();
-  const partner = state?.seats?.[partner_seat()];
-  const preset = state?.preset ?? 'Pitch';
-  set_text($('live-preset'), state?.presetPending && state.presetPending !== preset ? preset + ' to ' + state.presetPending : preset);
-  const phase = state?.phase ?? 'lobby';
-  const speaking_notes = $('live-pitch-notes');
-  const cue = phase === 'live' && !state?.canned && preset === 'Pitch' ? mine?.lastPitchCue : null;
-  speaking_notes.hidden = !cue?.text;
+function renderPitchControls(state, mine, phase, cue) {
+  const available = Boolean(state?.questionModeAvailable) && !is_sim();
+  const armed = mine?.questionMode === true;
+  if (reactPitch) {
+    const detail = { available, armed, live: phase === 'live' && !state?.canned, connected: is_online(), cue: cue ?? null };
+    const fingerprint = JSON.stringify(detail);
+    if (fingerprint !== lastPitchRender) {
+      lastPitchRender = fingerprint;
+      document.dispatchEvent(new CustomEvent('telepathy:pitch-state', { detail }));
+    }
+    return;
+  }
+
+  const mode_button = $('question-mode');
+  mode_button.hidden = !available;
+  mode_button.setAttribute('aria-pressed', String(armed));
+  set_text(mode_button.querySelector('b'), armed ? 'Question mode on' : 'Question mode');
+  set_text(mode_button.querySelector('span'), armed ? 'Listening for questions. Tap to stop.' : 'Prepare while the judge speaks');
+
+  $('live-pitch-notes').hidden = !cue?.text;
   set_text($('live-pitch-cue'), cue?.text ?? '');
   const points = Array.isArray(cue?.points) ? cue.points : [];
   const notes_key = JSON.stringify(points);
@@ -1462,6 +1472,17 @@ function render_live() {
       return item;
     }));
   }
+}
+
+function render_live() {
+  const state = ui.state;
+  const mine = my_state();
+  const partner = state?.seats?.[partner_seat()];
+  const preset = state?.preset ?? 'Pitch';
+  set_text($('live-preset'), state?.presetPending && state.presetPending !== preset ? preset + ' to ' + state.presetPending : preset);
+  const phase = state?.phase ?? 'lobby';
+  const cue = phase === 'live' && !state?.canned && preset === 'Pitch' ? mine?.lastPitchCue : null;
+  renderPitchControls(state, mine, phase, cue);
   $('live-phase').dataset.phase = phase;
   set_text($('live-phase'), state?.canned ? 'Canned take' : PHASE_LABELS[phase] ?? '');
   set_text($('live-partner'), partner?.online ? (partner.ready ? 'Ready' : 'Connected') : 'Offline');
@@ -1615,7 +1636,11 @@ function set_earbud_model(model) {
 }
 
 function bind_events() {
-  $('question-mode').addEventListener('click', () => on_signal('LR', undefined, true));
+  if (reactPitch) {
+    document.addEventListener('telepathy:toggle-question-mode', () => {
+      if (ui.state?.phase === 'live' && ui.state.questionModeAvailable) on_signal('LR', undefined, true);
+    });
+  } else $('question-mode').addEventListener('click', () => on_signal('LR', undefined, true));
   installDiag({ send, keepalive });
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);

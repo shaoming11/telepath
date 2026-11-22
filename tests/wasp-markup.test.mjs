@@ -13,12 +13,30 @@ for (const [filename, name] of [['index', 'PhoneMarkup'], ['stage', 'StageMarkup
     assert.ok(body);
     assert.match(jsx, new RegExp('export function ' + name + '\\('));
     const hooks = source => Array.from(source.matchAll(/\s(id|role|aria-[a-z-]+|data-[a-z-]+)="([^"]*)"/g), match => [match[1], match[2]]);
-    assert.deepEqual(hooks(jsx), hooks(body));
+    if (filename === 'index') {
+      const pitch = await text('wasp-ui/src/PhonePitchControls.tsx');
+      const replaced = jsx.replace('<PhonePitchControls />', pitch);
+      const dynamic = new Set(['aria-pressed:false', 'data-pitch-owner:react']);
+      assert.deepEqual(hooks(replaced).filter(pair => !dynamic.has(pair.join(':'))),
+        hooks(body).filter(pair => !dynamic.has(pair.join(':'))));
+      assert.match(pitch, /aria-pressed=\{state\.armed\}/);
+    } else assert.deepEqual(hooks(jsx), hooks(body));
     assert.doesNotMatch(jsx, /<(?:script|iframe)\b|dangerouslySetInnerHTML/);
     assert.doesNotMatch(jsx, /\s(?:class|for|viewbox)=/);
     assert.match(jsx, /<svg[^>]*viewBox=/);
   });
 }
+
+test('the Wasp question rail delegates actions to the hub controller and animates actual speech start', async () => {
+  const controller = await text('public/phone.mjs');
+  const component = await text('wasp-ui/src/PhonePitchControls.tsx');
+  for (const event of ['telepathy:pitch-state', 'telepathy:pitch-speech-start', 'telepathy:toggle-question-mode']) {
+    assert.ok(controller.includes(event));
+    assert.ok(component.includes(event));
+  }
+  assert.match(component, /disabled=\{!state\.live \|\| !state\.connected\}/);
+  assert.match(component, /prefers-reduced-motion: reduce/);
+});
 
 test('phone input remains uncontrolled for Media Session and setup controllers', async () => {
   const jsx = await text('wasp-ui/src/generated/PhoneMarkup.tsx');
