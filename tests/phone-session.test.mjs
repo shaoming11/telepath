@@ -300,6 +300,23 @@ test('a rejected clone stays on the voice screen with the provider reason and a 
   assert.equal(get_element('voice-record').disabled, false);
 });
 
+test('AirPods 1 calibration releases mic capture until leaving setup', async () => {
+  socket.receive({ type: 'state', state: seat_state(null, { phase: 'lobby', sessionId: '2' }) });
+  await settle();
+  const before = mic_tracks.at(-1);
+  assert.equal(before.readyState, 'live');
+  get_element('settings-calibrate').listeners.click[0]();
+  get_element('cal-quick-start').listeners.click[0]();
+  await settle();
+  assert.equal(before.readyState, 'ended');
+  media_actions.get('nexttrack')();
+  assert.equal(get_element('cal-quick-nexttrack').textContent, 'Next Track received');
+  get_element('cal-skip').listeners.click[0]();
+  await settle();
+  assert.notEqual(mic_tracks.at(-1), before);
+  assert.equal(mic_tracks.at(-1).readyState, 'live');
+});
+
 test.after(() => {
   restore();
   Object.defineProperty(globalThis, 'location', saved_location);

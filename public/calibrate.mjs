@@ -461,7 +461,7 @@ export function createCalibration(services) {
       elements.quick_status.textContent = received === 'nexttrack'
         ? 'Safari received the double-tap. Start the timing trials when ready.'
         : received ? 'Safari sent ' + ACTION_LABELS[received] + '. Set the earbud double-tap to Next Track.'
-          : 'Double-tap the earbud assigned to Next Track once. If nothing changes, check that Control Center shows Telepathy in Now Playing.';
+          : 'Double-tap the earbud assigned to Next Track once. The microphone is off for this check. If nothing changes, check Now Playing in Control Center.';
       elements.quick_continue.textContent = 'Start timing trials';
       elements.quick_continue.hidden = !checked_actions.has('nexttrack');
       return;
