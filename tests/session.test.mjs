@@ -1156,6 +1156,7 @@ test('a receipt intent only acknowledges its named playback and expires quietly'
   assert.equal(entry.playedAt, 1180);
   assert.equal(entry.playbackLatencyMs, 180);
   assert.equal(session.snapshot('B').seats.B.receipt.messageId, fixed.messageId);
+  assert.equal(session.snapshot('B').seats.B.receipt.openedAt, 1180);
   assert.equal(session.snapshot('A').seats.B.receipt, null);
 
   await act('B', { type: 'signal', signal: 'LR' });

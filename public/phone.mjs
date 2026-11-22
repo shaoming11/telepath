@@ -306,21 +306,27 @@ function clear_signal_tracking() {
   awaiting_signal_ack.clear();
 }
 
+function prefersReceipt(pending, receipt) {
+  return Number.isFinite(pending?.heardAt) && Number.isFinite(receipt?.openedAt) && receipt.openedAt >= pending.heardAt;
+}
+
 function gesture_scope(pressed_at) {
   const state = ui.state;
   const mine = my_state();
   const pending = mine?.pending;
   const receipt = mine?.receipt;
   const receipt_wait = (ui.receipt_deadline ?? -1) - (pressed_at ?? performance.now());
+  const receipt_id = receipt && receipt_wait >= 0 ? receipt.messageId : null;
+  const receipt_first = pressed_at != null && receipt_id && prefersReceipt(pending, receipt);
   return {
     hubId: state?.hubId,
     sessionId: state?.sessionId,
     cacheId: state?.cacheId ?? null,
     pitchHelp: state?.phase === 'live' && state.pitchHelp === true,
-    draftId: drafts.can_approve(pending) ? pending.id : null,
+    draftId: drafts.can_approve(pending) && !receipt_first ? pending.id : null,
     visibleDraftId: drafts.visible(pending) ? pending.id : null,
     previewWaiting: drafts.visible(pending) && pending.heardAt == null,
-    receiptId: receipt && receipt_wait >= 0 ? receipt.messageId : null,
+    receiptId: receipt_id,
     receiptPressedAt: receipt && pressed_at != null && receipt_wait >= 0 ? receipt.until - receipt_wait : undefined,
   };
 }
@@ -384,6 +390,7 @@ function on_signal(signal, trace, { toggle_question_mode = false, draft_id, rece
   const { previewWaiting, pitchHelp, visibleDraftId, receiptPressedAt, ...intent } = scope;
   intent.draftId = explicit_signal || receipt_id ? null : draft_id ?? (discard ? visibleDraftId : scope.draftId);
   intent.receiptId = explicit_signal ? null : receipt_id ?? scope.receiptId;
+  if (first && signal === 'R1' && intent.draftId) intent.receiptId = null;
   if (signal === 'R1' && !intent.draftId && intent.receiptId === scope.receiptId && Number.isFinite(receiptPressedAt)) {
     intent.receiptPressedAt = receiptPressedAt;
   }
@@ -1464,7 +1471,6 @@ function render_draft(shown) {
     return;
   }
   const is_preset = pending.kind === 'preset';
-  set_text($('live-draft-label'), is_preset ? 'Switch preset?' : 'Send this?');
   set_text($('live-draft-text'), pending.text ?? '');
   set_text($('draft-send'), is_preset ? 'Switch' : 'Send');
   set_text($('draft-discard'), 'Discard');
@@ -1486,7 +1492,11 @@ function render_draft(shown) {
     clock.style.transform = 'scaleX(0)';
   }
   const left = Math.max(0, ui.draft_deadline - now);
-  $('draft-send').disabled = !drafts.can_approve(pending) || !left;
+  const can_approve = drafts.can_approve(pending) && left > 0;
+  const receipt_first = can_approve && gesture_scope().receiptId && prefersReceipt(pending, my_state()?.receipt);
+  set_text($('live-draft-label'), receipt_first ? is_preset ? 'Use Switch for this preset' : 'Use Send for this draft'
+    : is_preset ? 'Switch preset?' : 'Send this?');
+  $('draft-send').disabled = !can_approve;
   set_text($('live-draft-time'), !left ? 'Expired' : pending.heardAt == null ? 'Waiting for preview' : Math.ceil(left / 1000) + ' s');
   if (left) ui.draft_timer = setTimeout(schedule_render, (left % 1000 || 1000) + 1);
 }

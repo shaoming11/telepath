@@ -528,6 +528,32 @@ test('both AirPods profiles toggle question mode with one press and retain recei
   assert.equal(sent().at(-1)?.purpose, undefined);
 });
 
+test('Single follows the newest playback while the explicit draft action stays independent', async () => {
+  const serverNow = Date.now();
+  const receipt = { messageId: 'incoming-whisper', openedAt: serverNow - 300, until: serverNow + 3700 };
+  const settings = { pitchHelp: true, questionModeAvailable: true, roomInput: 'mac', sessionId: '2', serverNow };
+  const sample = heardAt => {
+    const state = seat_state(draft({ id: 'overlapping-draft', heardAt, expiresAt: serverNow + 5500 }), settings);
+    state.seats.A.receipt = receipt;
+    return state;
+  };
+  const signals = () => socket.sent.filter(frame => frame.type === 'signal');
+  socket.receive({ type: 'state', state: sample(serverNow - 1200) });
+  await settle();
+  socket.sent.length = 0;
+  assert.equal(get_element('live-draft-label').textContent, 'Use Send for this draft');
+  media_actions.get('pause')();
+  assert.deepEqual([signals()[0]?.receiptId, signals()[0]?.draftId], ['incoming-whisper', null]);
+  get_element('draft-send').listeners.click[0]();
+  assert.equal(signals().at(-1)?.draftId, 'overlapping-draft');
+
+  socket.receive({ type: 'state', state: sample(serverNow - 100) });
+  await settle();
+  socket.sent.length = 0;
+  media_actions.get('pause')();
+  assert.deepEqual([signals()[0]?.receiptId, signals()[0]?.draftId], [null, 'overlapping-draft']);
+});
+
 test('the live screen keeps the private cue visible until the hub clears it', async () => {
   const state = seat_state(null, { sessionId: '2' });
   state.seats.A.lastPitchCue = { text: 'Phone catches taps.', points: ['Safari sends a browser event.'] };
