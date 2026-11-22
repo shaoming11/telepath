@@ -1,34 +1,6 @@
 {
-  "revision": 17,
+  "revision": 18,
   "claims": [
-    {
-      "id": "8e83fdf6-49d4-405c-b10a-fda92b6f2e1d",
-      "owner": "influxtion",
-      "agent": "conversation-answers",
-      "branch": "codex/conversation-answers",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub",
-        "public/stage.html",
-        "public/stage.mjs",
-        "public/stage.css",
-        "tests",
-        "package.json",
-        "package-lock.json",
-        "README.md"
-      ],
-      "paths": [
-        "README.md",
-        "hub",
-        "package-lock.json",
-        "package.json",
-        "public/stage.css",
-        "public/stage.html",
-        "public/stage.mjs",
-        "tests"
-      ],
-      "claimedAt": "2026-11-22T03:22:36.488Z"
-    },
     {
       "id": "071419b2-b865-4894-9942-8da1b3e6d7ba",
       "owner": "fireheartjerry",
