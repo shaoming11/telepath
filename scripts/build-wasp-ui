@@ -2,6 +2,35 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo="$PWD"
+target="$repo/.runtime/wasp-client"
+fingerprint=$(node --input-type=module <<'JS'
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync } from 'node:fs';
+
+function files(directory) {
+  return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const path = directory + '/' + entry.name;
+    return entry.isDirectory() ? files(path) : entry.isFile() ? [path] : [];
+  });
+}
+
+const inputs = [
+  'scripts/build-wasp-ui', 'scripts/generate-wasp-surfaces.py', 'public/index.html', 'public/stage.html',
+  'wasp-ui/.wasproot', 'wasp-ui/.waspignore', 'wasp-ui/.npmrc', 'wasp-ui/main.wasp.ts', 'wasp-ui/schema.prisma',
+  'wasp-ui/package.json', 'wasp-ui/package-lock.json', 'wasp-ui/vite.config.ts', 'wasp-ui/tsconfig.json',
+  'wasp-ui/tsconfig.src.json', 'wasp-ui/tsconfig.wasp.json', ...files('wasp-ui/src'),
+];
+const hash = createHash('sha256');
+for (const path of inputs.sort()) {
+  hash.update(path + '\0').update(createHash('sha256').update(readFileSync(path)).digest());
+}
+console.log(hash.digest('hex'));
+JS
+)
+if [[ "${1:-}" == "--ensure" && -s "$target/index.html" && -d "$target/wasp-assets" && -s "$target/source.sha256" ]] \
+   && [[ "$fingerprint" == "$(cat "$target/source.sha256")" ]]; then
+  exit 0
+fi
 python3 scripts/generate-wasp-surfaces.py --check
 cd wasp-ui
 wasp=(npm exec --yes --package=@wasp.sh/wasp-cli@0.26.0 -- wasp)
@@ -9,7 +38,6 @@ if [[ ! -d .wasp/spec ]]; then "${wasp[@]}" install; fi
 "${wasp[@]}" build
 PATH="$PWD/node_modules/.bin:$PATH" REACT_APP_API_URL=http://127.0.0.1:5780 vite build
 dist="$PWD/.wasp/out/web-app/build"
-target="$repo/.runtime/wasp-client"
 test -s "$dist/200.html"
 test -d "$dist/wasp-assets"
 mkdir -p "$target/wasp-assets"
@@ -23,3 +51,5 @@ if ([...html.matchAll(viewport)].length !== 1) throw new Error('Expected one Was
 writeFileSync(target, html.replace(viewport, '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'));
 JS
 mv "$target/index.html.next" "$target/index.html"
+printf '%s\n' "$fingerprint" > "$target/source.sha256.next"
+mv "$target/source.sha256.next" "$target/source.sha256"
