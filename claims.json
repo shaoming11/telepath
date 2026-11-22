@@ -1,5 +1,5 @@
 {
-  "revision": 98,
+  "revision": 99,
   "claims": [
     {
       "id": "1de997b5-3f95-411d-a390-3dba874864d8",
@@ -16,32 +16,6 @@
         "video"
       ],
       "claimedAt": "2026-11-22T06:27:03.141Z"
-    },
-    {
-      "id": "0388b271-792d-4fc0-8eff-bec9faeabc34",
-      "owner": "fireheartjerry",
-      "agent": "codex-wasp-calibration",
-      "branch": "jerry/wasp-liquid-glass",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/calibrate.mjs",
-        "wasp-ui/src/CalibrationTrial.tsx",
-        "wasp-ui/src/liquid.css",
-        "wasp-ui/src/generated/PhoneMarkup.tsx",
-        "scripts/generate-wasp-surfaces.py",
-        "tests/phone-calibrate.test.mjs",
-        "tests/wasp-markup.test.mjs"
-      ],
-      "paths": [
-        "public/calibrate.mjs",
-        "scripts/generate-wasp-surfaces.py",
-        "tests/phone-calibrate.test.mjs",
-        "tests/wasp-markup.test.mjs",
-        "wasp-ui/src/CalibrationTrial.tsx",
-        "wasp-ui/src/generated/PhoneMarkup.tsx",
-        "wasp-ui/src/liquid.css"
-      ],
-      "claimedAt": "2026-11-22T06:45:41.249Z"
     }
   ]
 }
