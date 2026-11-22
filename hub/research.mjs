@@ -2,11 +2,13 @@ import { createTextReference } from './references.mjs';
 
 const TOOL = { type: 'function', name: 'research_person', description: 'Look up a named interviewer or pitch judge by their explicitly stated full name and current employer. Use only when professional background could improve future coaching.', strict: true,
   parameters: { type: 'object', properties: { name: { type: 'string' }, company: { type: 'string' } }, required: ['name', 'company'], additionalProperties: false } };
+const phrase = value => ' ' + String(value ?? '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim() + ' ';
 const clean = (value, max = 900) => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '';
 
 // Separate background tool loop: never put a research request on the cue deadline.
 export function createResearch({ env = process.env, fetchImpl = fetch, now = Date.now } = {}) {
-  const enabled = Boolean(env.FIBER_API_KEY && env.OPENAI_API_KEY && env.TELEPATHY_RESEARCH !== 'off');
+  const enabled = Boolean(env.FIBER_API_KEY && env.OPENAI_API_KEY
+    && env.TELEPATHY_RESEARCH !== 'off' && !['local', 'off'].includes(env.TELEPATHY_LLM));
   let busy = false, last = -Infinity, attempts = 0;
   const seen = new Set();
   return {
@@ -29,8 +31,8 @@ export function createResearch({ env = process.env, fetchImpl = fetch, now = Dat
         if (!call) return null;
         const args = JSON.parse(call.arguments);
         const name = clean(args.name, 120), company = clean(args.company, 160);
-        const spoken = turns.map(t => t.text).join(' ').toLowerCase();
-        if (name.split(' ').length < 2 || !company || !spoken.includes(name.toLowerCase()) || !spoken.includes(company.toLowerCase())) return null;
+        const spoken = phrase(turns.map(t => t.text).join(' '));
+        if (name.split(' ').length < 2 || !company || !spoken.includes(phrase(name)) || !spoken.includes(phrase(company))) return null;
         const key = (name + ' at ' + company).toLowerCase();
         if (seen.has(key)) return null;
         seen.add(key);
@@ -47,8 +49,11 @@ export function createResearch({ env = process.env, fetchImpl = fetch, now = Dat
         const person = rows[0];
         const returnedName = clean(person.name || [person.first_name, person.last_name].filter(Boolean).join(' '));
         if (returnedName.toLowerCase() !== name.toLowerCase()) return null;
-        const job = person.current_job;
-        if (clean(job?.company_name).toLowerCase() !== company.toLowerCase()) return null;
+        const employer = phrase(company);
+        const job = [person.current_job, ...(Array.isArray(person.experiences) ? person.experiences : [])].find(
+          item => item?.is_current === true && phrase(item.company_name) === employer,
+        );
+        if (!job) return null;
         const slug = clean(person.primary_slug, 160);
         const url = /^[a-z0-9_-]+$/i.test(slug) ? 'https://www.linkedin.com/in/' + slug : 'https://api.fiber.ai/docs/';
         const text = [

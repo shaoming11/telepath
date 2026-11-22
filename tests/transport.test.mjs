@@ -319,7 +319,7 @@ test('a phone request uses a prepared Maritime context plan and reports private 
       const input = JSON.parse(JSON.parse(request.body).input);
       assert.equal(input.plan.intent, 'answer');
       assert.equal(input.turns.at(-1)?.speaker, 'Speaker 1');
-      const passage = input.passages.find(item => item.name === 'Telepathy pitch brief.md');
+      const passage = input.passages.find(item => item.name === 'Telepath pitch brief.md');
       const answer = { status: 'answer', question: 'Why the MacBook?', answer: finalLine, responseQuote: '',
         sources: [{ id: passage.id, quote: passage.text.slice(0, 50).trim() }] };
       return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(answer) }] }] });
@@ -379,7 +379,7 @@ test('loopback rehearsal advertises the address it actually listens on', async c
   assert.equal(new URL(info.joinUrl).hostname, '127.0.0.1');
   const response = await fetch(info.joinUrl);
   assert.equal(response.status, 200);
-  assert.match(await response.text(), /<title>Telepathy<\/title>/);
+  assert.match(await response.text(), /<title>Telepath<\/title>/);
 });
 
 test('a hub without a hotspot address retains Mac rehearsal and reports phone join unavailable', async context => {

@@ -147,7 +147,7 @@ async function pitch(run, { fast }) {
     await stage.when(stateFor(state => state.canBegin), 7000, 'both seats and both caches ready');
     stage.link.send({ type: 'operator', action: 'begin' });
     await stage.when(stateFor(state => state.phase === 'live'), 5000, 'live');
-    a.link.send({ type: 'sim_transcript', text: 'This is the Telepathy pitch. Let me explain how it works.', level: 0.18 });
+    a.link.send({ type: 'sim_transcript', text: 'This is the Telepath pitch. Let me explain how it works.', level: 0.18 });
 
     b.emulator.configure({ missRate: 1 });
     b.gesture('R1');

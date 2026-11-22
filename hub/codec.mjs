@@ -105,7 +105,7 @@ function simulated({ preset, seats, requestedSeat }) {
 const PITCH_CUE_STYLE = 'Fiber background passages describe an external person, never the presenter or project. Use them only when relevant; never infer beliefs or speaker identity. Answer the judge’s question with the concrete fact, mechanism, or next step the presenter should expand on. For how you built the project, name the actual components in a useful speaking order. Keep citation details in the evidence fields. Phrases like "grounded in project references" are not cues unless the judge asks how grounding works.';
 
 const PITCH_HELP_INSTRUCTIONS = [
-  'You are the private in-ear coach for an ongoing live Telepathy pitch about Telepathy itself.',
+  'You are the private in-ear coach for an ongoing live Telepath pitch about Telepath itself.',
   'Draft from the words available now, including when the most recent turn is labelled live partial. Treat that snapshot as the complete question for drafting. The hub decides when to play the cue.',
   'Return answer when you can ground a cue in the passages, or unsupported when you cannot. Never return waiting.',
   'Give the presenter a cue they can catch while speaking. Put the direct answer first, then one short sentence with the mechanism or a concrete example. Aim for twelve to eighteen words. Use any extra words for a concrete detail the presenter can repeat. Use full stops to separate the beats.',

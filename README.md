@@ -31,9 +31,7 @@ The hub uses OpenAI for text when its key is present. Set `TELEPATHY_LLM=local` 
 
 ## Listen through the Mac microphone
 
-Open the printed local stage URL on the Mac. In **Room microphone**, click **Start Mac microphone** and allow browser microphone access. Choose **MacBook Microphone** as the macOS Sound input (not AirPods), or select that device in the stage's input menu. If device names were hidden before permission, stop the microphone, select the now-labelled Mac input, and start it again. The input meter should move and **Shared room transcript** should fill as you speak. This can be checked in the lobby before connecting phones. ElevenLabs groups speech by anonymous speaker. Inside **Shared room transcript**, you can label a speaker as Seat A or Seat B and swap the labels by choosing the other seat.
-
-Load the references and prepare seats A and B as usual, then begin the session. The shared room transcript drives both question answers and missed-point reminders through the existing private preview and approval flow. Use the phones' on-screen Send/Discard and fixed-message buttons if earbud gestures are unavailable. Phone microphone permission is only needed if you choose to record a voice sample; premade voices avoid that step.
+Open the local Stage URL and choose **Start listening**. Allow browser access and select **MacBook Microphone** as the input. The level meter and transcript confirm capture. In **Device and transcript**, use the speaker controls to label the two known seats. See [room setup and recovery](docs/rehearsal.md).
 
 ## Ask what to say during the Telepath pitch
 
@@ -49,23 +47,15 @@ To explicitly return to the old phone-microphone mode, start the hub with `TELEP
 
 ## Answer questions from your documents
 
-Before **Begin session**, use **Team brief & references** on the local stage to load TXT, Markdown, text-based PDF or DOCX files (up to eight files, 5 MB each / 8 MB total, 200,000 extracted characters). Each upload replaces the set. Scanned PDFs need OCR first. Documents remain in hub memory and are cleared on reset; nothing is saved to disk.
-
-Automatic document answers require `OPENAI_API_KEY` and the OpenAI text provider (`TELEPATHY_LLM=openai`, or the default when that key is present), plus ElevenLabs for live transcription and whispers. Relevant passages and recent conversation are sent to OpenAI. This automatic path starts after you upload references. The on-demand pitch cue also works with the bundled brief.
-
-Completed speech triggers a debounced question check. The coach uses the references to propose a short supported answer when someone asks for help, expresses uncertainty, or leaves a question unanswered. L-R explicitly requests help. The assistant previews answers to the coach (or the requesting seat); a tap still approves delivery in that person's voice. New speech cancels pending answers immediately, including during generation, and the next completed transcript is re-evaluated. The stage shows answer status and evidence. Unsupported questions stay silent; no web search is performed.
-
-Use real seats to exercise generated answer audio. Simulated seats retain their bundled-audio behavior and cannot speak arbitrary new answers. Verify microphone/earbud coexistence and latency on the actual hardware before presenting.
-
-The same coach also checks completed answers for important omissions. For example, if you describe a pilot but omit its documented duration, it can propose "You forgot to mention the six-week pilot." It waits for a pause or a help request, checks the point against your references and the actual spoken answer, and uses the same private preview and approval flow. The stage shows the answer excerpt and supporting source. Covering the point, moving on, or any new speech cancels a pending reminder before re-evaluation; reminders are suppressed after approval, rejection or expiry for that question.
+Before **Begin session**, upload TXT, Markdown, text-based PDF or DOCX using **Team brief & references**. Each upload replaces the set, and Reset clears it from memory. The coach can suggest a supported answer or flag a missed point. The sender hears a private preview and approves delivery to the other seat. See [question coaching](docs/handbook/architecture/question-coaching.md).
 
 ## Maritime pitch coach
 
-During a live Pitch session, open **Operator**, choose the current pitch beat, and select **Ask coach**. Review the suggested cue and its reason, then select **Send to both seats**. The console reports which seats confirmed playback. The coach receives the pitch beat, elapsed time, counts of online and ready seats, and the count of acknowledged messages. ElevenLabs supplies the announcement audio.
+In a live Pitch session, open **Operator**, choose the pitch beat, and select **Ask coach**. The operator reviews the cue before sending it. Enable the hosted planner with `TELEPATHY_MARITIME=on` after setting up the agent. See the [Maritime setup and verification guide](docs/maritime.md).
 
-`./start` reads `MARITIME_API_KEY` and `TELEPATHY_MARITIME_AGENT_ID` from the environment or from the Git-ignored `.env.maritime.local`. Set `TELEPATHY_MARITIME_ENV_FILE` to load a different owner-only file. On a new Maritime account, `node --env-file=.env.maritime.local scripts/maritime-deploy.mjs` packages and privately deploys the coach. Add the printed agent ID to the local environment file. Pass `--update` to redeploy to that ID. The hub uses local rules unless you explicitly set `TELEPATHY_MARITIME=on`.
+## Research a judge or interviewer with Fiber
 
-The coach has its own 12-second timeout. Set `TELEPATHY_MARITIME_ASSIST=openai` to let the Mac request a candidate cue through its existing OpenAI configuration before asking Maritime for the final choice. Only the cue ID and the same pitch telemetry go to Maritime. The panel distinguishes Maritime inference, an accepted OpenAI-assisted cue, and a rule-based fallback. Manual announcements are available while coaching runs. To verify a live model recommendation and both simulated playback acknowledgements in one request, run `TELEPATHY_VERIFY_MARITIME=1 node --env-file=.env.openai.local --env-file=.env.maritime.local --test --test-name-pattern='pitch coach sends' tests/transport.test.mjs`.
+With Fiber and OpenAI configured, introduce the judge by full name and current employer in the live room. A confirmed professional match becomes a session reference for later cues. The lookup runs in the background. [Fiber setup and data flow](docs/fiber.md)
 
 ## Rehearse now
 
