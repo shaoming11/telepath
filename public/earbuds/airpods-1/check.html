@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Telepathy AirPods check</title>
+  <link rel="stylesheet" href="/phone.css">
+</head>
+<body>
+  <main class="app">
+    <section class="screen">
+      <h1 class="display">AirPods check</h1>
+      <p>Pause Spotify. Start the test sound, then double-tap the AirPod assigned to Next Track.</p>
+      <audio id="check-audio" loop playsinline preload="auto" src="./playback.mp3"></audio>
+      <div class="setup-group">
+        <button class="primary" id="check-start" type="button">Start test sound</button>
+        <button id="check-stop" type="button" hidden>Stop test sound</button>
+      </div>
+      <p class="meta" id="check-status" role="status"></p>
+      <p id="check-count" aria-live="polite">Next Track received: 0</p>
+      <p class="fineprint">This page uses the speaker or earbuds you selected. The microphone stays off.</p>
+      <a href="/">Return to Telepathy</a>
+    </section>
+  </main>
+  <script type="module" src="./check.mjs"></script>
+</body>
+</html>

@@ -148,12 +148,12 @@
         </svg>
 
         <div class="join">
-          <p class="kicker">JOIN FROM EACH PHONE ON THE HOTSPOT</p>
+          <p class="kicker">Join from each phone on the hotspot</p>
           <div class="join__row">
             <span class="join__url" id="join-url">&mdash;</span>
-            <a class="join__link" href="/?sim=1&amp;seat=A">Simulated seat A <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?sim=1&amp;seat=B">Simulated seat B <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?calibrate=1">Calibration bench <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?sim=1&amp;seat=A">Simulate A <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?sim=1&amp;seat=B">Simulate B <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?calibrate=1">Calibrate <span aria-hidden="true">↗</span></a>
           </div>
           <p class="join__note" id="join-guidance" hidden></p>
         </div>
@@ -241,7 +241,7 @@
       </div>
 
       <section class="lanes-wrap" aria-labelledby="lanes-title">
-        <h2 class="section-title" id="lanes-title">Timeline <span>Speech, taps and whispers on one clock</span></h2>
+        <h2 class="section-title" id="lanes-title">Timeline <span>Speech, taps and whispers</span></h2>
         <div class="lanes" id="reveal-lanes"></div>
       </section>
 
@@ -281,8 +281,29 @@
         <button class="op-action" id="op-replay" type="button" data-action="replay">Replay last</button>
         <button class="op-action" id="op-canned" type="button" data-action="canned">Canned take</button>
       </div>
-      <p class="operator__note">Canned take replays the full pitch through this Mac in about 18 seconds.</p>
+      <p class="operator__note">Canned take plays the full pitch through this Mac in about 18 seconds.</p>
+      <a class="join__link" href="/room-mic.html" target="_blank" rel="noopener">Open Mac room mic</a>
     </div>
+
+    <section class="operator__group" id="op-coach" aria-labelledby="op-coach-title" hidden>
+      <h3 class="operator__label" id="op-coach-title">Pitch coach</h3>
+      <form class="field-row" id="op-coach-form">
+        <label class="sr-only" for="op-coach-beat">Current pitch beat</label>
+        <select class="control mono" id="op-coach-beat">
+          <option value="opening">Opening</option>
+          <option value="problem">Problem</option>
+          <option value="demo">Working demo</option>
+          <option value="closing">Closing</option>
+        </select>
+        <button class="op-action" id="op-coach-ask" type="submit">Ask coach</button>
+      </form>
+      <p class="operator__note" id="op-coach-status" role="status"></p>
+      <div class="operator__coach-draft" id="op-coach-draft" hidden>
+        <p class="operator__coach-line" id="op-coach-text"></p>
+        <p class="operator__note" id="op-coach-reason"></p>
+        <button class="op-action op-action--solid" id="op-coach-send" type="button">Send to both seats</button>
+      </div>
+    </section>
 
     <form class="operator__group" id="op-announce">
       <h3 class="operator__label">Announce to both seats</h3>
@@ -308,7 +329,7 @@
         </select>
         <button class="op-action op-action--fit" id="op-set-preset" type="button">Set</button>
       </div>
-      <label class="field-label" for="op-context">Context, sent with the preset when filled</label>
+      <label class="field-label" for="op-context">Context (optional, sent with the preset)</label>
       <textarea id="op-context" class="control control--text" rows="2" spellcheck="false" placeholder="Pitch outline, slide order, judge seating"></textarea>
     </div>
 
@@ -328,7 +349,7 @@
 
     <div class="operator__group">
       <h3 class="operator__label">Reset session</h3>
-      <p class="operator__note">Clears the log, the seats and the bits. The reveal lives in memory only.</p>
+      <p class="operator__note">Clears the log, seats and bits. Reveal data is not saved.</p>
       <button class="op-action op-action--danger" id="op-reset" type="button" aria-describedby="op-reset-note">Reset</button>
       <span class="operator__note" id="op-reset-note"></span>
     </div>

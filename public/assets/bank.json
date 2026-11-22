@@ -403,11 +403,11 @@
       "preset": "Pitch",
       "mode": 2,
       "speed": 1.2,
-      "text": "R1, Slow down. R2, One minute left. L1, Show the demo now. Out, Wrap it up now.",
+      "text": "Single, Slow down. Double, One minute left. Triple, Show the demo now. Out, Wrap it up now.",
       "voiceId": "SAz9YHcvj6GT2YYXdXww",
-      "file": "line-asst-638f587b70.mp3",
-      "bytes": 39540,
-      "sha256": "6202ce11c2b0700ad4dd7950685944ac6c643fee5f1c6f5638126d846f5da07f"
+      "file": "line-asst-1331668df6.mp3",
+      "bytes": 35569,
+      "sha256": "666623afdfc46c08b92448d62d59a31c9beaaac7ed6cf6b6a25d907f568ad6a4"
     },
     {
       "role": "assistant",
@@ -427,11 +427,11 @@
       "preset": "Party",
       "mode": 2,
       "speed": 1.2,
-      "text": "R1, Find me. R2, Rescue me. L1, I'm good. Out, Leave.",
+      "text": "Single, Find me. Double, Rescue me. Triple, I'm good. Out, Leave.",
       "voiceId": "SAz9YHcvj6GT2YYXdXww",
-      "file": "line-asst-c67ed6b9ef.mp3",
-      "bytes": 31389,
-      "sha256": "03e1a5a0c3c1f9ae9737d080db306ca557264e05ade2e02190ab3d2b74b97cd8"
+      "file": "line-asst-3e969fba74.mp3",
+      "bytes": 28464,
+      "sha256": "95f514e69e7b39406d252004560b57aff3f30f9c29227037468110bd1aea0b93"
     },
     {
       "role": "assistant",
@@ -451,11 +451,11 @@
       "preset": "Meeting",
       "mode": 2,
       "speed": 1.2,
-      "text": "R1, Following? R2, Talk later. L1, Back me up. Out, Stepping out.",
+      "text": "Single, Following? Double, Talk later. Triple, Back me up. Out, Stepping out.",
       "voiceId": "SAz9YHcvj6GT2YYXdXww",
-      "file": "line-asst-1de16bf6c2.mp3",
-      "bytes": 40585,
-      "sha256": "11a52584349e6ab329a7a2458303b0ee996adb49b95a5bf22833bf96bc576290"
+      "file": "line-asst-54f9ecc9a5.mp3",
+      "bytes": 27001,
+      "sha256": "9d2899c2310189cd4e32da5af97b7a39b303cc3351696ef22019bddbf40c1a08"
     },
     {
       "role": "assistant",
@@ -473,31 +473,31 @@
       "role": "assistant",
       "kind": "status",
       "id": "sounds_like_pitch",
-      "text": "Sounds like a pitch. R1 to switch.",
+      "text": "Sounds like a pitch. Use one gesture to switch.",
       "voiceId": "SAz9YHcvj6GT2YYXdXww",
-      "file": "line-asst-d05e1660b6.mp3",
-      "bytes": 15716,
-      "sha256": "e113efc6856db465e2867bcd299108930851bf5fb42375e6338b09fad4a5c55e"
+      "file": "line-asst-63bf932db2.mp3",
+      "bytes": 18851,
+      "sha256": "2d22e2119d4e4696f50dc0b0deeff1a5e2e23543970add8835abb8068930f6b4"
     },
     {
       "role": "assistant",
       "kind": "status",
       "id": "sounds_like_party",
-      "text": "Sounds like a party. R1 to switch.",
+      "text": "Sounds like a party. Use one gesture to switch.",
       "voiceId": "SAz9YHcvj6GT2YYXdXww",
-      "file": "line-asst-1c82b8c41f.mp3",
-      "bytes": 18851,
-      "sha256": "022af7ccd8e74bf02bb4b07bc87b1f7e6ebb06a8e250fda38aa9bc0ab8affc16"
+      "file": "line-asst-3cbd6db581.mp3",
+      "bytes": 20523,
+      "sha256": "d96af015d923371c98815c57a94f6d019ded914dd9e1e49af8b7e7876bc09ec8"
     },
     {
       "role": "assistant",
       "kind": "status",
       "id": "sounds_like_meeting",
-      "text": "Sounds like a meeting. R1 to switch.",
+      "text": "Sounds like a meeting. Use one gesture to switch.",
       "voiceId": "SAz9YHcvj6GT2YYXdXww",
-      "file": "line-asst-96bcc39aa8.mp3",
-      "bytes": 18851,
-      "sha256": "43fcc91095ba3d2fe0611c580da76e9be93d5b87c3f8440646d7e46be730b024"
+      "file": "line-asst-844b38a25a.mp3",
+      "bytes": 21358,
+      "sha256": "5ec95dedcf1ae8beed08d0f9bb3184ae0e3cb0f0ee8344824c042237c3252d9c"
     },
     {
       "role": "assistant",
@@ -538,6 +538,16 @@
       "file": "line-asst-ee9dd27dfd.mp3",
       "bytes": 12372,
       "sha256": "afc14c6ee025d4d324476da2a8f584f33c89335a0d48c39ede55c98f04e5abdc"
+    },
+    {
+      "role": "assistant",
+      "kind": "announcement",
+      "id": "demo-cue",
+      "text": "Show the working demo now.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-91c6355039.mp3",
+      "bytes": 12372,
+      "sha256": "f54e1f86021a57a0e0eb79f037cf51438d6bee290e215dc725cbda5815099f3c"
     },
     {
       "role": "assistant",

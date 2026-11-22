@@ -1,9 +1,10 @@
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
-import { announcementText } from '../public/announcements.mjs';
 import { retrieveReferences } from './references.mjs';
 import { questionKey, validateAnswer } from './questions.mjs';
+import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcements.mjs';
+import { normalizePitch, recommendLocally } from '../maritime/policy.mjs';
 
 const DEFAULT_SETTINGS = Object.freeze({
   draftCooldownMs: 30_000,
@@ -13,6 +14,7 @@ const DEFAULT_SETTINGS = Object.freeze({
   roomContextMs: 45_000,
   serviceTimeoutMs: 3_000,
   announcementPlaybackMs: 8_000,
+  coachTimeoutMs: 12_000,
   cacheTimeoutMs: 25_000,
   cacheAckRetryMs: 1_500,
   cacheAckRetries: 3,
@@ -33,7 +35,7 @@ function createSeat(name) {
   return {
     name, online: false, sim: false, mode: 2, drafts: true,
     connected: false, connection: new AbortController(),
-    listening: false, listeningRequested: false, transcription: 'off',
+    listening: false, listeningRequested: false, roomMicSource: null, transcription: 'off',
     voice: 'idle', voiceRef: null, voiceRequest: null,
     earbuds: false, calibrated: false, wantsReady: false,
     situation: '', transcript: [], level: 0, pending: null,
@@ -101,14 +103,16 @@ function signalIntent(frame, state, now) {
 }
 
 export class Session {
-  constructor({ emitSeat, emitStage, audio, codec, settings = {}, now = Date.now }) {
+  constructor({ emitSeat, emitStage, audio, codec, coach, settings = {}, now = Date.now }) {
     this.emitSeat = emitSeat;
     this.emitStage = emitStage;
     this.audio = audio;
     this.codec = codec;
+    this.coach = coach;
     this.settings = { ...DEFAULT_SETTINGS, ...settings };
     this.now = now;
     this.generation = 0;
+    this.setupReset = null;
     this.sequence = 0;
     this.senseTimer = null;
     this.cannedTimers = new Set();
@@ -131,6 +135,7 @@ export class Session {
     this.bits = 0;
     this.lastReplay = null;
     this.announcement = null;
+    this.coachState = { status: 'idle' };
     this.voiceRevision = 0;
     this.activeCache = null;
     this.cacheCandidate = null;
@@ -158,6 +163,7 @@ export class Session {
   snapshot(viewer) {
     return {
       sessionId: this.sessionId,
+      ...(this.setupReset && { setupReset: this.setupReset }),
       phase: this.phase,
       preset: this.preset,
       presetPending: this.cacheCandidate?.preset ?? (this.targetPreset.preset !== this.preset ? this.targetPreset.preset : null),
@@ -175,7 +181,8 @@ export class Session {
         const visible = viewer == null || viewer === seat;
         return [seat, {
           name: state.name, online: state.online, sim: state.sim, mode: state.mode,
-          drafts: state.drafts, listening: state.listening, transcription: state.transcription, voice: state.voice,
+          drafts: state.drafts, listening: state.listening, roomMicSource: state.roomMicSource,
+          transcription: state.transcription, voice: state.voice,
           earbuds: state.earbuds, calibrated: state.calibrated, ready: this.isReady(seat),
           situation: visible ? state.situation : '',
           transcript: visible ? state.transcript.slice() : [],
@@ -193,6 +200,7 @@ export class Session {
       ...(viewer == null && { references: this.references.map(({ id, name, characters }) => ({ id, name, characters })),
         referencesLoading: this.referencesLoading, questionAnswering: this.codec?.questionAnswering === true,
         questionState: this.questionState }),
+      ...(viewer == null && { coach: { available: Boolean(this.coach), ...this.coachState } }),
       log: viewer == null
         ? this.log.slice()
         : this.log.filter(entry => entry.seat === viewer || entry.to === viewer),
@@ -289,6 +297,7 @@ export class Session {
     this.questionState = { status: 'idle' };
     this.scene.abort();
     this.scene = new AbortController();
+    this.coachState = { status: 'idle' };
     for (const seat of SEATS) this.clearPending(seat, reason);
   }
 
@@ -433,6 +442,7 @@ export class Session {
       case 'preset': return this.selectPreset(frame.preset, frame.context);
       case 'cache_ready': return this.cacheReady(seat, frame.activeId);
       case 'voice': return this.recordVoice(seat, frame);
+      case 'voice_preview': return this.previewVoice(seat);
       case 'mic': return this.receiveMic(seat, frame);
       case 'calibration': return this.applyCalibration(frame.profile);
       case 'listen': return this.setListening(seat, frame.enabled === true);
@@ -664,6 +674,28 @@ export class Session {
     try { await this.audio.removeVoice?.(voice); } catch {}
   }
 
+  async previewVoice(seat) {
+    const state = this.seats[seat];
+    if (state.voiceRef?.status !== 'ready' || state.voicePreviewPending || state.sim) return;
+    state.voicePreviewPending = true;
+    const voice = state.voiceRef;
+    const signal = this.liveScope([seat]);
+    try {
+      const text = 'Hi, this is my Telepathy voice. Take a moment to hear how I sound at a normal speaking volume.';
+      const url = toUrl(await withDeadline(requestSignal => this.audio.speech(seat, text, {
+        voice, role: 'voice-preview', signal: requestSignal,
+      }), 8000, signal));
+      if (!signal.aborted && state.voiceRef === voice) {
+        if (url) this.cue(seat, null, { kind: 'voice_preview', text, url });
+        else this.emitSeat(seat, { type: 'voice_preview_error' });
+      }
+    } catch {
+      if (!signal.aborted) this.emitSeat(seat, { type: 'voice_preview_error' });
+    } finally {
+      state.voicePreviewPending = false;
+    }
+  }
+
   addTranscript(seat, value, generation = this.generation) {
     const state = seat === 'room' ? this.room : this.seats[seat];
     if (this.closed || generation !== this.generation || this.canned || this.phase === 'reveal'
@@ -793,10 +825,10 @@ export class Session {
     } };
   }
 
-  async receiveMic(seat, frame) {
+  async receiveMic(seat, frame, source = 'phone') {
     if (this.roomInput === 'mac') return;
     const state = this.seats[seat];
-    if (!state.listening || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
+    if (!state.listening || state.roomMicSource !== source || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
     state.level = this.levelValue(frame.level);
     const generation = this.generation;
     const listen_version = state.listenVersion;
@@ -805,9 +837,11 @@ export class Session {
     } catch {}
   }
 
-  async setListening(seat, enabled) {
+  async setListening(seat, enabled, source = 'phone') {
     if (this.roomInput === 'mac') return;
+    const state = this.seats[seat];
     if (!enabled) {
+      if (state.roomMicSource !== source) return;
       this.cancelAnswers('listening_stopped');
       this.questionPartialSeats.delete(seat);
       this.questionSpeechPending = this.questionPartialSeats.size > 0;
@@ -815,12 +849,17 @@ export class Session {
       this.publish();
       return;
     }
-    const state = this.seats[seat];
-    if (state.listeningRequested || state.sim || this.canned || this.phase === 'reveal') return;
+    if (!state.online || state.sim || this.canned || this.phase === 'reveal') return;
+    if (state.listeningRequested) {
+      if (source !== 'companion' || state.roomMicSource === 'companion') return;
+      this.stopListening(seat);
+    }
     const generation = this.generation;
     const listen_version = ++state.listenVersion;
     state.listeningRequested = true;
+    state.roomMicSource = source;
     state.transcription = 'waiting';
+    this.publish();
     try {
       const listening = await this.audio.listen?.(seat, true, this.transcriptionCallbacks(seat, generation, listen_version));
       if (generation !== this.generation || listen_version !== state.listenVersion || !state.online) return;
@@ -831,6 +870,7 @@ export class Session {
     }
     if (!state.listening) {
       state.listeningRequested = false;
+      state.roomMicSource = null;
       state.transcription = 'unavailable';
     }
     this.publish();
@@ -857,6 +897,7 @@ export class Session {
     state.listenVersion += 1;
     state.listening = false;
     state.listeningRequested = false;
+    state.roomMicSource = null;
     state.transcription = 'off';
     state.level = 0;
     if (was_requested) {
@@ -1130,7 +1171,7 @@ export class Session {
     return { id, text, status, targets: [...targets.keys()], heard: SEATS.filter(seat => heard.has(seat)), ...(reason && { reason }) };
   }
 
-  async announce(value) {
+  async announce(value, approvedCoach) {
     if (this.canned || this.phase === 'reveal' || announcementInFlight(this.announcement)) return;
     const text = announcementText(value);
     if (!text) return;
@@ -1141,6 +1182,9 @@ export class Session {
       status: 'building', lifecycle: new AbortController(),
     };
     this.announcement = announcement;
+    if (approvedCoach) {
+      this.coachState = { ...approvedCoach, status: 'sent', announcementId: announcement.id };
+    }
     if (targets.size === 0) this.finishAnnouncement('no_seats');
     this.publish();
     if (announcement.status !== 'building') return;
@@ -1212,6 +1256,46 @@ export class Session {
     if (announcement.status !== 'played') announcement.reason = reason;
   }
 
+  async askCoach(beat) {
+    if (this.phase !== 'live' || this.canned || this.preset !== 'Pitch' || this.coachState.status === 'asking') return;
+    const input = normalizePitch({
+      beat,
+      elapsedSeconds: Math.max(0, Math.floor((this.now() - this.startedAt) / 1_000)),
+      onlineSeats: SEATS.filter(seat => this.seats[seat].online).length,
+      readySeats: SEATS.filter(seat => this.isReady(seat)).length,
+      acknowledgedMessages: this.log.filter(entry => entry.kind === 'receipt').length,
+    });
+    if (!input) return;
+
+    const pending = { status: 'asking', beat: input.beat, id: 'coach-' + ++this.sequence };
+    const scope = this.liveScope();
+    this.coachState = pending;
+    this.emitStage({ type: 'state', state: this.snapshot() });
+
+    let recommendation;
+    if (this.coach) {
+      try {
+        recommendation = await withDeadline(signal => this.coach.recommend(input, { signal }), this.settings.coachTimeoutMs, scope);
+      } catch {}
+    }
+    if (scope.aborted || this.coachState !== pending) return;
+
+    const findCue = id => OPERATOR_ANNOUNCEMENTS.find(line => line.id === id);
+    if (!findCue(recommendation?.cueId)) recommendation = { ...recommendLocally(input), source: 'local' };
+    const cue = findCue(recommendation.cueId);
+    this.coachState = {
+      ...pending, status: 'ready', text: cue.text, reason: recommendation.reason, source: recommendation.source,
+    };
+    this.emitStage({ type: 'state', state: this.snapshot() });
+  }
+
+  approveCoach(id) {
+    const current = this.coachState;
+    if (this.phase !== 'live' || this.canned || this.preset !== 'Pitch' || current.status !== 'ready'
+      || current.id !== id || !SEATS.every(seat => this.seats[seat].online)) return;
+    return this.announce(current.text, current);
+  }
+
   async handleStage(frame) {
     if (this.closed || !frame) return;
     switch (frame.action) {
@@ -1223,6 +1307,8 @@ export class Session {
         break;
       case 'preset': return this.selectPreset(frame.preset, frame.context);
       case 'announce': return this.announce(frame.text);
+      case 'coach_ask': return this.askCoach(frame.beat);
+      case 'coach_send': return this.approveCoach(frame.coachId);
       case 'inject':
         if (this.phase !== 'live' || this.canned || !SEATS.includes(frame.seat)) return;
         this.sendFixed(frame.seat, frame.signal, 'operator');
@@ -1343,6 +1429,7 @@ export class Session {
       seat, { online: previous[seat].online, sim: previous[seat].sim, connected: previous[seat].connected },
     ]));
     this.initialize(connections);
+    this.setupReset = this.sessionId;
     const cleanup = this.disposeAudio(previous);
     this.publish();
     await cleanup;

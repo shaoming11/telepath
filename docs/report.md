@@ -2,7 +2,7 @@
 
 Telepathy is a two-seat hackathon demo. The MacBook runs the hub, the stage, and a third-person operator panel. Each seat can record a 30-second sample. The hub verifies the ElevenLabs voice and the partner’s phone decodes the four fixed Pitch whispers before the take.
 
-The operator uses **O** to open the panel. Three neutral ElevenLabs announcements ship with the app. The operator can type a short custom line with real seats connected. The hub generates the line once, sends the same clip to both seats, and tracks their playback starts separately. Announcements add zero tap bits.
+The operator uses **O** to open the panel. Four neutral ElevenLabs announcements ship with the app. The operator can type a short custom line with real seats connected. The hub generates the line once, sends the same clip to both seats, and tracks their playback starts separately. Announcements add zero tap bits.
 
 ## Before and after
 
@@ -21,6 +21,7 @@ The operator uses **O** to open the panel. Three neutral ElevenLabs announcement
 - **Live providers.** One run through the actual Mac hub cloned Seat B from an ElevenLabs-generated 30-second sample and made all four fixed whispers available in 4.17 seconds. Both real Scribe streams accepted synthetic PCM, and Seat B’s test phrase was transcribed word for word. One real OpenAI request produced a private ElevenLabs draft. The draft MP3 downloaded 316 ms after the decision and 4.21 seconds after the start of the emulated L-R gesture. R1 after the playback acknowledgement released the cloned sender clip. Cleanup removed the temporary clone ledger.
 - **Safari.** The two browser seats completed the fixed send, receipt, private preview, confirm, wrap, and Reveal. The reveal showed four messages, 16 words, and seven tap bits. The synthetic decision-to-scheduled-playback measurement was 1.10 seconds. Safari also reported both seats’ playback starts for the operator’s sound check and in-pitch time cue. Both seats rejoined with their caches after a full hub restart. At 320 CSS pixels all nine phone screens fit. Normal-time emulated calibration improved from 21 to 32 of 33 after fixing Safari’s batching of background timers.
 - **Verification commands.** `npm test`, `npm run rehearse`, and `npm run rehearse:faults -- --tls --fast --cycles=2` cover the local paths. The extended fault rehearsals exercise reconnects, an incomplete cache swap, a private draft, the frozen reveal, and full and partial operator confirmations without provider calls.
+- **Maritime pitch coach.** The private deployment reviewed a cue suggested by OpenAI through the Mac hub. The Operator received the recommendation in 1.86 seconds. Both simulated seats acknowledged the same bundled ElevenLabs clip after the operator’s approval. The local suite passed 177 tests. Five standard fast rehearsals reached Reveal, and five additional TLS fault rehearsals recovered all 37 deliberately dropped attempts.
 
 ## Extended local rehearsals
 
