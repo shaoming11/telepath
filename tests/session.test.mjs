@@ -1172,6 +1172,38 @@ test('a receipt intent only acknowledges its named playback and expires quietly'
   assert.equal(state().seats.B.pending.id, preview.messageId);
 });
 
+test('a receipt gesture that started in its window can finish recognition after the deadline', async t => {
+  const { session, state, audioFrames, act, advance } = await createLiveSession();
+  t.after(() => session.close());
+  await act('A', { type: 'signal', signal: 'R2' });
+  const { messageId } = audioFrames('B', 'soft')[0];
+  await act('B', { type: 'heard', messageId });
+  const { until } = state().seats.B.receipt;
+  advance(6490);
+
+  for (const receiptPressedAt of [undefined, until + 1, until - 4001]) {
+    await act('B', { type: 'signal', signal: 'R1', draftId: null, receiptId: messageId, receiptPressedAt });
+  }
+  assert.equal(audioFrames('A', 'receipt').length, 0);
+  await act('B', { type: 'signal', signal: 'R1', draftId: null, receiptId: messageId, receiptPressedAt: until - 1 });
+  assert.equal(audioFrames('A', 'receipt').length, 1);
+  assert.ok(state().log.some(entry => entry.kind === 'receipt' && entry.messageId === messageId));
+  assert.equal(state().log.filter(entry => entry.kind === 'message').length, 1);
+});
+
+test('a captured receipt intent cannot be applied beyond the bounded recognition delay', async t => {
+  const { session, state, audioFrames, act, advance } = await createLiveSession();
+  t.after(() => session.close());
+  await act('A', { type: 'signal', signal: 'R2' });
+  const { messageId } = audioFrames('B', 'soft')[0];
+  await act('B', { type: 'heard', messageId });
+  const { until } = state().seats.B.receipt;
+  advance(7001);
+  await act('B', { type: 'signal', signal: 'R1', draftId: null, receiptId: messageId, receiptPressedAt: until - 1 });
+  assert.equal(audioFrames('A', 'receipt').length, 0);
+  assert.equal(state().log.filter(entry => entry.kind === 'message').length, 1);
+});
+
 test('cache retries target missing acknowledgements and stop after a preset commits', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const { session, state, seatFrames, ack } = await createLiveSession({

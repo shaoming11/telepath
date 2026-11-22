@@ -5,10 +5,13 @@ import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
 import { exactExcerptQuotes, packReferenceEvidence, recallRoomTurns, retrieveProjectReferences, retrieveReferences } from './references.mjs';
 import { questionKey, validateAnswer } from './questions.mjs';
 import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcements.mjs';
+import { COUNT_CALIBRATION_WINDOW_MS } from '../public/earbuds/airpods-1/input.mjs';
 import { normalizePitch, normalizePitchHelp, recommendLocally } from '../maritime/policy.mjs';
 import { createPitchPlanner } from './pitch-planner.mjs';
 import { createSessionMonitor } from '../monitor/session.mjs';
 import { createSpeakerBindings, splitDiarizedSegment } from '../monitor/speakers.mjs';
+
+const MAX_RECEIPT_RECOGNITION_MS = COUNT_CALIBRATION_WINDOW_MS + 500;
 
 const DEFAULT_SETTINGS = Object.freeze({
   draftCooldownMs: 30_000,
@@ -100,7 +103,7 @@ function announcementInFlight(announcement) {
 }
 
 function signalIntent(frame, state, now) {
-  const { draftId, receiptId, signal } = frame;
+  const { draftId, receiptId, receiptPressedAt, signal } = frame;
   const { pending, receipt } = state;
   const approve = signal === 'R1';
   const discard = signal === 'L1' || state.mode === 1 && signal === 'R2';
@@ -112,7 +115,11 @@ function signalIntent(frame, state, now) {
 
   const can_receipt = approve && receipt?.until >= now;
   if (approve && typeof receiptId === 'string') {
-    return can_receipt && receipt.messageId === receiptId ? 'receipt' : 'skip';
+    if (receipt?.messageId !== receiptId) return 'skip';
+    const recognized_in_time = Number.isFinite(receiptPressedAt)
+      && receiptPressedAt >= receipt.openedAt && receiptPressedAt <= receipt.until
+      && now - receiptPressedAt <= MAX_RECEIPT_RECOGNITION_MS;
+    return can_receipt || recognized_in_time ? 'receipt' : 'skip';
   }
 
   const implicit_draft = pending && !Object.hasOwn(frame, 'draftId');
@@ -700,6 +707,7 @@ export class Session {
       from: entry.seat,
       text: entry.text,
       messageId: entry.messageId,
+      openedAt: playedAt,
       until: playedAt + this.settings.receiptWindowMs,
     };
     this.publish();

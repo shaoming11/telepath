@@ -298,6 +298,22 @@ test('a receipt gesture does not become an approval when a new draft appears mid
   assert.equal(signal.receiptId, 'inbound-1');
 });
 
+test('a receipt binds its press time to the first media event before recognition closes', async () => {
+  const serverNow = Date.now();
+  const base = seat_state(null, { cacheId: 'pitch-cache', serverNow });
+  base.seats.A.receipt = { messageId: 'almost-expired', until: serverNow + 4000 };
+  socket.receive({ type: 'state', state: base });
+  socket.sent.length = 0;
+  world.advance(3950);
+  media_actions.get('nexttrack')();
+  world.advance(1300);
+  await settle();
+  const signal = socket.sent.find(frame => frame.type === 'signal');
+  assert.equal(signal?.receiptId, 'almost-expired');
+  assert.equal(signal.receiptPressedAt, serverNow + 3950);
+  assert.equal(get_element('live-acknowledge').hidden, true);
+});
+
 test('triple Next Track discards the unheard draft captured by the first press', async () => {
   const now = Date.now();
   socket.receive({ type: 'state', state: seat_state(draft({ id: 'preview-loading', heardAt: null, expiresAt: now + 5000 })) });

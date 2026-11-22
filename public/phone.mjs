@@ -306,11 +306,12 @@ function clear_signal_tracking() {
   awaiting_signal_ack.clear();
 }
 
-function gesture_scope() {
+function gesture_scope(pressed_at) {
   const state = ui.state;
   const mine = my_state();
   const pending = mine?.pending;
   const receipt = mine?.receipt;
+  const receipt_wait = (ui.receipt_deadline ?? -1) - (pressed_at ?? performance.now());
   return {
     hubId: state?.hubId,
     sessionId: state?.sessionId,
@@ -319,13 +320,14 @@ function gesture_scope() {
     draftId: drafts.can_approve(pending) ? pending.id : null,
     visibleDraftId: drafts.visible(pending) ? pending.id : null,
     previewWaiting: drafts.visible(pending) && pending.heardAt == null,
-    receiptId: receipt && (ui.receipt_deadline ?? 0) >= performance.now() ? receipt.messageId : null,
+    receiptId: receipt && receipt_wait >= 0 ? receipt.messageId : null,
+    receiptPressedAt: receipt && pressed_at != null && receipt_wait >= 0 ? receipt.until - receipt_wait : undefined,
   };
 }
 
 function on_raw(event) {
   calibration.note_raw(event);
-  gesture_scopes.set(event.action + ':' + event.at, gesture_scope());
+  gesture_scopes.set(event.action + ':' + event.at, gesture_scope(event.at));
   if (gesture_scopes.size > 32) gesture_scopes.delete(gesture_scopes.keys().next().value);
   if (event.action !== 'pause' || event.squeeze) return;
   if (ui.issues.get('media')?.anchor) set_issue('media', '');
@@ -379,9 +381,12 @@ function on_signal(signal, trace, { toggle_question_mode = false, draft_id, rece
   flash_signal(signal);
   ui.signal_count += 1;
   const id = ui.seat + '-' + Date.now().toString(36) + '-' + ui.signal_count;
-  const { previewWaiting, pitchHelp, visibleDraftId, ...intent } = scope;
+  const { previewWaiting, pitchHelp, visibleDraftId, receiptPressedAt, ...intent } = scope;
   intent.draftId = explicit_signal || receipt_id ? null : draft_id ?? (discard ? visibleDraftId : scope.draftId);
   intent.receiptId = explicit_signal ? null : receipt_id ?? scope.receiptId;
+  if (signal === 'R1' && !intent.draftId && intent.receiptId === scope.receiptId && Number.isFinite(receiptPressedAt)) {
+    intent.receiptPressedAt = receiptPressedAt;
+  }
   if (!send({ type: 'signal', signal, id, ...intent, ...(pitch_help && { purpose: question_mode ? 'question_mode' : 'pitch_help' }) })) {
     audio.play_cue('error');
     show_note('Signal did not reach the hub.');
