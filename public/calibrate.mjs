@@ -1,5 +1,7 @@
-import { COUNT_CALIBRATION_WINDOW_MS, DEFAULT_TIMING, patternFor, tuneCalibration } from './input.mjs';
+import { DEFAULT_TIMING, patternFor, tuneCalibration } from './input.mjs';
 import { CALIBRATION_SIGNALS, MEASURE_TEXT, SIGNAL_LABELS } from './phone-data.mjs';
+import { AIRPODS_1_ID, buildCountTrials, COUNT_CALIBRATION_WINDOW_MS } from './earbuds/airpods-1/input.mjs';
+import { AIRPODS_PRO_ID, PRO_CHECKS, proCheckAction } from './earbuds/airpods-pro/input.mjs';
 
 export const TRIALS_PER_PATTERN = 3;
 export const MIN_RESPONSE_RATE = 0.6;
@@ -8,12 +10,6 @@ const MIN_RECOGNITION_RATE = 0.75;
 const PROFILE_VERSION = 1;
 const TRACK_ACTIONS = new Set(['nexttrack', 'previoustrack']);
 const ACTION_LABELS = { nexttrack: 'Next Track', previoustrack: 'Previous Track', pause: 'Pause', play: 'Play' };
-const CONTROL_STEPS = [
-  ['pause', 'single squeeze either stem'],
-  ['nexttrack', 'double squeeze either stem'],
-  ['previoustrack', 'triple squeeze either stem'],
-];
-const SQUEEZE_LABELS = { pause: 'Single squeeze', nexttrack: 'Double squeeze', previoustrack: 'Triple squeeze' };
 const PATTERNS = {
   1: { R1: 'Next Track once', R2: 'Next Track twice quickly', L2: 'Next Track, pause, Next Track', LR: 'Next Track three times quickly' },
   2: { R1: 'Next Track once', R2: 'Next Track twice quickly', L1: 'Previous Track once', L2: 'Previous Track twice quickly', LR: 'Previous Track, then Next Track' },
@@ -23,10 +19,7 @@ const $ = id => document.getElementById(id);
 const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 export function build_plan(scope, current_mode, model) {
-  if (model === 'next-only') {
-    return ['R2', 'L1'].flatMap(signal => Array.from({ length: TRIALS_PER_PATTERN }, (_, trial) =>
-      ({ signal, trial, mode: current_mode, kind: 'tap', gestureModel: model })));
-  }
+  if (model === AIRPODS_1_ID) return buildCountTrials(current_mode, TRIALS_PER_PATTERN);
   const modes = scope === 'both' ? [2, 1] : [current_mode];
   const plan = [];
   for (const mode of modes) {
@@ -87,7 +80,7 @@ function format_percent(value) {
 
 function metric_rows(profile) {
   const { metrics, emulator, timing } = profile;
-  if (profile.gestureModel === 'next-only') {
+  if (profile.gestureModel === AIRPODS_1_ID) {
     return [
       ['Recognized', metrics.recognized + ' of ' + metrics.trials],
       ['Median gap between Next Track events', format_ms(timing.countMedianMs)],
@@ -161,8 +154,8 @@ export function createCalibration(services) {
     elements.quick.hidden = sim;
     elements.quick_start.disabled = !has_seat;
     elements.quick_model.disabled = checking;
-    if (!checking) elements.quick_start.textContent = elements.quick_model.value === 'pro' ? 'Test squeezes' : 'Calibrate timing';
-    if (!checking && has_seat && !sim) elements.quick_status.textContent = elements.quick_model.value === 'pro'
+    if (!checking) elements.quick_start.textContent = elements.quick_model.value === AIRPODS_PRO_ID ? 'Test squeezes' : 'Calibrate timing';
+    if (!checking && has_seat && !sim) elements.quick_status.textContent = elements.quick_model.value === AIRPODS_PRO_ID
       ? 'Use either stem. Keep the earbuds in while testing.'
       : 'Set an AirPods double-tap to Next Track. Repeat it two or three times at your normal pace.';
     $('cal-full').hidden = !sim;
@@ -365,7 +358,7 @@ export function createCalibration(services) {
     }
     const { profile } = last_output;
     const enough_events = profile.metrics.responseRate >= MIN_RESPONSE_RATE;
-    const personal = profile.gestureModel === 'next-only';
+    const personal = profile.gestureModel === AIRPODS_1_ID;
     const calibrated = personal
       ? ['R2', 'L1'].every(signal => records.filter(trial => trial.signal === signal && trial.recognized.includes(signal)).length >= 2)
       : enough_events && profile.metrics.recognizedRate >= MIN_RECOGNITION_RATE;
@@ -460,7 +453,7 @@ export function createCalibration(services) {
   }
 
   function render_control_check(received) {
-    if (elements.quick_model.value !== 'pro') {
+    if (elements.quick_model.value !== AIRPODS_PRO_ID) {
       const item = $('cal-quick-nexttrack');
       item.textContent = checked_actions.has('nexttrack') ? 'Next Track received' : 'Waiting for one Next Track event';
       $('cal-quick-pause').hidden = true;
@@ -476,15 +469,15 @@ export function createCalibration(services) {
     $('cal-quick-pause').hidden = false;
     $('cal-quick-previoustrack').hidden = false;
     elements.quick_continue.textContent = 'Continue with defaults';
-    for (const [action, gesture] of CONTROL_STEPS) {
+    for (const [action, { label, hint }] of Object.entries(PRO_CHECKS)) {
       const item = $('cal-quick-' + action);
-      item.textContent = SQUEEZE_LABELS[action] + (checked_actions.has(action) ? ' · received' : ' · ' + gesture);
+      item.textContent = label + (checked_actions.has(action) ? ' · received' : ' · ' + hint);
     }
-    const next = CONTROL_STEPS.find(([action]) => !checked_actions.has(action));
+    const next = Object.keys(PRO_CHECKS).find(action => !checked_actions.has(action));
     elements.quick_status.textContent = !received
       ? 'Pause Spotify or other audio first. Start with a single squeeze.'
       : !next ? 'All three squeezes reached Telepathy.'
-        : 'Received ' + SQUEEZE_LABELS[received].toLowerCase() + '. Try ' + SQUEEZE_LABELS[next[0]].toLowerCase() + ' next.';
+        : 'Received ' + PRO_CHECKS[received].label.toLowerCase() + '. Try ' + PRO_CHECKS[next].label.toLowerCase() + ' next.';
     elements.quick_continue.hidden = !checked_actions.size;
   }
 
@@ -505,7 +498,7 @@ export function createCalibration(services) {
   });
   elements.quick_continue.addEventListener('click', () => {
     if (!checking || !checked_actions.size) return;
-    const calibrate_timing = elements.quick_model.value !== 'pro';
+    const calibrate_timing = elements.quick_model.value !== AIRPODS_PRO_ID;
     if (calibrate_timing && !checked_actions.has('nexttrack')) return;
     stop_check();
     if (calibrate_timing) {
@@ -549,13 +542,13 @@ export function createCalibration(services) {
     stop,
     active: () => running || checking,
     note_media_event(action) {
-      if (checking && elements.quick_model.value !== 'pro') {
+      if (checking && elements.quick_model.value !== AIRPODS_PRO_ID) {
         if (action === 'nexttrack') checked_actions.add(action);
         render_control_check(action);
         return;
       }
-      if (action === 'play') action = 'pause';
-      if (!checking || !Object.hasOwn(SQUEEZE_LABELS, action)) return;
+      action = proCheckAction(action);
+      if (!checking || !Object.hasOwn(PRO_CHECKS, action)) return;
       checked_actions.add(action);
       render_control_check(action);
     },
