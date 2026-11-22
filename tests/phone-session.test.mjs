@@ -10,6 +10,7 @@ const elements = new Map();
 const sockets = [];
 const media_actions = new Map();
 const mic_tracks = [];
+const mic_nodes = [];
 const fake_microphone = {
   async getUserMedia() {
     const track = { readyState: 'live', stop() { this.readyState = 'ended'; } };
@@ -92,6 +93,7 @@ const globals = {
   navigator: { mediaSession: { setActionHandler(action, callback) { media_actions.set(action, callback); }, playbackState: 'none' }, mediaDevices: fake_microphone },
   AudioWorkletNode: class {
     port = { onmessage: null, postMessage() {} };
+    constructor() { mic_nodes.push(this); }
     connect() {}
     disconnect() {}
   },
@@ -276,6 +278,26 @@ test('Reveal releases the physical mic and the next take resumes previously cons
   await settle();
   assert.notEqual(mic_tracks.at(-1), current);
   assert.equal(mic_tracks.at(-1).readyState, 'live');
+});
+
+test('a rejected clone stays on the voice screen with the provider reason and a retry', async () => {
+  get_element('settings-voice').listeners.click[0]();
+  get_element('voice-record').listeners.click[0]();
+  await settle();
+  mic_nodes.at(-1).port.onmessage({ data: { pcm: new Int16Array(480_000).fill(1000).buffer, level: 0.2 } });
+  await settle();
+  const upload = socket.sent.findLast(frame => frame.type === 'voice');
+  assert.ok(upload?.requestId);
+  assert.match(get_element('voice-status').textContent, /uploading/i);
+  assert.equal(get_element('voice-record').disabled, true);
+  socket.receive({
+    type: 'voice_status', status: 'fallback', requestId: upload.requestId,
+    detail: 'ElevenLabs requires voice verification.',
+  });
+  world.advance(20);
+  await settle();
+  assert.equal(get_element('voice-status').textContent, 'ElevenLabs requires voice verification.');
+  assert.equal(get_element('voice-record').disabled, false);
 });
 
 test.after(() => {

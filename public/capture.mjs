@@ -5,6 +5,11 @@ const WORKLET_NAME = 'pcm-worklet';
 const BASE64_CHUNK = 0x6000;
 const WAV_HEADER_BYTES = 44;
 const RESUME_WAIT_MS = 600;
+const RECORDING_GRACE_MS = 10_000;
+const MIN_CLONE_SPEECH_SAMPLES = 15 * PCM_RATE;
+const MAX_CLONE_SAMPLES = 36 * PCM_RATE;
+const PAUSE_PAD_SAMPLES = Math.round(PCM_RATE * 0.16);
+const CLONE_CAPTURE_LIMIT_MS = 120_000;
 const MIC_CONSTRAINTS = Object.freeze({
   audio: {
     channelCount: 1,
@@ -86,7 +91,8 @@ export function createCapture({ get_context, frame_ms, on_frame, on_level, on_st
 
   function fail_recording(message) {
     if (!recording) return;
-    const { reject } = recording;
+    const { reject, timer } = recording;
+    clearTimeout(timer);
     recording = null;
     reject(new Error(message));
   }
@@ -112,26 +118,66 @@ export function createCapture({ get_context, frame_ms, on_frame, on_level, on_st
   function receive({ data }) {
     if (!data?.pcm) return;
     const pcm = new Int16Array(data.pcm);
+    if (!pcm.length) return;
     on_level?.(data.level);
     on_frame?.({
       audio: bytes_to_base64(new Uint8Array(pcm.buffer)),
       level: Math.min(1, Math.max(0, data.level)),
     });
     if (!recording) return;
+    if (recording.adaptive) {
+      const quiet = !Number.isFinite(data.level) || data.level < 0.009;
+      let clipped = 0;
+      for (let index = 0; index < pcm.length; index += 8) {
+        if (Math.abs(pcm[index]) >= 32000) clipped += 1;
+      }
+      if (quiet || clipped * 8 >= pcm.length * 0.05) {
+        if (quiet) recording.pause = pcm.subarray(Math.max(0, pcm.length - PAUSE_PAD_SAMPLES));
+        recording.on_progress?.(recording.voiced / recording.target, {
+          seconds: recording.voiced / PCM_RATE, ready: recording.voiced >= MIN_CLONE_SPEECH_SAMPLES, quiet, clipped: !quiet,
+        });
+        return;
+      }
+      if (recording.pause && recording.samples) {
+        const pad = recording.pause.subarray(0, MAX_CLONE_SAMPLES - recording.samples);
+        recording.chunks.push(pad);
+        recording.samples += pad.length;
+      }
+      recording.pause = null;
+      const speech = pcm.subarray(0, Math.min(recording.target - recording.voiced, MAX_CLONE_SAMPLES - recording.samples));
+      recording.chunks.push(speech);
+      recording.samples += speech.length;
+      recording.voiced += speech.length;
+      recording.on_progress?.(recording.voiced / recording.target, {
+        seconds: recording.voiced / PCM_RATE, ready: recording.voiced >= MIN_CLONE_SPEECH_SAMPLES,
+      });
+      if (recording.voiced >= recording.target) finish_recording();
+      else if (recording.samples >= MAX_CLONE_SAMPLES) {
+        if (recording.voiced >= MIN_CLONE_SPEECH_SAMPLES) finish_recording();
+        else fail_recording('Too little usable speech. Try again closer to the microphone.');
+      }
+      return;
+    }
     recording.chunks.push(pcm);
     recording.samples += pcm.length;
     recording.on_progress?.(Math.min(1, recording.samples / recording.target));
     if (recording.samples < recording.target) return;
-    const { chunks, target, resolve } = recording;
+    finish_recording();
+  }
+
+  function finish_recording() {
+    const { chunks, target, samples, adaptive, resolve, timer } = recording;
+    clearTimeout(timer);
     recording = null;
-    let remaining = target;
+    const length = adaptive ? samples : target;
+    let remaining = length;
     const trimmed = [];
     for (const chunk of chunks) {
       if (remaining <= 0) break;
       trimmed.push(chunk.length <= remaining ? chunk : chunk.subarray(0, remaining));
       remaining -= chunk.length;
     }
-    resolve({ wav: bytes_to_base64(encode_wav(trimmed)), samples: target, duration_ms: target / PCM_RATE * 1000 });
+    resolve({ wav: bytes_to_base64(encode_wav(trimmed)), samples: length, duration_ms: length / PCM_RATE * 1000 });
   }
 
   function stop_tracks(media) {
@@ -238,15 +284,28 @@ export function createCapture({ get_context, frame_ms, on_frame, on_level, on_st
       set_audio_session('playback');
       set_status('idle');
     },
-    record({ duration_ms, on_progress }) {
+    record({ duration_ms, speech_ms, on_progress }) {
       if (!stream) return Promise.reject(new Error('Microphone is not open.'));
       if (recording) return Promise.reject(new Error('Already recording.'));
       return new Promise((resolve, reject) => {
+        const adaptive = Number.isFinite(speech_ms);
         recording = {
-          chunks: [], samples: 0, target: Math.round(PCM_RATE * duration_ms / 1000),
+          chunks: [], samples: 0, voiced: 0, pause: null, adaptive,
+          target: adaptive ? Math.min(MAX_CLONE_SAMPLES, Math.max(MIN_CLONE_SPEECH_SAMPLES, Math.round(PCM_RATE * speech_ms / 1000)))
+            : Math.round(PCM_RATE * duration_ms / 1000),
+          timer: setTimeout(() => {
+            if (adaptive && recording.voiced >= MIN_CLONE_SPEECH_SAMPLES) finish_recording();
+            else fail_recording(adaptive ? 'Too little usable speech. Try again closer to the microphone.' :
+              'The microphone stopped delivering audio. Reconnect it and try again.');
+          }, adaptive ? CLONE_CAPTURE_LIMIT_MS : duration_ms + RECORDING_GRACE_MS),
           on_progress, resolve, reject,
         };
       });
+    },
+    finish_record() {
+      if (!recording?.adaptive || recording.voiced < MIN_CLONE_SPEECH_SAMPLES) return false;
+      finish_recording();
+      return true;
     },
     cancel_record() { fail_recording('Recording cancelled.'); },
     get status() { return status; },

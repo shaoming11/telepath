@@ -3,18 +3,21 @@ import { createServer as createSecureServer } from 'node:https';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { isIP } from 'node:net';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { bankFileName, createAudio, STATUS_LINES, STOCK_VOICES } from './audio.mjs';
 import { createCodec } from './codec.mjs';
+import { createMaritimeCoach } from './maritime.mjs';
 import { Session } from './session.mjs';
-import { findLanAddress, resolveTLS } from './tls.mjs';
+import { findLanAddress, hotspotIPv6Peers, resolveTLS } from './tls.mjs';
 
 const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const RUNTIME = fileURLToPath(new URL('../.runtime/', import.meta.url));
 const MAX_SOCKET_BACKLOG = 2 * 1024 * 1024;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
+const LOOPBACK_PEERS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const TEST_AUDIO = {
   '/assets/test-left.mp3': bankFileName('assistant', STOCK_VOICES.assistant.id, STATUS_LINES.test_left),
   '/assets/test-right.mp3': bankFileName('assistant', STOCK_VOICES.assistant.id, STATUS_LINES.test_right),
@@ -30,6 +33,14 @@ const TYPES = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
 };
+
+function audioRange(header, size) {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header ?? '');
+  if (!match || (!match[1] && !match[2])) return null;
+  const start = match[1] ? Number(match[1]) : Math.max(0, size - Number(match[2]));
+  const end = match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+  return { start, end };
+}
 
 function send(socket, frame) {
   if (socket?.readyState !== WebSocket.OPEN) return false;
@@ -62,12 +73,13 @@ function listen(server, port, host) {
 }
 
 export function createHub({
-  env = process.env, audio, codec, settings, tls = null,
+  env = process.env, audio, codec, coach, settings, tls = null,
   lan = env.TELEPATHY_HOST ?? findLanAddress(), localPath = null, ledgerPath,
 } = {}) {
   const assets = new Map();
   const seats = new Map();
   const stage = new Set();
+  const ipv6_peer = hotspotIPv6Peers(lan);
   const hub_id = randomUUID();
   let session;
   const speech = audio ?? createAudio({
@@ -76,6 +88,7 @@ export function createHub({
     onTranscriptionStatus: status => session?.updateTranscriptionStatus?.(status),
   });
   const language = codec ?? createCodec({ env, localPath });
+  const maritime = coach === undefined ? createMaritimeCoach({ env }) : coach;
   const scope = frame => frame.type === 'state'
     ? { ...frame, state: { ...frame.state, hubId: hub_id, serverNow: Date.now() } }
     : { sessionId: session.sessionId, ...frame, hubId: hub_id };
@@ -91,6 +104,7 @@ export function createHub({
     },
     audio: speech,
     codec: language,
+    coach: maritime,
     settings,
   });
   let info = {};
@@ -123,12 +137,26 @@ export function createHub({
       const file = await stat(absolute);
       const mime = TYPES[extname(absolute)];
       if (!file.isFile() || !mime) return respond(req, res, 404, 'text/plain', 'Not found.');
-      res.writeHead(200, {
+      const audio_file = mime.startsWith('audio/');
+      const range = audio_file ? audioRange(req.headers.range, file.size) : null;
+      const headers = {
         'Content-Type': mime, 'Content-Length': file.size, 'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
-      });
+      };
+      if (audio_file) headers['Accept-Ranges'] = 'bytes';
+      if (range) {
+        if (range.start > range.end || range.start >= file.size) {
+          res.writeHead(416, {
+            ...headers, 'Content-Length': 0, 'Content-Range': 'bytes */' + file.size,
+          });
+          return res.end();
+        }
+        headers['Content-Length'] = range.end - range.start + 1;
+        headers['Content-Range'] = 'bytes ' + range.start + '-' + range.end + '/' + file.size;
+      }
+      res.writeHead(range ? 206 : 200, headers);
       if (req.method === 'HEAD') res.end();
-      else createReadStream(absolute).on('error', () => res.destroy()).pipe(res);
+      else createReadStream(absolute, range ?? {}).on('error', () => res.destroy()).pipe(res);
     } catch {
       if (!res.headersSent) respond(req, res, 404, 'text/plain', 'Not found.');
       else res.destroy();
@@ -140,13 +168,19 @@ export function createHub({
   const wss = new WebSocketServer({ noServer: true, maxPayload: 2_100_000 });
 
   function attach(server) {
+    if (ipv6_peer) {
+      server?.prependListener('connection', socket => {
+        const address = socket.remoteAddress;
+        if (!LOOPBACK_PEERS.has(address) && !ipv6_peer(address)) socket.destroy();
+      });
+    }
     server?.on('upgrade', (req, socket, head) => {
       try {
         const url = new URL(req.url, 'http://localhost');
         const role = url.searchParams.get('role');
         const seat = url.searchParams.get('seat');
         const trusted = !req.headers.origin || new URL(req.headers.origin).host === req.headers.host;
-        const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+        const local = LOOPBACK_PEERS.has(req.socket.remoteAddress);
         if (url.pathname !== '/ws' || !trusted || !(role === 'stage' && local || role === 'seat' && ['A', 'B'].includes(seat))) {
           socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
           return;
@@ -243,7 +277,7 @@ export function createHub({
 async function main() {
   const env = process.env;
   const lan = env.TELEPATHY_HOST ?? findLanAddress();
-  const bind = env.TELEPATHY_BIND ?? '0.0.0.0';
+  const bind = env.TELEPATHY_BIND ?? (isIP(lan) === 6 ? '::' : '0.0.0.0');
   let tls = null;
   try { tls = resolveTLS(env, RUNTIME, LOOPBACK_HOSTS.has(bind) ? bind : lan); }
   catch (error) { console.error('LAN HTTPS was unavailable. Local rehearsal remains available. ' + (error.code ?? error.message.split('\n')[0])); }
@@ -264,6 +298,7 @@ async function main() {
       ? info.joinUrl : 'Connect the MacBook to the hotspot, then restart.'));
     if (info.lanAvailable && info.certificateUrl) console.log('LAN trust setup      ' + info.certificateUrl);
     console.log('Text model          ', info.codec);
+    console.log('Pitch coach          ' + (hub.session.coach ? 'Maritime with local fallback' : 'Local'));
   } catch (error) {
     await hub.close();
     throw error;

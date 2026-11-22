@@ -25,6 +25,9 @@ export const TRACKS = Object.freeze({
   previoustrack: 'L',
 });
 const ONE_EAR_REJECTION_MS = 60;
+export const COUNT_SIGNALS = Object.freeze(['R1', 'R2', 'L1']);
+export const COUNT_CALIBRATION_WINDOW_MS = 2500;
+const PRO_SIGNALS = Object.freeze({ pause: 'R1', play: 'R1', nexttrack: 'R2', previoustrack: 'L1' });
 
 export function seededRandom(seed) {
   let value = seed >>> 0;
@@ -68,12 +71,14 @@ export function touchSettings(timing, emulator, mode) {
 }
 
 export function createMediaInput({
-  mode = 2, timing = DEFAULT_TIMING, onSignal, onRaw, onError, onPlay,
+  mode = 2, gestureModel = null, timing = DEFAULT_TIMING, onSignal, onRaw, onError, onPlay, onMediaEvent,
   now = () => performance.now(), setTimer = setTimeout, clearTimer = clearTimeout,
 } = {}) {
   let thresholds = { ...DEFAULT_TIMING, ...timing };
   let current_mode = mode;
+  let current_model = gestureModel;
   let events = [];
+  let count_events = false;
   let timer;
   let removed = false;
   let media_session;
@@ -87,14 +92,14 @@ export function createMediaInput({
 
   function flush() {
     if (!events.length) return;
-    const signal = recognize(events, current_mode, thresholds);
+    const signal = count_events ? COUNT_SIGNALS[events.length - 1] : recognize(events, current_mode, thresholds);
     const trace = events;
     clear();
     if (signal) onSignal?.(signal, trace);
     else onError?.(trace);
   }
 
-  function dispatch(action, at) {
+  function dispatch(action, at, count = false) {
     const stamp = Number.isFinite(at) ? at : now();
     if (action !== 'pause' && action !== 'play' && !Object.hasOwn(TRACKS, action)) return;
     onRaw?.({ action, at: stamp });
@@ -114,13 +119,32 @@ export function createMediaInput({
       }
       return;
     }
-    if (events.length && stamp - events.at(-1).at >= thresholds.closeMs) flush();
+    const window_ms = count ? thresholds.countWindowMs ?? DEFAULT_TIMING.closeMs : thresholds.closeMs;
+    if (events.length && (count !== count_events || stamp - events.at(-1).at >= window_ms)) flush();
     const previous = events.at(-1);
     const same_track = current_mode === 1 || previous?.action === action;
-    if (previous && same_track && stamp - previous.at < thresholds.duplicateMs) return;
+    if (previous && same_track && stamp - previous.at < (count ? DEFAULT_TIMING.duplicateMs : thresholds.duplicateMs)) return;
+    count_events = count;
     events.push({ action, at: stamp });
     clearTimer(timer);
-    timer = setTimer(flush, thresholds.closeMs);
+    timer = setTimer(flush, window_ms);
+  }
+
+  function media_action(action) {
+    onMediaEvent?.(action);
+    if (current_model === 'next-only') {
+      if (action === 'nexttrack') dispatch(action, undefined, true);
+      if (action === 'play') onPlay?.();
+      return;
+    }
+    if (current_model === 'pro') {
+      const event = { action, at: now(), squeeze: true };
+      onRaw?.(event);
+      if (action === 'play') onPlay?.();
+      onSignal?.(PRO_SIGNALS[action], [event]);
+      return;
+    }
+    dispatch(action);
   }
 
   function unregister() {
@@ -136,16 +160,17 @@ export function createMediaInput({
       if (!media_session) return [];
       for (const action of ['nexttrack', 'previoustrack', 'pause', 'play']) {
         try {
-          media_session.setActionHandler(action, () => dispatch(action));
+          media_session.setActionHandler(action, () => media_action(action));
           registered.push(action);
         } catch {}
       }
       return [...registered];
     },
     dispatch,
-    configure({ mode: new_mode, timing: new_timing } = {}) {
-      if (new_mode && new_mode !== current_mode) clear();
+    configure({ mode: new_mode, timing: new_timing, gestureModel: model } = {}) {
+      if (new_mode && new_mode !== current_mode || model !== undefined && model !== current_model) clear();
       current_mode = new_mode ?? current_mode;
+      if (model !== undefined) current_model = model;
       if (new_timing) thresholds = { ...thresholds, ...new_timing };
     },
     flush,
@@ -231,11 +256,14 @@ export function tuneCalibration(trials, defaults = {}) {
   const mixed = [];
   const prompt_delays = [];
   const duplicate_gaps = [];
+  const personal_gaps = [];
   let expected = 0;
   let missed = 0;
 
   for (const trial of trials) {
-    const pattern = patternFor(trial.signal, trial.mode, emulator);
+    const pattern = trial.gestureModel === 'next-only'
+      ? Array.from({ length: COUNT_SIGNALS.indexOf(trial.signal) + 1 }, () => ({ action: 'nexttrack' }))
+      : patternFor(trial.signal, trial.mode, emulator);
     const received = trial.events.filter(({ action, at }) => Number.isFinite(at) && pattern.some(event => event.action === action)).toSorted((a, b) => a.at - b.at);
     const unique = [];
     expected += pattern.length;
@@ -262,7 +290,10 @@ export function tuneCalibration(trials, defaults = {}) {
     const exact = unique.length === pattern.length && unique.every((event, index) => event.action === pattern[index].action);
     if (exact && pattern.length > 1) {
       const gaps = unique.slice(1).map(({ at }, index) => at - unique[index].at);
-      if (trial.signal === 'L2' && trial.mode === 1) slow.push(...gaps);
+      if (trial.gestureModel === 'next-only') {
+        if (trial.matched !== false) personal_gaps.push(...gaps);
+      }
+      else if (trial.signal === 'L2' && trial.mode === 1) slow.push(...gaps);
       else if (trial.signal === 'LR' && trial.mode !== 1) mixed.push(...gaps);
       else fast.push(...gaps);
     }
@@ -290,11 +321,19 @@ export function tuneCalibration(trials, defaults = {}) {
     timing.slowMaxMs = Math.round(Math.max(timing.slowMaxMs, timing.slowMinMs, ...slow));
   }
   if (mixed.length) timing.mixedMaxMs = Math.round(Math.max(timing.mixedMaxMs, ...mixed));
+  if (personal_gaps.length) {
+    const typical = median(personal_gaps, DEFAULT_TIMING.closeMs);
+    const sorted = personal_gaps.toSorted((a, b) => a - b);
+    const upper = sorted[Math.ceil(sorted.length * 0.85) - 1];
+    timing.countMedianMs = Math.round(typical);
+    timing.countWindowMs = Math.round(Math.min(COUNT_CALIBRATION_WINDOW_MS, Math.max(350, upper + 220, typical * 1.35)));
+  }
   timing.closeMs = Math.round(Math.max(timing.closeMs, timing.fastMaxMs + 1, timing.slowMaxMs + 1, timing.mixedMaxMs + 1));
   return {
     timing, emulator,
     metrics: {
       trials: trials.length, expected, missed, duplicates: duplicate_gaps.length,
+      personalSamples: personal_gaps.length,
       medianPromptToEventMs: median(prompt_delays, null), fastSamples: fast.length, slowSamples: slow.length,
     },
   };

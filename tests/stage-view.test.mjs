@@ -35,3 +35,63 @@ test('the operator sees when a seat left during an otherwise valid announcement'
   assert.match(stage.announcementNote({ status: 'failed', reason: 'seat_left', targets: ['B'], heard: [] }), /seat disconnected/i);
   assert.match(stage.announcementNote({ status: 'failed', reason: 'voice_unavailable', targets: ['A','B'], heard: [] }), /voice was unavailable/i);
 });
+
+test('coach approval carries only the current cue ID', () => {
+  assert.deepEqual(stage.operatorFrame('coach_ask', { beat: 'problem' }),
+    { type: 'operator', action: 'coach_ask', beat: 'problem' });
+  assert.equal(stage.operatorFrame('coach_ask', { beat: 'unknown' }), null);
+  assert.equal(stage.operatorFrame('coach_send', { text: 'Skip to the demo.' }), null);
+  assert.deepEqual(stage.operatorFrame('coach_send', { coachId: 'coach-9', text: 'Skip to the demo.' }),
+    { type: 'operator', action: 'coach_send', coachId: 'coach-9' });
+});
+
+const COACH_DRAFT = {
+  available: true, status: 'ready', beat: 'problem', id: 'coach-9',
+  text: 'Skip to the demo.', reason: 'The pitch is running long.', source: 'maritime',
+};
+const LIVE_PITCH = {
+  phase: 'live', preset: 'Pitch', seats: { A: { online: true }, B: { online: true } }, coach: COACH_DRAFT,
+};
+
+test('pitch coach appears only in a live Pitch take and distinguishes availability and source', () => {
+  const view = (options, connected = true) => stage.pitchCoachView(stage.normalizeState({ ...LIVE_PITCH, ...options }), connected, 'problem');
+  assert.equal(view({ phase: 'lobby' }), null);
+  assert.equal(view({ phase: 'reveal' }), null);
+  assert.equal(view({ preset: 'Party' }), null);
+  assert.equal(view({ canned: true }), null);
+  assert.equal(view({ coach: null }), null);
+  assert.deepEqual(view({ coach: { available: false, status: 'idle' } }), {
+    canAsk: true, canSend: false, draft: false, note: 'Ask the local coach for a cue.',
+  });
+  assert.deepEqual(view({ coach: { available: true, status: 'asking' } }), {
+    canAsk: false, canSend: false, draft: false, note: 'Waiting for Maritime…',
+  });
+  assert.match(view({ coach: { ...COACH_DRAFT, source: 'maritime-rules' } }).note, /^Maritime rules fallback/);
+  assert.match(view({ coach: { ...COACH_DRAFT, source: 'local' } }).note, /^Local fallback/);
+});
+
+test('coach send requires a connected hub, both seats, current pitch beat and idle audio', () => {
+  const view = (options, connected = true, beat = 'problem') =>
+    stage.pitchCoachView(stage.normalizeState({ ...LIVE_PITCH, ...options }), connected, beat);
+  assert.deepEqual(view({}), { canAsk: true, canSend: true, draft: true, note: 'Maritime agent · Ready to send.' });
+  assert.equal(view({}, false).canSend, false);
+  assert.match(view({}, true, 'demo').note, /Ask again/);
+  assert.equal(view({}, true, 'demo').canSend, false);
+  const missing_seat = view({ seats: { A: { online: true } } });
+  assert.equal(missing_seat.canAsk, true);
+  assert.equal(missing_seat.canSend, false);
+  assert.match(missing_seat.note, /Connect both seats/);
+  const playing = view({ announcement: { id: 'manual-8', status: 'queued' } });
+  assert.equal(playing.canSend, false);
+  assert.match(playing.note, /current announcement/);
+});
+
+test('coach receipts report the approved announcement and ignore unrelated playback', () => {
+  const coach = { ...COACH_DRAFT, status: 'sent', announcementId: 'announcement-10' };
+  const announcement = { id: 'announcement-10', status: 'played', targets: ['A', 'B'], heard: ['A', 'B'] };
+  const view = value => stage.pitchCoachView(stage.normalizeState({ ...LIVE_PITCH, coach, announcement: value }), true, 'problem');
+  assert.equal(view(announcement).canSend, false);
+  assert.match(view(announcement).note, /Playback confirmed on both seats/);
+  assert.match(view({ ...announcement, status: 'partial', heard: ['A'] }).note, /confirmed on Seat A/);
+  assert.equal(view({ ...announcement, id: 'manual-11', text: COACH_DRAFT.text }).note, 'Maritime agent · Cue sent.');
+});

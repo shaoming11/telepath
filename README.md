@@ -12,6 +12,14 @@ Set `ELEVENLABS_API_KEY` and optionally `OPENAI_API_KEY` in the launcher’s env
 
 The hub uses OpenAI for text when its key is present. Set `TELEPATHY_LLM=local` to keep the room-read text on the Mac via Apple’s local language model, or `TELEPATHY_LLM=off` for fixed messages only. Both physical seats stream PCM to ElevenLabs for transcription whenever listening is enabled. The hub supplies the LLM with a short rolling window from each seat. No recording or transcript is saved to disk by the app.
 
+## Maritime pitch coach
+
+During a live Pitch session, open **Operator**, choose the current pitch beat, and select **Ask coach**. Review the suggested cue and its reason, then select **Send to both seats**. The console reports which seats confirmed playback. The coach receives the pitch beat, elapsed time, counts of online and ready seats, and the count of acknowledged messages. ElevenLabs supplies the announcement audio.
+
+`./start` reads `MARITIME_API_KEY` and `TELEPATHY_MARITIME_AGENT_ID` from the environment or from the Git-ignored `.env.maritime.local`. Set `TELEPATHY_MARITIME_ENV_FILE` to load a different owner-only file. On a new Maritime account, `node --env-file=.env.maritime.local scripts/maritime-deploy.mjs` packages and privately deploys the coach. Add the printed agent ID to the local environment file. Pass `--update` to redeploy to that ID. Set `TELEPATHY_MARITIME=off` for a local-only rehearsal.
+
+The coach has its own 12-second timeout. Set `TELEPATHY_MARITIME_ASSIST=openai` to let the Mac request a candidate cue through its existing OpenAI configuration before asking Maritime for the final choice. Only the cue ID and the same pitch telemetry go to Maritime. The panel distinguishes Maritime inference, an accepted OpenAI-assisted cue, and a rule-based fallback. Manual announcements are available while coaching runs. To verify a live model recommendation and both simulated playback acknowledgements in one request, run `TELEPATHY_VERIFY_MARITIME=1 node --env-file=.env.openai.local --env-file=.env.maritime.local --test --test-name-pattern='pitch coach sends' tests/transport.test.mjs`.
+
 ## Rehearse now
 
 1. Open the printed stage URL. Open the two rehearsal-seat links and complete the simulated setup in both tabs. Start the session from the stage.
@@ -19,7 +27,7 @@ The hub uses OpenAI for text when its key is present. Set `TELEPATHY_LLM=local` 
 3. Send from Seat B, acknowledge with R1 on Seat A after hearing it, and give Seat B the simulated transcript “The judge on the left looks lost.” Wait for a draft, confirm with R1, then Reveal from stage.
 4. In Operator, choose a preset announcement and send it to check playback on both seats. For an offline fallback, choose **Canned take** to play the bundled pitch, receipt and confirmed draft through the stage. Keep slides on the projector during a real pitch and bring up the stage for the reveal.
 
-The browser rehearsal uses bundled ElevenLabs audio and scripted excerpts without paid API calls. With real seats, the operator can also type a short announcement in the neutral ElevenLabs voice. It is sent once to both connected phones. `npm test` checks timestamp patterns, signal logic, and service integrations. `npm run rehearse` runs five WebSocket rehearsals with seeded loss, jitter, and delayed retry plus the offline operator take. `npm run rehearse -- --fast --runs=1` is the quick smoke test. `npm run rehearse:faults -- --tls --fast --cycles=5` also checks pre-playback approval, reconnect, preset changes and the operator's full/partial playback confirmations. The automated seat clients verify asset delivery and receipt timing using application frames. The physical browser and Bluetooth playback checks are in the rehearsal guide.
+The browser rehearsal uses bundled ElevenLabs audio and scripted excerpts. It can run without API calls using the local coach. With real seats, the operator can also type a short announcement in the neutral ElevenLabs voice. It is sent once to both connected phones. `npm test` checks timestamp patterns, signal logic, and service integrations. `npm run rehearse` runs five WebSocket rehearsals with seeded loss, jitter, and delayed retry plus the offline operator take. `npm run rehearse -- --fast --runs=1` is the quick smoke test. `npm run rehearse:faults -- --tls --fast --cycles=5` also checks pre-playback approval, reconnect, preset changes and the operator's full/partial playback confirmations. The automated seat clients verify asset delivery and receipt timing using application frames. The physical browser and Bluetooth playback checks are in the rehearsal guide.
 
 ## Physical demo
 

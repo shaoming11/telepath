@@ -1,13 +1,28 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { join } from 'node:path';
 
-export function findLanAddress() {
-  const routes = networkInterfaces();
-  const preferred = [...(routes.en0 ?? []), ...Object.values(routes).flat()];
-  return preferred.find(item => item?.family === 'IPv4' && !item.internal && /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(item.address))?.address ?? 'localhost';
+export function findLanAddress(routes = networkInterfaces()) {
+  const wifi = routes.en0 ?? [];
+  const privateIPv4 = item => item?.family === 'IPv4' && !item.internal
+    && /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[01])\./.test(item.address);
+  const local = wifi.find(privateIPv4);
+  if (local) return local.address;
+  if (wifi.some(item => item.address === '192.0.0.2' && item.cidr === '192.0.0.2/32')) {
+    const hotspot = wifi.find(item => item.family === 'IPv6' && /^[23]/.test(item.address)
+      && item.cidr?.endsWith('/64'));
+    if (hotspot) return hotspot.address;
+  }
+  return Object.values(routes).flat().find(privateIPv4)?.address ?? 'localhost';
+}
+
+export function hotspotIPv6Peers(address) {
+  if (isIP(address) !== 6 || address === '::1') return null;
+  const subnet = new BlockList();
+  subnet.addSubnet(address, 64, 'ipv6');
+  return peer => typeof peer === 'string' && isIP(peer) === 6 && subnet.check(peer, 'ipv6');
 }
 
 function openssl(args) {

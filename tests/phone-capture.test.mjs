@@ -177,3 +177,37 @@ test('base64 and WAV helpers handle large buffers and empty input', () => {
   assert.deepEqual(new Uint8Array(Buffer.from(bytes_to_base64(big), 'base64')), big);
   assert.equal(encode_wav([]).length, 44);
 });
+
+test('a recording rejects if the microphone never supplies PCM', async () => {
+  const { capture } = make_capture();
+  const started = capture.start();
+  media.gates[0].resolve(fake_stream());
+  await started;
+  const rejected = assert.rejects(capture.record({ duration_ms: 500 }), /stopped delivering audio/);
+  world.advance(11_000);
+  await rejected;
+  assert.equal(capture.recording, false);
+});
+
+test('adaptive capture ignores silence and clipped frames and can finish on usable speech', async () => {
+  const { capture } = make_capture();
+  const started = capture.start();
+  media.gates[0].resolve(fake_stream());
+  await started;
+  const updates = [];
+  const result = capture.record({ speech_ms: 24_000, on_progress: (_, data) => updates.push(data) });
+  const feed = (seconds, sample, level) => nodes[0].port.onmessage({
+    data: { pcm: new Int16Array(seconds * PCM_RATE).fill(sample).buffer, level },
+  });
+  feed(4, 0, 0);
+  feed(2, 32767, 0.9);
+  assert.equal(updates.at(-1).seconds, 0);
+  assert.equal(updates.at(-1).clipped, true);
+  assert.equal(capture.finish_record(), false);
+  feed(8, 1800, 0.06);
+  feed(5, 0, 0);
+  feed(7, 1600, 0.05);
+  assert.equal(updates.at(-1).seconds, 15);
+  assert.equal(capture.finish_record(), true);
+  assert.equal((await result).duration_ms, 15_160);
+});
