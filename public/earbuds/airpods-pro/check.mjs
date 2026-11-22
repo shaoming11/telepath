@@ -4,6 +4,7 @@ const byId = id => document.getElementById(id);
 const audio = byId('check-audio');
 const start = byId('check-start');
 const stop = byId('check-stop');
+const replay = byId('check-replay');
 const status = byId('check-status');
 const labels = { R1: 'Single squeeze', R2: 'Double squeeze', L1: 'Triple squeeze' };
 const counts = { R1: 0, R2: 0, L1: 0 };
@@ -19,6 +20,7 @@ const input = createAirPodsProInput({
 function showPlayback() {
   start.hidden = !audio.paused;
   stop.hidden = audio.paused;
+  replay.hidden = audio.paused;
   if (navigator.mediaSession) navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
 }
 
@@ -53,5 +55,6 @@ stop.addEventListener('click', () => {
   armed = false;
   audio.pause();
 });
+replay.addEventListener('click', () => { audio.currentTime = 0; });
 audio.addEventListener('playing', showPlayback);
 audio.addEventListener('pause', showPlayback);
