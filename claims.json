@@ -1,4 +1,41 @@
 {
-  "revision": 156,
-  "claims": []
+  "revision": 157,
+  "claims": [
+    {
+      "id": "3c38f0cf-2ff4-4d5b-a057-effd8b9e3d88",
+      "owner": "fireheartjerry",
+      "agent": "codex-wasp-solid-surfaces",
+      "branch": "jerry/wasp-liquid-glass",
+      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
+      "scopes": [
+        "@ui",
+        "scripts/generate-wasp-surfaces.py",
+        "wasp-ui/src/AppearanceControl.tsx",
+        "wasp-ui/src/generated/PhoneMarkup.tsx",
+        "wasp-ui/src/generated/StageMarkup.tsx",
+        "wasp-ui/src/liquid.css",
+        "tests/wasp-markup.test.mjs",
+        "docs/wasp-ui.md"
+      ],
+      "paths": [
+        "docs/wasp-ui.md",
+        "public/announcements.mjs",
+        "public/calibrate.mjs",
+        "public/index.html",
+        "public/phone-data.mjs",
+        "public/phone.css",
+        "public/phone.mjs",
+        "public/stage.css",
+        "public/stage.html",
+        "public/stage.mjs",
+        "scripts/generate-wasp-surfaces.py",
+        "tests/wasp-markup.test.mjs",
+        "wasp-ui/src/AppearanceControl.tsx",
+        "wasp-ui/src/generated/PhoneMarkup.tsx",
+        "wasp-ui/src/generated/StageMarkup.tsx",
+        "wasp-ui/src/liquid.css"
+      ],
+      "claimedAt": "2026-11-22T11:23:29.348Z"
+    }
+  ]
 }
