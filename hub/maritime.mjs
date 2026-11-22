@@ -1,4 +1,4 @@
-import { COACH_CUES, normalizePitch, normalizePitchHelp, validatePitchHelpPlan } from '../maritime/policy.mjs';
+import { COACH_CUES, normalizeCueRequest, normalizePitch, normalizePitchHelp, validatePitchHelpPlan } from '../maritime/policy.mjs';
 
 const MARITIME_API = 'https://api.maritime.sh';
 const OPENAI_RESPONSES = 'https://api.openai.com/v1/responses';
@@ -84,6 +84,18 @@ export function createMaritimeCoach({ env = process.env, fetchImpl = fetch, now 
   }
 
   return {
+    ...(env.TELEPATHY_MARITIME_CUE_RACE === 'on' && {
+      async draftPitchCue(context, { signal } = {}) {
+        const input = normalizeCueRequest({ ...context, type: 'pitch_cue' });
+        if (!input) throw new Error('Invalid Maritime cue context');
+        return chat(input, signal);
+      },
+      async verifyPitchCue(context, { signal } = {}) {
+        const input = normalizeCueRequest({ ...context, type: 'pitch_cue_review' });
+        if (!input) throw new Error('Invalid Maritime cue review context');
+        return chat(input, signal);
+      },
+    }),
     ...(env.TELEPATHY_MARITIME_PITCH_HELP === 'on' && {
       async planPitchHelp(context, { signal } = {}) {
         const input = normalizePitchHelp(context);

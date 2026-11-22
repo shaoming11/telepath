@@ -1891,3 +1891,63 @@ test('interview Question Mode redrafts while the question grows and plays the la
   assert.equal(drafts.length, 2);
   assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').text, 'Draft 2. Lead with the latency win.');
 });
+
+for (const fastest of ['openai', 'maritime']) {
+  test(fastest + ' can win the private cue race and the slower provider verifies it', async t => {
+    let releaseSlow, review;
+    const makeDraft = name => async input => {
+      const answer = supportedAnswer(input);
+      if (name === fastest) return answer;
+      return new Promise(resolve => { releaseSlow = () => resolve(answer); });
+    };
+    const verify = name => async input => {
+      review = { name, input };
+      return { status: 'resolved' };
+    };
+    const { session, act, seatFrames } = await createLiveSession({
+      sim: { A: false, B: false },
+      coach: { draftPitchCue: makeDraft('maritime'), verifyPitchCue: verify('Maritime') },
+      codec: { pitchHelp: makeDraft('openai'), verifyPitchCue: verify('OpenAI') },
+    });
+    t.after(() => session.close());
+    session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
+    await act('A', { type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'race-' + fastest });
+    assert.ok(releaseSlow, 'both drafts started');
+    assert.equal(review, undefined, 'the whisper does not await the verifier');
+    assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help')?.text, 'The buyer is a sales team lead.');
+    assert.equal(seatFrames.A.find(frame => frame.kind === 'pitch_help').expiresAfterMs, 8000);
+    assert.equal(session.log.find(entry => entry.kind === 'pitch_help').source, fastest);
+    assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
+    releaseSlow();
+    const reviewer = fastest === 'openai' ? 'Maritime' : 'OpenAI';
+    await eventually(() => session.seats.A.lastPitchCue.points.includes('Verified by ' + reviewer));
+    assert.equal(review.name, reviewer);
+    assert.equal(review.input.firstCue, 'The buyer is a sales team lead.');
+  });
+}
+
+test('a material verified correction is spoken only to the original seat', async t => {
+  let releaseReview;
+  const quote = 'The decision maker is the VP of Sales.';
+  const { session, act, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false },
+    coach: {
+      draftPitchCue: async () => ({ status: 'unsupported' }),
+      verifyPitchCue: async input => new Promise(resolve => {
+        releaseReview = () => resolve({ ...supportedAnswer(input), answer: quote, sources: [{ id: input.passages[0].id, quote }] });
+      }),
+    },
+    codec: { pitchHelp: async input => supportedAnswer(input), verifyPitchCue: async () => ({ status: 'resolved' }) },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'brief.md',
+    data: Buffer.from('The buyer is a sales team lead. ' + quote).toString('base64') }]);
+  await act('A', { type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'correct' });
+  await eventually(() => releaseReview);
+  releaseReview();
+  await eventually(() => seatFrames.A.filter(frame => frame.kind === 'pitch_help').length === 2);
+  const revision = seatFrames.A.findLast(frame => frame.kind === 'pitch_help');
+  assert.equal(revision.text, quote);
+  assert.match(decodeURIComponent(revision.url), /Correction\./);
+  assert.ok(!seatFrames.B.some(frame => frame.kind === 'pitch_help'));
+});
