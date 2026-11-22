@@ -1,0 +1,48 @@
+.story { background: var(--void); }
+
+.story-bar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 30;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-5) clamp(20px, 3.4vw, 48px);
+  pointer-events: none;
+  mix-blend-mode: difference;
+}
+.story-mark { font-size: var(--body); font-weight: 600; letter-spacing: -0.01em; }
+.story-skip {
+  pointer-events: auto;
+  color: var(--ink);
+  font-size: var(--caption);
+  text-decoration: none;
+  opacity: 0.55;
+  padding: 12px 0;
+  transition: opacity var(--fast) var(--ease-out);
+}
+.story-skip:hover, .story-skip:focus-visible { opacity: 1; }
+
+.story-track { position: relative; }
+.story-sticky { position: sticky; top: 0; height: 100vh; height: 100svh; overflow: clip; }
+.story-sticky .film { position: absolute; }
+
+.story-hint {
+  position: absolute;
+  inset: auto 0 var(--space-6);
+  margin: 0;
+  text-align: center;
+  font-size: var(--caption);
+  color: var(--ink-tertiary);
+  pointer-events: none;
+}
+.story-progress { position: absolute; inset: auto 0 0; height: 2px; background: var(--hairline); }
+.story-progress div { height: 100%; background: var(--ink); opacity: 0.6; transform-origin: 0 50%; transform: scaleX(0); }
+
+.story-text { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.story-static { list-style: none; margin: 0; padding: var(--space-8) clamp(20px, 6vw, 96px); display: grid; gap: var(--space-8); }
+.story-static h2 { margin: 0 0 var(--space-3); font-size: var(--display); font-weight: 600; letter-spacing: var(--track-display); line-height: 1.04; max-width: 14ch; }
+.story-static p { margin: 0; font-size: var(--title); color: var(--ink-secondary); max-width: 40ch; }
+
+.story-live { position: relative; z-index: 10; min-height: 100vh; background: var(--void); }
