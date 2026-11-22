@@ -225,7 +225,7 @@ export class Session {
       canBegin: !this.referencesLoading && SEATS.every(seat => this.isReady(seat)),
       startedAt: this.startedAt,
       canned: this.canned,
-      ...(viewer == null && { announcement: this.snapshotAnnouncement() }),
+      ...(viewer == null && { announcement: this.snapshotAnnouncement(), canReplay: this.canReplay() }),
       ...(viewer == null && { references: this.references.map(({ id, name, characters }) => ({ id, name, characters })),
         referencesLoading: this.referencesLoading, questionAnswering: this.codec?.questionAnswering === true,
         questionState: this.questionState }),
@@ -657,6 +657,10 @@ export class Session {
     if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
     this.cue(seat, 'sent');
     this.cue(recipient, audio.cue, { ...audio, text, messageId });
+  }
+
+  canReplay() {
+    return this.phase === 'live' && !this.canned && Boolean(this.lastReplay && this.seats[this.lastReplay.entry.to].online);
   }
 
   heard(seat, frame) {
@@ -1835,10 +1839,8 @@ export class Session {
         this.sendFixed(frame.seat, frame.signal, 'operator');
         break;
       case 'replay': {
-        if (this.phase !== 'live' || this.canned) return;
-        const replay = this.lastReplay;
-        if (!replay || !this.seats[replay.entry.to].online) return;
-        const { entry, cue, url } = replay;
+        if (!this.canReplay()) return;
+        const { entry, cue, url } = this.lastReplay;
         this.append('replay', { seat: entry.seat, to: entry.to, text: entry.text, messageId: entry.messageId });
         this.cue(entry.to, cue, { url, text: entry.text });
         break;

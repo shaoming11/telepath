@@ -18,6 +18,13 @@ const FIXED_SIGNALS = new Set(['R1', 'R2', 'L1', 'OUT']);
 const LIVE_TRANSCRIPT_LINES = 12;
 const PITCH_BEATS = Object.freeze(['opening', 'problem', 'demo', 'closing']);
 const COACH_STATUSES = Object.freeze(['idle', 'asking', 'ready', 'sent']);
+const SESSION_REQUESTS = Object.freeze({
+  begin: 'Begin requested.',
+  reveal: 'Reveal requested.',
+  replay: 'Replay requested.',
+  canned: 'Canned take requested.',
+});
+const SESSION_ACTIONS = Object.keys(SESSION_REQUESTS);
 const COACH_SOURCES = Object.freeze({
   maritime: 'Maritime agent', 'maritime-assisted': 'Maritime · OpenAI-assisted', 'maritime-rules': 'Maritime rules fallback', local: 'Local fallback',
 });
@@ -219,6 +226,7 @@ export function normalizeState(raw) {
     presetPending: normalizePresetPending(source.presetPending),
     context: firstText(source.context),
     canBegin: asBool(source.canBegin),
+    canReplay: source.canReplay === true,
     bits: asNumber(source.bits),
     startedAt: asNumber(source.startedAt),
     canned: normalizeCanned(source.canned),
@@ -444,6 +452,27 @@ export function announcementNote(progress) {
   }
 }
 
+export function operatorSessionView(state, connected) {
+  if (!connected) {
+    const guide = 'Waiting for the hub.';
+    return { guide, actions: Object.fromEntries(SESSION_ACTIONS.map(action => [action, guide])) };
+  }
+
+  const lobby = state.phase === 'lobby';
+  const live = state.phase === 'live';
+  const live_only = live ? null : 'Available during a live take.';
+  const begin = !lobby ? 'The lobby has ended.'
+    : state.canBegin ? null
+    : state.referencesLoading ? 'Wait for the team brief to load.' : 'Wait for both seats to be ready.';
+  const replay = live_only ?? (state.canned ? 'Replay last is for teammate cues.'
+    : state.canReplay ? null : 'Send a cue to a connected seat first.');
+  const canned = live && state.canned ? 'The canned take is playing.' : null;
+  const guide = lobby ? (begin ?? 'Both seats are ready. Begin the live take.') + ' Canned take runs about 18 seconds.'
+    : live ? (canned ?? replay ?? 'Replay last sends the previous cue again.') + ' Reveal shows the score.'
+    : 'Canned take plays the recorded pitch in about 18 seconds.';
+  return { guide, actions: { begin, reveal: live_only, replay, canned } };
+}
+
 export function announcementView(state, online, raw) {
   const connected = SEATS.filter(seat => state.seats[seat].online);
   const rehearsal = connected.length > 0 && connected.every(seat => state.seats[seat].sim);
@@ -584,6 +613,8 @@ function boot() {
   let roomMessage = '';
   const reactRoom = Boolean(document.querySelector('[data-room-owner="react"]'));
   const wasp_operator = body.classList.contains('wasp-liquid');
+  const session_buttons = SESSION_ACTIONS.map(action => byId('op-' + action));
+  const session_guide = ui.opBegin.closest('.operator__group').querySelector('.operator__note');
   let roomDevices = [];
   let roomRenderKey = '';
   const roomBars = reactRoom ? [] : Array.from({ length: 24 }, () => node('span'));
@@ -1330,21 +1361,36 @@ function boot() {
       const label = SIGNAL_LABELS[option.value] + (meaning ? ' · ' + meaning : ' · ' + (SIGNAL_ROLES[option.value] ?? 'signal'));
       if (option.textContent !== label) option.textContent = label;
     }
-    const blocked = state.canBegin === false;
-    ui.opBegin.disabled = false;
-    ui.opBegin.title = blocked ? 'Seats are not all ready. The hub may refuse.' : '';
+    if (wasp_operator) {
+      const { guide, actions } = operatorSessionView(state, linkState === 'live');
+      for (const button of session_buttons) describeOperatorAction(button, actions[button.dataset.action]);
+      if (session_guide.textContent !== guide) session_guide.textContent = guide;
+    } else {
+      ui.opBegin.disabled = false;
+      ui.opBegin.title = state.canBegin === false ? 'Seats are not all ready. The hub may refuse.' : '';
+    }
     renderPitchCoach();
     renderAnnouncement();
+  }
+
+  function describeOperatorAction(button, reason) {
+    button.setAttribute('aria-disabled', String(Boolean(reason)));
+    button.title = reason ?? '';
   }
 
   function renderPitchCoach() {
     const view = pitchCoachView(state, linkState === 'live', ui.opCoachBeat.value);
     ui.opCoach.hidden = !view;
     if (!view) return;
-    ui.opCoachBeat.disabled = !view.canAsk;
-    ui.opCoachAsk.disabled = !view.canAsk;
     ui.opCoachDraft.hidden = !view.draft;
-    ui.opCoachSend.disabled = !view.canSend;
+    if (wasp_operator) {
+      describeOperatorAction(ui.opCoachAsk, view.canAsk ? null : view.note);
+      describeOperatorAction(ui.opCoachSend, view.canSend ? null : view.note);
+    } else {
+      ui.opCoachBeat.disabled = !view.canAsk;
+      ui.opCoachAsk.disabled = !view.canAsk;
+      ui.opCoachSend.disabled = !view.canSend;
+    }
     const text = view.draft ? state.coach.text : '';
     const reason = view.draft ? state.coach.reason ?? '' : '';
     if (ui.opCoachText.textContent !== text) ui.opCoachText.textContent = text;
@@ -1412,9 +1458,10 @@ function boot() {
       return false;
     }
     const detail = frame.preset ? ' ' + frame.preset : frame.signal ? ' ' + frame.seat + ' ' + SIGNAL_LABELS[frame.signal] : '';
-    const action_status = frame.action === 'coach_ask' ? 'Asked the pitch coach.'
+    const action_status = (wasp_operator ? SESSION_REQUESTS[frame.action] : null) ?? (
+      frame.action === 'coach_ask' ? 'Asked the pitch coach.'
       : frame.action === 'coach_send' ? 'Approved the cue.'
-      : frame.action === 'announce' ? 'Announcement requested.' : null;
+      : frame.action === 'announce' ? 'Announcement requested.' : null);
     status(action_status ?? 'Sent ' + frame.action + detail, 'sent');
     return true;
   }
@@ -1485,26 +1532,36 @@ function boot() {
     ui.opCoachBeat.addEventListener('change', renderPitchCoach);
     ui.opCoachForm.addEventListener('submit', event => {
       event.preventDefault();
-      if (ui.opCoachAsk.disabled) return;
+      if (!pitchCoachView(state, linkState === 'live', ui.opCoachBeat.value)?.canAsk) return;
       send('coach_ask', { beat: ui.opCoachBeat.value });
     });
     ui.opCoachSend.addEventListener('click', () => {
-      if (ui.opCoachSend.disabled) return;
+      if (!pitchCoachView(state, linkState === 'live', ui.opCoachBeat.value)?.canSend) return;
       send('coach_send', { coachId: state.coach.id });
     });
 
     ui.opToggle.addEventListener('click', () => setOperator(ui.operator.hidden,
       wasp_operator ? { trigger: ui.opToggle } : undefined));
     ui.opClose.addEventListener('click', () => setOperator(false));
-    for (const id of ['op-begin', 'op-reveal', 'op-replay', 'op-canned']) {
-      const button = byId(id);
-      button?.addEventListener('click', () => {
-        if (button.dataset.action === 'canned') {
+    if (wasp_operator) {
+      session_guide.id = 'op-session-guide';
+      session_guide.setAttribute('role', 'status');
+      for (const button of session_buttons) button.setAttribute('aria-describedby', session_guide.id);
+    }
+    for (const button of session_buttons) {
+      button.addEventListener('click', () => {
+        const { action } = button.dataset;
+        const reason = wasp_operator ? operatorSessionView(state, linkState === 'live').actions[action] : null;
+        if (reason) {
+          status(reason, 'blocked');
+          return;
+        }
+        if (action === 'canned') {
           canned_audio.clear_session();
           void canned_audio.unlock();
           void canned_audio.preload_cues();
         }
-        send(button.dataset.action);
+        send(action);
       });
     }
     byId('op-set-preset').addEventListener('click', () => {

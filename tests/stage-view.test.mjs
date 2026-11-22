@@ -69,6 +69,31 @@ test('the operator sends a short explicit announcement rather than a seat signal
   assert.equal(stage.operatorFrame('announce', { text: 'x'.repeat(190) }).text.length, 140);
 });
 
+test('the Operator only offers actions supported by the current Stage phase', () => {
+  const view = (state, connected = true) => stage.operatorSessionView(stage.normalizeState(state), connected);
+  const lobby = view({ phase: 'lobby' });
+  assert.match(lobby.actions.begin, /both seats/);
+  assert.match(lobby.actions.reveal, /live take/);
+  assert.equal(lobby.actions.canned, null);
+  assert.match(view({ phase: 'lobby', referencesLoading: true }).actions.begin, /team brief/);
+  assert.equal(view({ phase: 'lobby', canBegin: true }).actions.begin, null);
+
+  const live = view({ phase: 'live', canBegin: true, canReplay: true });
+  assert.equal(live.actions.reveal, null);
+  assert.equal(live.actions.replay, null);
+  assert.notEqual(live.actions.begin, null);
+  assert.match(view({ phase: 'live' }).actions.replay, /connected seat/);
+
+  const canned = view({ phase: 'live', canned: true, canReplay: true });
+  assert.equal(canned.actions.reveal, null);
+  assert.notEqual(canned.actions.canned, null);
+  assert.notEqual(canned.actions.replay, null);
+  const reveal = view({ phase: 'reveal', canned: true, canReplay: true });
+  assert.equal(reveal.actions.canned, null);
+  assert.notEqual(reveal.actions.replay, null);
+  assert.ok(Object.values(view({ phase: 'live' }, false).actions).every(Boolean));
+});
+
 test('the operator sees when a seat left during an otherwise valid announcement', () => {
   assert.match(stage.announcementNote({ status: 'failed', reason: 'seat_left', targets: ['B'], heard: [] }), /seat disconnected/i);
   assert.match(stage.announcementNote({ status: 'failed', reason: 'voice_unavailable', targets: ['A','B'], heard: [] }), /voice was unavailable/i);
