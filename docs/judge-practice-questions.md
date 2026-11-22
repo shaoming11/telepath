@@ -26,7 +26,7 @@ The docs cover these well, so every one should produce a useful cue.
 
 ## Product questions
 
-- What's the difference between Telepathy and the coaching agent?
+- What's the difference between Telepath and the coaching agent?
 - Who sends the cues, the teammate or the AI?
 - How does the teammate send a cue without anyone noticing?
 - Can the AI make things up? How do you stop that?

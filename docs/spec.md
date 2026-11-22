@@ -1,10 +1,10 @@
-# Telepathy — system architecture
+# Telepath — system architecture
 
 Nov 21, 2026 · Jerry Li
 
 ## Overview
 
-Telepathy lets two people in the same room message each other silently. Earbud taps go out; a chime and a whisper in the partner's own cloned voice come back. An AI listens to both rooms, keeps the meaning of each tap pattern matched to the moment, and drafts messages that the sender confirms with one tap.
+Telepath lets two people in the same room message each other silently. Earbud taps go out; a chime and a whisper in the partner's own cloned voice come back. An AI listens to both rooms, keeps the meaning of each tap pattern matched to the moment, and drafts messages that the sender confirms with one tap.
 
 The target is one flawless live demo: a pitch where a teammate in the audience steers the presenter silently, followed by a reveal of everything that was sent. Every choice below favours that demo. Hardcode whatever makes it more reliable.
 

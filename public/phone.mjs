@@ -493,7 +493,7 @@ function arm_media() {
   diag('arm', { registered, model: settings.gesture_model, input_mode: settings.input_mode });
   if (media_session && globalThis.MediaMetadata) {
     media_session.metadata = new MediaMetadata({
-      title: 'Telepathy', artist: ui.seat ? 'Seat ' + ui.seat : 'Seat',
+      title: 'Telepath', artist: ui.seat ? 'Seat ' + ui.seat : 'Seat',
     });
   }
   void audio.preload_cues();

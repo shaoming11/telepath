@@ -1,6 +1,6 @@
-# Telepathy verification
+# Telepath verification
 
-Telepathy is a two-seat hackathon demo. The MacBook runs the hub, the stage, and a third-person operator panel. Each seat can record a 30-second sample. The hub verifies the ElevenLabs voice and the partner’s phone decodes the four fixed Pitch whispers before the take.
+Telepath is a two-seat hackathon demo. The MacBook runs the hub, the stage, and a third-person operator panel. Each seat can record a 30-second sample. The hub verifies the ElevenLabs voice and the partner’s phone decodes the four fixed Pitch whispers before the take.
 
 The operator uses **O** to open the panel. Four neutral ElevenLabs announcements ship with the app. The operator can type a short custom line with real seats connected. The hub generates the line once, sends the same clip to both seats, and tracks their playback starts separately. Announcements add zero tap bits.
 

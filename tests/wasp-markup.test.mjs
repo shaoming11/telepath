@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { test } from 'node:test';
+import { pitchCueProvenance } from '../public/stage.mjs';
 
 const ROOT = new URL('../', import.meta.url);
 const text = path => readFile(new URL(path, ROOT), 'utf8');
@@ -170,4 +171,22 @@ test('the Wasp operator receipt connects to authoritative announcement status an
   assert.match(component, /addEventListener\('telepathy:announcement'/);
   assert.match(component, /key=\{receipt.id \+ ':' \+ row.label\}/);
   assert.match(component, /disabled=\{!view.canSend && !view.busy\}/);
+});
+
+
+test('Stage distinguishes the winning draft from the provider that reviewed it', () => {
+  assert.deepEqual(pitchCueProvenance({ kind: 'pitch_help', source: 'maritime' }), ['Maritime plan']);
+  assert.deepEqual(pitchCueProvenance({ kind: 'pitch_help', source: '__proto__' }), []);
+  assert.deepEqual(pitchCueProvenance({ kind: 'pitch_help', source: 'maritime', draftedBy: 'Maritime', verifiedBy: 'OpenAI' }),
+    ['Maritime draft', 'Verified by OpenAI']);
+  assert.deepEqual(pitchCueProvenance({ kind: 'pitch_help', draftedBy: 'OpenAI', verifiedBy: 'Maritime', corrected: true }),
+    ['OpenAI draft', 'Corrected by Maritime']);
+});
+
+test('Stage keeps setup and diagnostics collapsed while preserving the phone join copy action', async () => {
+  const stage = await text('wasp-ui/src/generated/StageMarkup.tsx');
+  assert.match(stage, /id="join-copy" type="button" disabled/);
+  assert.match(stage, /<details className="reference-panel stage-inspector" id="reference-setup">/);
+  assert.match(stage, /<StagePair \/>[\s\S]*<details className="stage-inspector stage-inspector--live">[\s\S]*<ChannelMonitor id="stage-monitor"/);
+  assert.match(stage, /<details className="reference-panel stage-inspector" id="answer-panel" hidden>/);
 });

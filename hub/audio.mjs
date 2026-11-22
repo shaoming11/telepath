@@ -1,4 +1,4 @@
-// ElevenLabs-only audio adapter for the Telepathy hub.
+// ElevenLabs-only audio adapter for the Telepath hub.
 //
 // Every voice/audio feature here is an ElevenLabs call (TTS, voice clone, Scribe
 // Realtime v2, sound effects at build time) or a pre-generated ElevenLabs file from
@@ -722,7 +722,7 @@ export function createAudio({
     try {
       const form = new FormData();
       form.append('name', `TELEPATHY-APP-${seat}-${String(requestId ?? reqNo).replace(/[^\w-]/g, '').slice(0, 16)}-${now()}`);
-      form.append('description', 'Telepathy demo clone. App-created from a consented seat recording; deleted on reset.');
+      form.append('description', 'Telepath demo clone. App-created from a consented seat recording; deleted on reset.');
       form.append('files', new Blob([wav], { type: 'audio/wav' }), 'sample.wav');
       const added = await client.request('voice clone', '/v1/voices/add', { method: 'POST', form, timeoutMs: cloneTimeoutMs });
       cloneId = added?.voice_id || null;

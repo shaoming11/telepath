@@ -1,5 +1,5 @@
 /*
- * Telepathy stage screen: lobby, live board, reveal, plus hidden operator controls.
+ * Telepath stage screen: lobby, live board, reveal, plus hidden operator controls.
  * The stage is a view of the hub. It renders state and sends operator frames.
  * The operator's canned take can play bundled ElevenLabs clips.
  */
@@ -32,7 +32,7 @@ export const OPERATOR_ACTIONS = Object.freeze([
   'begin', 'preset', 'inject', 'replay', 'canned', 'reset', 'reveal', 'announce', 'coach_ask', 'coach_send', 'coach_scenario',
 ]);
 export const COACH_SCENARIOS = Object.freeze({
-  pitch: 'Pitch Q&A: answers from the Telepathy brief and your uploads',
+  pitch: 'Pitch Q&A: answers from the Telepath brief and your uploads',
   interview: 'Interview: answers from your uploaded persona documents only',
   social: 'Date or small talk: topics and questions to ask, no documents needed',
 });
@@ -330,6 +330,17 @@ export function operatorFrame(action, options = {}) {
     frame.coachId = id;
   }
   return frame;
+}
+
+export function pitchCueProvenance(entry) {
+  if (entry?.kind !== 'pitch_help') return [];
+  const sources = { maritime: 'Maritime plan', 'maritime-rules': 'Maritime rules', 'local-policy': 'Local plan' };
+  const draft = ['Maritime', 'OpenAI'].includes(entry.draftedBy) ? entry.draftedBy + ' draft'
+    : Object.hasOwn(sources, entry.source) ? sources[entry.source] : '';
+  const review = ['Maritime', 'OpenAI'].includes(entry.verifiedBy)
+    ? (entry.corrected ? 'Corrected by ' : 'Verified by ') + entry.verifiedBy
+    : '';
+  return [draft, review].filter(Boolean);
 }
 
 export function joinGuidance(info) {
@@ -891,7 +902,7 @@ function boot() {
     byId('reference-clear').disabled = !editable || !state.references.length;
     byId('reference-status').textContent = busy ? 'Reading documents…' : [referenceMessage,
       !state.questionAnswering ? 'Document answering requires OPENAI_API_KEY and the OpenAI text provider. Fixed whispers and ordinary coaching remain available.'
-        : !referenceMessage ? state.references.length ? 'References ready. Question answering starts with the session.' : 'Built-in Telepathy brief is ready. Upload files to add details.' : ''].filter(Boolean).join(' ');
+        : !referenceMessage ? state.references.length ? 'References ready. Question answering starts with the session.' : 'Built-in Telepath brief is ready. Upload files to add details.' : ''].filter(Boolean).join(' ');
     fill(byId('reference-list'), state.references.map(item => node('li', null, `${item.name} · ${item.characters.toLocaleString()} characters`)));
     const scenario = byId('coach-scenario');
     if (scenario.value !== state.coachScenario) scenario.value = state.coachScenario;
@@ -908,12 +919,11 @@ function boot() {
     byId('answer-question').textContent = answer.question ? 'Question: ' + answer.question : '';
     byId('answer-text').textContent = answer.answer ?? '';
     fill(byId('answer-sources'), asList(answer.sources).map(source => node('li', null, `${source.name}: “${source.quote}”`)));
-    const planners = { maritime: 'Maritime plan', 'maritime-rules': 'Maritime rules', 'local-policy': 'Local plan' };
     fill(byId('answer-history'), state.answerHistory.map(entry => {
-      const planner = entry.kind === 'pitch_help' && Object.hasOwn(planners, entry.source) ? planners[entry.source] : '';
+      const providers = pitchCueProvenance(entry);
       const playback = entry.kind === 'pitch_help' && Number.isFinite(entry.requestToPlaybackMs) && entry.requestToPlaybackMs >= 0
         ? `${(entry.requestToPlaybackMs / 1000).toFixed(1)} s to playback start` : '';
-      const metadata = [planner, entry.ungrounded ? 'not from your files' : '', playback].filter(Boolean).join(' · ');
+      const metadata = [...providers, entry.ungrounded ? 'not from your files' : '', playback].filter(Boolean).join(' · ');
       const evidence = asList(entry.sources).map(source => `${source.name}: “${source.quote}”`).join('; ');
       return node('li', null, [metadata ? `${entry.text} (${metadata})` : entry.text, evidence].filter(Boolean).join(' — '));
     }));
@@ -1009,6 +1019,8 @@ function boot() {
       const index = PHASES.indexOf(step.dataset.phaseStep);
       const current = PHASES.indexOf(state.phase);
       step.toggleAttribute('data-active', index === current);
+      if (index === current) step.setAttribute('aria-current', 'step');
+      else step.removeAttribute('aria-current');
       step.toggleAttribute('data-done', index < current);
     }
     for (const [phase, section] of Object.entries(ui.screens)) {
@@ -1681,6 +1693,18 @@ function boot() {
       send('reset');
     });
 
+    byId('join-copy').addEventListener('click', async () => {
+      const result = byId('join-copy-status');
+      const url = info?.lanAvailable === false ? null : firstText(info?.joinUrl);
+      if (!url) return;
+      try {
+        await navigator.clipboard.writeText(url);
+        result.textContent = 'Phone link copied.';
+      } catch {
+        result.textContent = 'Copy the displayed link manually.';
+      }
+      result.hidden = false;
+    });
     ui.begin.addEventListener('click', () => send('begin'));
     byId('reference-upload').addEventListener('click', () => void uploadReferences());
     byId('coach-scenario').addEventListener('change', event => send('coach_scenario', { scenario: event.target.value }));
@@ -1727,7 +1751,10 @@ function boot() {
     info = isObject(next) ? next : null;
     const joinUrl = firstText(info?.joinUrl) ?? location.origin;
     const local_only = info?.lanAvailable === false;
-    ui.joinUrl.textContent = local_only ? 'No hotspot address' : joinUrl.replace(/\/$/, '');
+    const previousUrl = ui.joinUrl.textContent;
+    ui.joinUrl.textContent = local_only ? 'No hotspot address' : joinUrl;
+    byId('join-copy').disabled = local_only || !firstText(info?.joinUrl);
+    if (previousUrl !== ui.joinUrl.textContent) byId('join-copy-status').hidden = true;
     if (ui.diaHost) {
       let host = null;
       try { host = new URL(joinUrl).hostname; } catch { /* a hand-typed address has no host to show */ }
@@ -1850,6 +1877,7 @@ function boot() {
       if (socket !== next) return;
       reconnectDelay = 600;
       setLink('live');
+      void loadInfo();
     });
     next.addEventListener('message', event => {
       if (socket !== next) return;

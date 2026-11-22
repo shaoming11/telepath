@@ -1,12 +1,12 @@
-# Telepathy technical reference
+# Telepath technical reference
 
 ## Project overview
 
-Telepathy helps two teammates in the same room give each other discreet feedback without interrupting a conversation. The demo is a pitch about Telepathy itself. A presenter and a coach each wear earbuds paired to their own phone. Cached cues let them steer pace and timing. A Mac operator can send an announcement to both seats. In Question Mode, the presenter can privately hear a short prompt grounded in the room conversation and the project references. The presenter speaks their own answer. These are two-seat hackathon workflows, without user accounts.
+Telepath helps two teammates in the same room give each other discreet feedback without interrupting a conversation. The demo is a pitch about Telepath itself. A presenter and a coach each wear earbuds paired to their own phone. Cached cues let them steer pace and timing. A Mac operator can send an announcement to both seats. In Question Mode, the presenter can privately hear a short prompt grounded in the room conversation and the project references. The presenter speaks their own answer. These are two-seat hackathon workflows, without user accounts.
 
 ## How we built the project
 
-The implementation connects Safari earbud controls, a Mac hub, and private cues written by OpenAI and voiced by ElevenLabs. To explain how we developed Telepathy, start with the phone translating a hardware gesture to a media event. Then show the Mac routing that event and listening to the room. Finish by showing how the live question becomes a private cue in the presenter's ear. That is a walkthrough of the implementation, not a claim about the order in which the team wrote each component.
+The implementation connects Safari earbud controls, a Mac hub, and private cues written by OpenAI and voiced by ElevenLabs. To explain how we developed Telepath, start with the phone translating a hardware gesture to a media event. Then show the Mac routing that event and listening to the room. Finish by showing how the live question becomes a private cue in the presenter's ear. That is a walkthrough of the implementation, not a claim about the order in which the team wrote each component.
 
 ## Phone client, AirPods and control routing
 

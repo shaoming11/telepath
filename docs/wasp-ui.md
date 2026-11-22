@@ -1,4 +1,4 @@
-# Telepathy on Wasp
+# Telepath on Wasp
 
 ## Active frontend stack
 
@@ -48,7 +48,7 @@ npm run rehearse:faults -- --tls --fast --cycles=5
 
 ## Rehearse on two phones
 
-1. Put the Mac and both phones on the same private hotspot. Open the printed Stage address on the Mac and the printed HTTPS phone address in Safari. Install and trust **Telepathy Local Demo** on each iPhone if prompted. [iPhone certificate steps](rehearsal.md)
+1. Put the Mac and both phones on the same private hotspot. Open the printed Stage address on the Mac and the printed HTTPS phone address in Safari. Install and trust **Telepath Local Demo** (or **Telepathy Local Demo** on an existing install) on each iPhone if prompted. [iPhone certificate steps](rehearsal.md)
 2. Pair each set of AirPods with its own phone. Join as Seat A for the presenter and Seat B for the coach. Choose **Use the premade voice**, select the earbud model, and tap **Test audio**. Each person should hear the test in their own earbuds.
 3. For AirPods 1, map double-tap to **Next Track** in Bluetooth settings. Run two double-event trials and two triple-event trials after the initial check. For AirPods Pro, check single, double, and triple squeezes. Choose **Pitch** and tap **Ready** on both phones.
 4. On Stage, select the MacBook microphone under **Device and transcript**. Click **Start listening** and confirm that speech appears. Begin the session once both seats are ready.
@@ -63,6 +63,6 @@ The branch passed a local two-seat rehearsal using the iPhone SE and iPhone 17 P
 
 ## Visual direction
 
-Telepathy uses a glass treatment for the control layer, with solid text panels beneath it. Press and release are timed separately. Realtime status changes use the actual local recognition, calibration, speech, and acknowledgement events. Each phone’s Question Mode control sits above the monitor, so the presenter can see the armed state without scrolling. The stylesheet respects reduced motion and the contrast and transparency preferences the browser exposes. Choose **Solid surfaces** under **Appearance** in Phone Settings or Operator to remove navigation blur. The choice stays in that browser.
+Telepath uses a glass treatment for the control layer, with solid text panels beneath it. Press and release are timed separately. Realtime status changes use the actual local recognition, calibration, speech, and acknowledgement events. Each phone’s Question Mode control sits above the monitor, so the presenter can see the armed state without scrolling. The stylesheet respects reduced motion and the contrast and transparency preferences the browser exposes. Choose **Solid surfaces** under **Appearance** in Phone Settings or Operator to remove navigation blur. The choice stays in that browser.
 
 The direction draws on the touch-origin menu, rounded nesting, and specular edges in Apple's official [Meet Liquid Glass demo](https://developer.apple.com/videos/play/wwdc2025/219/?time=302), plus Apple's [materials guidance](https://developer.apple.com/design/human-interface-guidelines/materials). The [Wasp spec and routing guide](https://wasp.sh/docs/features/pages-and-routes) explains route generation.

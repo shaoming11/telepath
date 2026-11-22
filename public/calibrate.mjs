@@ -504,7 +504,7 @@ export function createCalibration(services) {
     elements.quick_continue.textContent = next ? 'Continue with defaults' : 'Continue';
     elements.quick_status.textContent = !received
       ? 'Pause Spotify or other audio first. Start with a single squeeze.'
-      : !next ? 'All three squeezes reached Telepathy.'
+      : !next ? 'All three squeezes reached Telepath.'
         : 'Controls checked: ' + checked_actions.size + ' of 3. Try ' + PRO_CHECKS[next].label.toLowerCase() + ' next.';
     elements.quick_continue.hidden = !checked_actions.size;
   }

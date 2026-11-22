@@ -17,7 +17,7 @@ function useSurface(surface: Surface) {
       body.dataset.stageRoot = '';
       body.dataset.phase = 'lobby';
       body.dataset.link = 'connecting';
-      document.title = 'Telepathy · Stage';
+      document.title = 'Telepath · Stage';
     }
     for (const path of ['/' + surface + '.css', '/channel-monitor.css']) {
       const link = document.createElement('link');

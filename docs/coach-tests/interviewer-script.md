@@ -7,7 +7,7 @@ For your friend to read. This file is not for uploading. The coach should help w
 3. Tell me about a time you failed.
 4. Tell me about a time you disagreed with a senior engineer.
 5. What's your biggest weakness?
-6. What did you actually build on Telepathy?
+6. What did you actually build on Telepath?
 7. Why should we hire you over someone with more experience?
 8. Do you have any questions for me?
 

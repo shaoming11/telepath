@@ -130,7 +130,7 @@ test('the Pro earbud check reports three squeezes and ignores injected gestures'
   callbacks.get('pause')();
   callbacks.get('play')();
   assert.equal(element('cal-quick-pause').textContent, 'Single squeeze · received');
-  assert.equal(element('cal-quick-status').textContent, 'All three squeezes reached Telepathy.');
+  assert.equal(element('cal-quick-status').textContent, 'All three squeezes reached Telepath.');
   assert.equal(element('cal-quick-continue').textContent, 'Continue');
   element('cal-quick-continue').listeners.click[0]();
   assert.equal(calibration.active(), false);

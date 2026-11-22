@@ -14,7 +14,7 @@ export function StageMarkup() {
       <div className="frame">
         <header className="nav">
           <span className="brand">
-            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l7.5 4.3v6.4L10 17.5l-7.5-4.3V6.8z" /><path d="M2.5 6.8L10 11l7.5-4.2M10 11v6.5" opacity=".55" /></svg>{"\n      Telepathy\n    "}</span>
+            <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5l7.5 4.3v6.4L10 17.5l-7.5-4.3V6.8z" /><path d="M2.5 6.8L10 11l7.5-4.2M10 11v6.5" opacity=".55" /></svg>{"\n      Telepath\n    "}</span>
 
           <nav className="phases" aria-label="Stage phase">
             <ol>
@@ -46,8 +46,8 @@ export function StageMarkup() {
           <section className="screen screen--lobby" id="screen-lobby" aria-labelledby="lobby-title" hidden>
             <div className="hero">
               <div className="hero__copy">
-                <h1 className="display" id="lobby-title"><span className="display__dim">Two seats.</span>{" One silent channel."}</h1>
-                <p className="lede">Tap an earbud to cue your teammate. The Mac listens to the room so Question Mode can whisper a private prompt.</p>
+                <h1 className="display" id="lobby-title">Demo setup</h1>
+                <p className="lede">Connect both phones, then start the room microphone and begin.</p>
                 <div className="cta">
                   <button className="begin" id="begin-button" type="button" disabled>
                     <span className="begin__label">Begin session</span>
@@ -55,8 +55,7 @@ export function StageMarkup() {
                   </button>
                 </div>
                 <p className="begin-hint" id="begin-hint">both seats ready</p>
-                <a className="join__link" href="#reference-setup">{"Add team brief & references ↓"}</a>
-                <dl className="readout-row" id="lobby-readout">
+                  <dl className="readout-row" id="lobby-readout">
                   <div><dt id="readout-a-name">PRESENTER</dt><dd id="readout-a">Waiting</dd></div>
                   <div><dt id="readout-b-name">COACH</dt><dd id="readout-b">Waiting</dd></div>
                   <div><dt>PRESET</dt><dd id="readout-preset">—</dd></div>
@@ -65,6 +64,45 @@ export function StageMarkup() {
               </div>
 
               <p className="sr-only" id="lobby-room-notice" role="status"></p>
+
+              <div className="join">
+                <p className="kicker">Join from each phone on the hotspot</p>
+                <div className="join__row">
+                  <span className="join__url" id="join-url">—</span>
+                  <button className="ghost" id="join-copy" type="button" disabled>Copy link</button>
+                </div>
+                <p className="join__note" id="join-guidance" hidden></p>
+                <p className="join__note" id="join-copy-status" role="status" hidden></p>
+              </div>
+            </div>
+
+            <details className="reference-panel stage-inspector" id="reference-setup">
+              <summary id="reference-title">Coach setup and documents</summary>
+              <label htmlFor="coach-scenario">Coaching scenario</label>
+              <select id="coach-scenario">
+                <option value="pitch">{"Pitch Q&A"}</option>
+                <option value="interview">Interview</option>
+                <option value="social">Date or small talk</option>
+              </select>
+              <p className="reference-note" id="coach-scenario-note"></p>
+              <label htmlFor="reference-files">Reference documents</label>
+              <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx" />
+              <div className="reference-actions">
+                <button id="reference-upload" type="button">Load documents</button>
+                <button id="reference-clear" type="button">Clear documents</button>
+              </div>
+              <p className="reference-note">TXT, Markdown, PDF with selectable text, or DOCX. Up to 8 files and 8 MB total. Loading replaces the current set. The coach sends relevant excerpts to the configured AI providers.</p>
+              <p id="reference-status" role="status" aria-live="polite"></p>
+              <ul id="reference-list"></ul>
+            </details>
+
+            <details className="stage-inspector stage-inspector--lobby">
+              <summary>Connections and rehearsal tools</summary>
+              <nav className="stage-rehearsal-links" aria-label="Rehearsal tools">
+                <a className="join__link" href="/?sim=1&amp;seat=A">Simulate A</a>
+                <a className="join__link" href="/?sim=1&amp;seat=B">Simulate B</a>
+                <a className="join__link" href="/?calibrate=1">Calibrate</a>
+              </nav>
               <svg className="diagram" id="lobby-diagram" viewBox="-560 -250 1120 700" role="img" aria-labelledby="diagram-label">
                 <title id="diagram-label">Seat A and Seat B linked through the hub</title>
                 <defs>
@@ -131,42 +169,8 @@ export function StageMarkup() {
                 <circle className="d-pt" cx="0" cy="-24" r="2.4" /><circle className="d-pt" cx="173.2" cy="76" r="2.4" /><circle className="d-pt" cx="-173.2" cy="76" r="2.4" />
                 <circle className="d-pt" cx="0" cy="-130" r="2.4" /><circle className="d-pt" cx="138.6" cy="-50" r="2.4" /><circle className="d-pt" cx="-138.6" cy="-50" r="2.4" />
               </svg>
-
-              <div className="join">
-                <p className="kicker">Join from each phone on the hotspot</p>
-                <div className="join__row">
-                  <span className="join__url" id="join-url">—</span>
-                  <a className="join__link" href="/?sim=1&amp;seat=A">{"Simulate A "}<span aria-hidden="true">↗</span></a>
-                  <a className="join__link" href="/?sim=1&amp;seat=B">{"Simulate B "}<span aria-hidden="true">↗</span></a>
-                  <a className="join__link" href="/?calibrate=1">{"Calibrate "}<span aria-hidden="true">↗</span></a>
-                </div>
-                <p className="join__note" id="join-guidance" hidden></p>
-              </div>
-            </div>
-
             <ChannelMonitor id="lobby-monitor" className="channel-monitor" />
-            <section className="reference-panel" id="reference-setup" aria-labelledby="reference-title">
-              <h2 className="kicker" id="reference-title">{"TEAM BRIEF & REFERENCES"}</h2>
-              <label htmlFor="coach-scenario">Coaching scenario</label>
-              <select id="coach-scenario">
-                <option value="pitch">{"Pitch Q&A"}</option>
-                <option value="interview">Interview</option>
-                <option value="social">Date or small talk</option>
-              </select>
-              <p className="reference-note" id="coach-scenario-note"></p>
-              <p>Add documents so the coach can find supported answers to live questions. Answers are previewed privately and require a tap to send.</p>
-              <label htmlFor="reference-files">Choose a brief and reference documents</label>
-              <input id="reference-files" type="file" multiple accept=".txt,.md,.pdf,.docx" />
-              <div className="reference-actions">
-                <button id="reference-upload" type="button">Load selected documents</button>
-                <button id="reference-clear" type="button">Clear documents</button>
-              </div>
-              <p className="reference-note">TXT, Markdown, text-based PDF or DOCX. Up to 8 files, 5 MB each / 8 MB total. Uploading replaces the current set. Documents stay in hub memory until reset; relevant passages are sent to the configured OpenAI model when answering.</p>
-              <p id="reference-status" role="status" aria-live="polite"></p>
-              <ul id="reference-list"></ul>
-            </section>
-
-            <div className="detail">
+              <div className="detail">
               <div className="detail__seats" id="lobby-seats"></div>
 
               <div className="detail__col">
@@ -182,7 +186,8 @@ export function StageMarkup() {
                   <div className="kv__row" id="certificate-row" hidden><dt>Certificate</dt><dd className="mono" id="certificate-readout"></dd></div>
                 </dl>
               </div>
-            </div>
+              </div>
+            </details>
           </section>
 
 
@@ -208,8 +213,10 @@ export function StageMarkup() {
             </div>
 
             <StagePair />
-            <p className="live__context" id="live-context"></p>
-            <ChannelMonitor id="stage-monitor" className="channel-monitor" />
+            <details className="stage-inspector stage-inspector--live">
+              <summary>Live diagnostics</summary>
+              <p className="live__context" id="live-context"></p>
+              <ChannelMonitor id="stage-monitor" className="channel-monitor" />
 
             <div className="board">
               <div className="board__seats" id="live-seats"></div>
@@ -219,6 +226,8 @@ export function StageMarkup() {
                 <p className="empty" id="stream-empty">Waiting for the first tap.</p>
               </div>
             </div>
+
+            </details>
 
 
           </section>
@@ -240,14 +249,14 @@ export function StageMarkup() {
 
             <div className="transcripts" id="reveal-transcripts"></div>
           </section>
-          <section className="reference-panel" id="answer-panel" aria-labelledby="answer-title" hidden>
-            <h2 className="kicker" id="answer-title">CONVERSATION ANSWERS</h2>
+          <details className="reference-panel stage-inspector" id="answer-panel" hidden>
+            <summary id="answer-title">Coach evidence</summary>
             <p id="answer-status" role="status" aria-live="polite"></p>
             <p id="answer-question"></p>
             <p id="answer-text"></p>
             <ul id="answer-sources"></ul>
-            <details><summary>Answer evidence from this session</summary><ul id="answer-history"></ul></details>
-          </section>
+            <ul id="answer-history"></ul>
+          </details>
         </main>
       </div>
 
@@ -293,8 +302,8 @@ export function StageMarkup() {
 
           <StageAnnouncement />
 
-          <div className="operator__group">
-            <h3 className="operator__label">Preset</h3>
+          <details className="operator__group stage-inspector">
+            <summary>Preset and context</summary>
             <div className="field-row">
               <label className="sr-only" htmlFor="op-preset">Preset</label>
               <select id="op-preset" className="control">
@@ -307,10 +316,10 @@ export function StageMarkup() {
             </div>
             <label className="field-label" htmlFor="op-context">Context (optional, sent with the preset)</label>
             <textarea id="op-context" className="control control--text" rows={2} spellCheck={false} placeholder="Pitch outline, slide order, judge seating"></textarea>
-          </div>
+          </details>
 
-          <div className="operator__group">
-            <h3 className="operator__label">Inject a signal</h3>
+          <details className="operator__group stage-inspector">
+            <summary>Test a signal</summary>
             <div className="field-row">
               <label className="sr-only" htmlFor="op-seat">Sending seat</label>
               <select id="op-seat" className="control control--fit">
@@ -321,7 +330,7 @@ export function StageMarkup() {
               <select id="op-signal" className="control"></select>
               <button className="op-action op-action--fit" id="op-inject" type="button">Inject</button>
             </div>
-          </div>
+          </details>
 
           <AppearanceControl className="operator__group" />
 

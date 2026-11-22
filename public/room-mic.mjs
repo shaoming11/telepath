@@ -78,7 +78,7 @@ start.addEventListener('click', async () => {
     status.textContent = active ? 'Room mic active for Seat ' + seat.value + '.' : 'Starting room transcription…';
   });
   connection.addEventListener('close', () => {
-    if (socket === connection) end('Room mic connection closed. Open a fresh room mic link from Telepathy.');
+    if (socket === connection) end('Room mic connection closed. Open a fresh room mic link from Telepath.');
   });
 });
 

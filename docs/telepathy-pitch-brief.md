@@ -1,18 +1,18 @@
-# Telepathy hackathon pitch brief
+# Telepath hackathon pitch brief
 
 ## The problem and the hook
 
-A teammate in the audience sees a judge looking lost, hears a question the presenter missed, or knows which fact would make an answer land. Interrupting makes the pitch harder. Telepathy gives two people in the same room a private audio channel through the earbuds they already wear. The same app can coach the presenter during the pitch that introduces it.
+A teammate in the audience sees a judge looking lost, hears a question the presenter missed, or knows which fact would make an answer land. Interrupting makes the pitch harder. Telepath gives two people in the same room a private audio channel through the earbuds they already wear. The same app can coach the presenter during the pitch that introduces it.
 
 ## The live demo
 
-Seat A presents Telepathy. Seat B listens and can send a silent signal. A third person runs the MacBook. Start by demonstrating a fixed signal and its playback receipt. Then ask a real question about the product. The presenter arms Question Mode with one AirPods 1 next-track event or one AirPods Pro stem squeeze. OpenAI starts drafting while the judge speaks and a short cue plays privately in the presenter’s earbuds after the question commits. “What should I say?” is the on-screen manual request. The presenter answers aloud. At the reveal, show the two-seat exchange and the context view on the Mac.
+Seat A presents Telepath. Seat B listens and can send a silent signal. A third person runs the MacBook. Start by demonstrating a fixed signal and its playback receipt. Then ask a real question about the product. The presenter arms Question Mode with one AirPods 1 next-track event or one AirPods Pro stem squeeze. OpenAI starts drafting while the judge speaks and a short cue plays privately in the presenter’s earbuds after the question commits. “What should I say?” is the on-screen manual request. The presenter answers aloud. At the reveal, show the two-seat exchange and the context view on the Mac.
 
 A fixed cue uses cached ElevenLabs audio, which is available immediately after setup. The live answer uses fresh room context and takes time for model inference and speech synthesis. A private coaching cue goes to the requester. A drafted seat-to-seat message goes to the partner only after a separate confirmation. The stage also lets an operator send a neutral announcement to both seats.
 
 ## The devices and the signal path
 
-The phones run Telepathy in Safari or Chrome. Each phone connects to the Node.js hub over a WebSocket, decodes cached or generated speech with Web Audio, and exposes a touch fallback. There are two fixed seats, no accounts, and no need for a native app in the demo. The devices join the same hotspot and the phones use a trusted HTTPS link to the MacBook.
+The phones run Telepath in Safari or Chrome. Each phone connects to the Node.js hub over a WebSocket, decodes cached or generated speech with Web Audio, and exposes a touch fallback. There are two fixed seats, no accounts, and no need for a native app in the demo. The devices join the same hotspot and the phones use a trusted HTTPS link to the MacBook.
 
 AirPods 1 sends a next-track event from a configured double-tap. The app counts next-track events inside a calibrated timing window. AirPods Pro stem squeezes arrive as play/pause, next-track, and previous-track media actions. The browser maps the actions to the selected earbud profile. The app cannot tell which physical earbud sent a media command. The demo uses earbud stem and track controls.
 
@@ -32,9 +32,9 @@ ElevenLabs provides live diarized transcription, speech for the assistant and bo
 
 Documents, room audio, and the live session are ephemeral on the hub. Reset clears uploaded documents and session data. The hub holds the API credentials. Each cloud service sees only the inputs it needs for its part of the flow.
 
-## Two features: Telepathy and the coaching agent
+## Two features: Telepath and the coaching agent
 
-Telepathy is the teammate channel. A teammate in the audience sends a cue such as "Slow down" or "One minute left" with an AirPods gesture, and it plays privately in the presenter's earbuds. Today the gestures are tap and double tap on AirPods 1, or stem squeezes on AirPods Pro.
+Telepath is the teammate channel. A teammate in the audience sends a cue such as "Slow down" or "One minute left" with an AirPods gesture, and it plays privately in the presenter's earbuds. Today the gestures are tap and double tap on AirPods 1, or stem squeezes on AirPods Pro.
 
 The coaching agent is "your agent in your ear". It listens to the room through the MacBook microphone. When someone asks a question, it whispers what to talk about. After the wearer answers, it can remind them of an important point they missed.
 
