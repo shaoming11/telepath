@@ -1039,7 +1039,7 @@ export function createAudio({
   }
 
   async function listen(seat, enabled, onTranscript, { diarize = false } = {}) {
-    if (!isSeat(seat)) return { listening: false };
+    if (!isSeat(seat) && seat !== 'room') return { listening: false };
     const s = sttState(seat);
     if (!enabled) {
       teardownStt(seat, false);
@@ -1057,7 +1057,7 @@ export function createAudio({
   }
 
   async function mic(seat, audio, level, onTranscript, opts = {}) {
-    if (!isSeat(seat) || opts?.sim) return { sent: false };
+    if ((!isSeat(seat) && seat !== 'room') || opts?.sim) return { sent: false };
     const s = sttState(seat);
     if (s.enabled === false || s.fatal) return { sent: false };
     if (s.enabled === undefined) s.enabled = true;
@@ -1089,7 +1089,7 @@ export function createAudio({
     const pending_creations = [...voice_creations];
     voice_lifetime.abort();
     voice_lifetime = new AbortController();
-    for (const seat of ['A', 'B']) teardownStt(seat, false);
+    for (const seat of ['A', 'B', 'room']) teardownStt(seat, false);
     for (const id of dynamicIds) assets.delete(id);
     dynamicIds.clear();
     owned.clear();

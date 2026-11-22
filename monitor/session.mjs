@@ -57,7 +57,7 @@ export function createSessionMonitor(now = Date.now) {
   }
 
   function startAnalysis(seats, { preset, mode, requestedSeat } = {}) {
-    read_context = Object.fromEntries(SEATS.map(seat => {
+    read_context = Object.fromEntries([...SEATS, 'room'].map(seat => {
       const lines = seats[seat]?.transcript ?? [];
       return [seat, { count: lines.length, excerpt: text(lines.at(-1)?.text, 190) }];
     }));
@@ -74,17 +74,16 @@ export function createSessionMonitor(now = Date.now) {
     agent = { ...agent, phase, summary: text(summary, 100), at: now() };
   }
 
-  function snapshot(seats, viewer, { sharedRoom = false } = {}) {
+  function snapshot(seats, viewer, { room, activity } = {}) {
     const visible = viewer == null ? SEATS : [viewer];
-    const room = sharedRoom ? SEATS.find(seat => seats[seat].roomMicSource === 'companion') : null;
     return {
-      agent,
-      sharedRoom: room,
+      agent: activity ?? agent,
+      sharedRoom: room ? 'A' : null,
       seats: Object.fromEntries(visible.map(seat => {
         const state = seats[seat];
-        const source = room ?? seat;
+        const source = room ? 'room' : seat;
         const input = inputs.get(source);
-        const input_state = seats[source];
+        const input_state = room ?? state;
         const latest = input_state.transcript.at(-1);
         const output = outputs.get(seat);
         const input_fresh = input_state.listening && input && now() - input.at <= FRESH_MS;
@@ -92,7 +91,7 @@ export function createSessionMonitor(now = Date.now) {
         return [seat, {
           name: text(state.name, 30),
           online: state.online,
-          source: input_state.roomMicSource ?? null,
+          source: room ? 'companion' : input_state.roomMicSource ?? null,
           listening: input_state.listening,
           transcription: input_state.transcription,
           input: input_fresh ? input.bars : [],

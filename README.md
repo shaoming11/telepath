@@ -4,13 +4,35 @@ Two fixed seats, one MacBook hub. A double-tap sends a cached whisper from the p
 
 ## Start
 
-From this folder, run `./start`. Node 22 or newer is required. The launcher installs the one npm dependency on first use, starts the stage on loopback, prints the HTTPS phone address, and shows which text model the hub will use.
+From this folder, run `./start`. Node 22.13 or newer is required. The launcher installs missing npm dependencies, starts the stage on loopback, prints the HTTPS phone address, and shows which text model the hub will use.
 
 Set `ELEVENLABS_API_KEY` and optionally `OPENAI_API_KEY` in the launcher’s environment, or point `TELEPATHY_ENV_FILE` and `TELEPATHY_OPENAI_ENV_FILE` to owner-only environment files. The default files are `.env.local` and `.env.openai.local`, both ignored by Git. The phones never receive the keys.
 
 `TELEPATHY_VOICE_A` and `TELEPATHY_VOICE_B` can name the two presenters’ existing, verified ElevenLabs clones for setup fallback. Those voice IDs are not deleted. Session-created clones are deleted on reset or a normal exit. When a clone is unavailable the UI labels any fallback. Keep the operator’s canned take ready for a service or hardware failure.
 
-The hub uses OpenAI for text when its key is present. Set `TELEPATHY_LLM=local` to keep the room-read text on the Mac via Apple’s local language model, or `TELEPATHY_LLM=off` for fixed messages only. Both physical seats stream PCM to ElevenLabs for transcription whenever listening is enabled. The hub supplies the LLM with a short rolling window from each seat. No recording or transcript is saved to disk by the app.
+The hub uses OpenAI for text when its key is present. Set `TELEPATHY_LLM=local` to keep the room-read text on the Mac via Apple’s local language model, or `TELEPATHY_LLM=off` for fixed messages only. By default, the stage captures the Mac's microphone and the hub sends its PCM audio to ElevenLabs for transcription. Phone room microphones remain off; phones still play whispers and handle approval. No recording or transcript is saved to disk by the app.
+
+## Listen through the Mac microphone
+
+Open the printed local stage URL on the Mac. In **Room microphone**, click **Start Mac microphone** and allow browser microphone access. Choose **MacBook Microphone** as the macOS Sound input (not AirPods), or select that device in the stage's input menu. If device names were hidden before permission, stop the microphone, select the now-labelled Mac input, and start it again. The input meter should move and **Shared room transcript** should fill as you speak. This can be checked in the lobby before connecting phones.
+
+Load the references and prepare seats A and B as usual, then begin the session. The shared room transcript drives both question answers and missed-point reminders through the existing private preview and approval flow. Use the phones' on-screen Send/Discard and fixed-message buttons if earbud gestures are unavailable. Phone microphone permission is only needed if you choose to record a voice sample; premade voices avoid that step.
+
+**Stop microphone**, Reveal, Reset, losing the stage connection or closing its tab stops room listening and cancels pending answers. Start the microphone again for a new session or after reconnecting. Only one stage tab owns capture at a time. Browser capture needs the local `localhost`/`127.0.0.1` stage URL or trusted HTTPS. On macOS, also allow the browser under System Settings → Privacy & Security → Microphone. An ElevenLabs key is still required for transcription.
+
+To explicitly return to the old phone-microphone mode, start the hub with `TELEPATHY_ROOM_INPUT=phones`. In this mode, the phone settings also offer a companion-microphone link so a separate browser can capture that seat's room while the phone handles earbud playback. Starting the stage's Mac microphone switches the running session to one shared Mac input again.
+
+## Answer questions from your documents
+
+Before **Begin session**, use **Team brief & references** on the local stage to load TXT, Markdown, text-based PDF or DOCX files (up to eight files, 5 MB each / 8 MB total, 200,000 extracted characters). Each upload replaces the set. Scanned PDFs need OCR first. Documents remain in hub memory and are cleared on reset; nothing is saved to disk.
+
+Document answers require `OPENAI_API_KEY` and the OpenAI text provider (`TELEPATHY_LLM=openai`, or the default when that key is present), plus ElevenLabs for live transcription and whispers. Relevant passages and recent conversation are sent to the configured model. Maritime is not used. Without references, ordinary coaching works as before.
+
+Completed speech triggers a debounced question check. The coach uses the references to propose a short supported answer when someone asks for help, expresses uncertainty, or leaves a question unanswered. L-R explicitly requests help. The assistant previews answers to the coach (or the requesting seat); a tap still approves delivery in that person's voice. New speech cancels pending answers immediately, including during generation, and the next completed transcript is re-evaluated. The stage shows answer status and evidence. Unsupported questions stay silent; no web search is performed.
+
+Use real seats to exercise generated answer audio. Simulated seats retain their bundled-audio behavior and cannot speak arbitrary new answers. Verify microphone/earbud coexistence and latency on the actual hardware before presenting.
+
+The same coach also checks completed answers for important omissions. For example, if you describe a pilot but omit its documented duration, it can propose "You forgot to mention the six-week pilot." It waits for a pause or a help request, checks the point against your references and the actual spoken answer, and uses the same private preview and approval flow. The stage shows the answer excerpt and supporting source. Covering the point, moving on, or any new speech cancels a pending reminder before re-evaluation; reminders are suppressed after approval, rejection or expiry for that question.
 
 ## Maritime pitch coach
 

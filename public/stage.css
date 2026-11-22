@@ -977,6 +977,21 @@ select.control {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
+/* Late additions */
+.reference-panel { padding: 24px 40px; border-top: 1px solid var(--line, #34383d); }
+#room-microphone-panel { padding-top: 96px; }
+.reference-panel p { max-width: 85ch; line-height: 1.5; margin: 12px 0; }
+.reference-panel label { display: block; margin: 16px 0 8px; }
+.reference-panel input { max-width: 100%; }
+.reference-panel select { max-width: 100%; padding: 8px; color: inherit; background: #111; border: 1px solid #555; }
+.reference-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.reference-actions button { border: 1px solid #555; padding: 10px 16px; color: inherit; background: transparent; cursor: pointer; }
+.reference-actions button:disabled { opacity: .45; cursor: default; }
+.reference-note { color: #a9afb7; font-size: 13px; }
+.reference-panel ul { padding-left: 20px; overflow-wrap: anywhere; }
+.reference-panel li { margin: 8px 0; line-height: 1.5; }
+@media (max-width: 760px) { .reference-panel { padding: 20px; } }
+.section-title__name { font-size: 16px !important; font-weight: 500 !important; color: var(--fg) !important; }
 .stream__kind::first-letter, .timeline__signal::first-letter { text-transform: uppercase; }
 .stream__kind { display: inline-block; }
 
