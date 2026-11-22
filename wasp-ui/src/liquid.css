@@ -472,6 +472,7 @@ body.wasp-liquid[data-solid-surfaces] {
 }
 .wasp-liquid[data-surface=stage] .frame { transition: none; }
 .wasp-liquid .operator__body { min-block-size: 0; overscroll-behavior: contain; }
+.wasp-liquid .operator .op-action--fit { inline-size: auto; max-inline-size: 100%; }
 
 @media (min-width: 1080px) {
   .wasp-liquid[data-operator-open] { --operator-size: clamp(310px, 30vw, 380px); }
@@ -640,8 +641,21 @@ body.wasp-liquid[data-solid-surfaces] {
 
 @media (max-width: 760px) {
   .wasp-liquid[data-surface="stage"] .frame { border: 0; border-radius: 0; }
-  .wasp-liquid[data-surface="stage"] .nav { margin: 8px 12px 0; padding-inline: 12px; }
-  .wasp-liquid .reveal__head .score { inline-size: max-content; grid-template-columns: minmax(0, 1fr); gap: 11px; }
+  .wasp-liquid[data-surface="stage"] .nav {
+    margin: 8px 12px 0;
+    padding-inline: 12px;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+  .wasp-liquid[data-surface="stage"] .nav__meta {
+    min-inline-size: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    white-space: normal;
+  }
+  .wasp-liquid .reveal__head { grid-template-columns: minmax(0, 1fr); }
+  .wasp-liquid .reveal__head .score { inline-size: 100%; grid-template-columns: minmax(0, 1fr); gap: 11px; }
+  .wasp-liquid .reveal__head :is(.score__num, .score__num small) { overflow-wrap: anywhere; }
   .wasp-liquid .reveal__head .score__num > span { font-size: clamp(4rem, 21vw, 6rem); }
   .wasp-liquid .reveal__head .score[data-long=true] .score__num > span { font-size: clamp(3.5rem, 18vw, 4.5rem); }
   .wasp-liquid .reveal__head .score__arrow { width: 26px; margin: 4px 0; transform: rotate(90deg); }
@@ -649,6 +663,12 @@ body.wasp-liquid[data-solid-surfaces] {
   .wasp-liquid .room-console__actions button { white-space: normal; }
 }
 @media (max-width: 420px) {
+  .wasp-liquid[data-surface="phone"] .facts dd { white-space: normal; overflow-wrap: anywhere; }
+  .wasp-liquid[data-surface="phone"] .signal b { flex-wrap: wrap; overflow-wrap: anywhere; }
+  .wasp-liquid[data-surface="phone"] .live-nav {
+    grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
+  }
+  .wasp-liquid[data-surface="phone"] .live-nav button { min-inline-size: 0; overflow-wrap: anywhere; }
   .wasp-liquid[data-phase=reveal] .mark--tap span { display: none; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
