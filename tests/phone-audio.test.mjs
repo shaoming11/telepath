@@ -65,6 +65,66 @@ test('audio that was waiting for resume is dropped when the session resets befor
   assert.deepEqual(heard, []);
 });
 
+test('a fixed whisper survives the short resume probe and plays once when audio wakes', async () => {
+  const engine = await ready_engine();
+  const base = context().started().length;
+  context().set_state('suspended');
+  engine.play(fixed('A:Pitch:R1', 'slow-wake'));
+  world.advance(600);
+  await world.flush();
+  assert.equal(context().started().length, base);
+  assert.deepEqual(heard, []);
+  context().allow_resume();
+  await world.flush();
+  assert.equal(context().started().length, base + 2, 'one chime and one whisper');
+  world.advance(3000);
+  assert.deepEqual(heard, ['slow-wake']);
+});
+
+test('a suspended announcement is dropped once its own start window has elapsed', async () => {
+  const engine = await ready_engine();
+  const base = context().started().length;
+  context().set_state('suspended');
+  engine.play({ type: 'audio', kind: 'announcement', cue: 'system', url: '/assets/short.mp3',
+    messageId: 'announcement-expired', expiresAfterMs: 900 });
+  await world.flush();
+  world.advance(950);
+  await world.flush();
+  context().allow_resume();
+  await world.flush();
+  assert.equal(context().started().length, base);
+  assert.deepEqual(heard, []);
+});
+
+test('a draft retains its own resume window after an untimed whisper has become stale', async () => {
+  const engine = await ready_engine();
+  context().set_state('suspended');
+  engine.play(fixed('A:Pitch:R1', 'late-fixed'));
+  engine.play(preview('valid-draft'));
+  await world.flush();
+  world.advance(2200);
+  await world.flush();
+  context().allow_resume();
+  await world.flush();
+  world.advance(3000);
+  assert.deepEqual(heard, ['valid-draft']);
+});
+
+test('clearing previews discards an unstarted draft while keeping a waiting teammate whisper', async () => {
+  const engine = await ready_engine();
+  context().set_state('suspended');
+  engine.play(preview('cancelled-during-resume'));
+  engine.play(fixed('A:Pitch:R1', 'retained-during-resume'));
+  await world.flush();
+  world.advance(600);
+  await world.flush();
+  assert.equal(engine.cancel_previews(), 1);
+  context().allow_resume();
+  await world.flush();
+  world.advance(3000);
+  assert.deepEqual(heard, ['retained-during-resume']);
+});
+
 test('a live url that finishes loading after reset never plays', async () => {
   const engine = await ready_engine();
   const base = context().started().length;

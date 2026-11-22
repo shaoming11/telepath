@@ -9,6 +9,7 @@ const QUEUE_TAIL_S = 0.08;
 const LOAD_ATTEMPTS = 3;
 const MANIFEST_CONCURRENCY = 4;
 const RESUME_WAIT_MS = 350;
+const FIXED_RESUME_WINDOW_MS = 1800;
 const ACK_EPSILON_S = 0.002;
 const IMMEDIATE_CUES = new Set(['sent', 'receipt', 'error']);
 const PREVIEW_START_LIMIT_MS = 6000;
@@ -101,6 +102,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
   const acks = new Set();
   const retired = new Set();
   const heard_backlog = new Map();
+  const waiting_for_audio = new Set();
   let backlog_timer = null;
   let session_generation = 0;
   let announcement_generation = 0;
@@ -146,7 +148,10 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
     voice_gain.gain.value = levels.voice;
     context.addEventListener?.('statechange', () => {
       report('context', context.state === 'running' ? '' : 'Audio is paused. Tap anywhere to resume.');
-      if (context.state === 'running') for (const ack of [...acks]) ack.check();
+      if (context.state === 'running') {
+        for (const ack of [...acks]) ack.check();
+        start_waiting_audio();
+      }
     });
     return context;
   }
@@ -327,17 +332,20 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
 
   function cancel_previews({ message_id } = {}) {
     if (message_id != null) retired.add(message_id);
-    return cancel_unstarted(meta => meta.preview && (message_id == null || meta.message_id === message_id));
+    const matches = meta => meta.preview && (message_id == null || meta.message_id === message_id);
+    return discard_waiting_audio(matches) + cancel_unstarted(matches);
   }
 
   function cancel_announcements() {
     announcement_generation += 1;
-    return cancel_unstarted(meta => meta.announcement);
+    const matches = meta => meta.announcement;
+    return discard_waiting_audio(matches) + cancel_unstarted(matches);
   }
 
   function stop_pitch_help(message_id) {
     retired.add(message_id);
     confirm_heard(message_id);
+    discard_waiting_audio(meta => meta.pitch_help && meta.message_id === message_id);
     for (const [source, meta] of [...sources]) {
       if (!meta.pitch_help || meta.message_id !== message_id) continue;
       try { source.stop(); } catch {}
@@ -386,21 +394,57 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
     else if (!speech && frame.cue === 'urgent' && cue_audible) arm_heard(frame.messageId, cue_at, cue_source);
   }
 
+  function remove_waiting_audio(pending) {
+    clearTimeout(pending.timer);
+    return waiting_for_audio.delete(pending);
+  }
+
+  function discard_waiting_audio(matches) {
+    let discarded = 0;
+    for (const pending of waiting_for_audio) {
+      if (!matches(pending)) continue;
+      remove_waiting_audio(pending);
+      discarded += 1;
+    }
+    return discarded;
+  }
+
+  function start_waiting_audio() {
+    for (const pending of waiting_for_audio) {
+      remove_waiting_audio(pending);
+      if (performance.now() < pending.until && pending.current()) {
+        schedule(pending.frame, pending.cue, pending.speech, pending.guard);
+      }
+    }
+  }
+
   function start(frame, cue, speech, guard) {
-    const alive = () => guard.generation === session_generation
+    const current = () => guard.generation === session_generation
       && (guard.announcement == null || guard.announcement === announcement_generation)
-      && !(frame.messageId && retired.has(frame.messageId))
-      && !(guard.deadline != null && performance.now() > guard.deadline);
-    if (!alive()) return;
+      && !(frame.messageId && retired.has(frame.messageId));
+    const now = performance.now();
+    if (!current() || guard.deadline != null && now >= guard.deadline) return;
     if (context?.state === 'running') {
       schedule(frame, cue, speech, guard);
       return;
     }
-    resume_briefly().then(running => {
-      if (guard.generation !== session_generation) return;
-      if (!alive()) return;
-      if (running) schedule(frame, cue, speech, guard);
-      else report('playback', 'Audio is not running, so this message was not heard. Tap to resume.');
+    if (!context) {
+      report('playback', 'Tap to turn on audio.');
+      return;
+    }
+    const until = guard.deadline ?? now + (speech || frame.messageId ? FIXED_RESUME_WINDOW_MS : RESUME_WAIT_MS);
+    const pending = { frame, cue, speech, guard, current, until, message_id: frame.messageId,
+      preview: guard.preview, announcement: guard.announcement != null, pitch_help: frame.kind === 'pitch_help' };
+    waiting_for_audio.add(pending);
+    pending.timer = setTimeout(() => {
+      if (remove_waiting_audio(pending) && current() && (speech || frame.messageId)) {
+        report('playback', 'Audio stayed paused. This message did not play.');
+      }
+    }, until - now);
+    void resume_briefly().then(running => {
+      if (!waiting_for_audio.has(pending)) return;
+      if (running && context.state === 'running') start_waiting_audio();
+      else report('context', 'Audio is paused. Tap anywhere to resume.');
     });
   }
 
@@ -486,6 +530,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_f
 
   function clear_session() {
     session_generation += 1;
+    discard_waiting_audio(() => true);
     playhead = 0;
     cache_banks.clear();
     shared_buffers.clear();
