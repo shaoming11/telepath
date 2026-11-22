@@ -304,6 +304,9 @@ test('the Wasp frontend retrieves compact implementation excerpts while classic 
     ['Where does the StageAnnouncement component render per-seat receipts?', 'wasp-ui/src/StageAnnouncement.tsx', 'receipt.seats.map'],
     ['What does CalibrationTrial display while it is checking the timing?', 'wasp-ui/src/CalibrationTrial.tsx', 'Checking timing'],
     ['Where is the StageRevealHeader score announced for screen readers?', 'wasp-ui/src/StageRevealHeader.tsx', 'aria-live="polite"'],
+    ['In wasp-ui/src/StagePair.tsx, where is the paired cue evidence rendered?', 'wasp-ui/src/StagePair.tsx', 'data-evidence={current.tone}'],
+    ['Where does StagePair.css draw the rotation for an acknowledged cue?', 'wasp-ui/src/StagePair.css', 'transform: rotate(45deg)'],
+    ['In AppearanceControl.tsx, where is the solid appearance preference saved?', 'wasp-ui/src/AppearanceControl.tsx', 'localStorage.setItem'],
     ['What source file checks whether a Wasp build needs refreshing?', 'scripts/build-wasp-ui', 'source.sha256'],
   ];
   let bytes = 0;
@@ -319,6 +322,7 @@ test('the Wasp frontend retrieves compact implementation excerpts while classic 
   }
   assert.ok(classic.every(doc => !doc.name.startsWith('wasp-ui/') && doc.name !== 'scripts/build-wasp-ui'));
   assert.ok(documents.every(doc => !/\/generated\/|node_modules|\.runtime|\.env/.test(doc.name)));
+  assert.ok(index.bytes <= 340_000);
   assert.equal(retrieveProjectReferences(classic, 'Where are the seat receipts in wasp-ui/src/StageAnnouncement.tsx?')
     .some(passage => passage.kind === 'code'), false);
   t.diagnostic(JSON.stringify({ queries: checks.length, recoveredFacts: checks.length, packedBytes: bytes, indexedBytes: index.bytes }));

@@ -31,10 +31,13 @@ const WASP_SOURCE_FILES = [
   'wasp-ui/src/CalibrationTrial.tsx',
   'wasp-ui/src/StageRoomConsole.tsx',
   'wasp-ui/src/StageAnnouncement.tsx',
+  'wasp-ui/src/StagePair.tsx',
+  'wasp-ui/src/StagePair.css',
   'wasp-ui/src/StageRevealHeader.tsx',
+  'wasp-ui/src/AppearanceControl.tsx',
   'scripts/build-wasp-ui',
 ];
-const MAX_PROJECT_BYTES = 325_000;
+const MAX_PROJECT_BYTES = 340_000;
 const CODE_LINES = 22;
 const CODE_STEP = 17;
 const SECRET = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-(?:proj-)?[\w-]{24,}|mk_[\w-]{24,})\b/;

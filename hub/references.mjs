@@ -19,6 +19,8 @@ const ALIASES = [
   [/(?:judge|question).*(?:speak|finish|playback)|playback.*(?:judge|question)/i, 'committed transcript question partial playback'],
   [/screen reader|aria live/i, 'aria live polite status'],
   [/speech.*(?:start|begin)|(?:start|begin).*speech/i, 'speech start'],
+  [/\bcue evidence\b/i, 'cue evidence status current tone'],
+  [/\b(?:preference|appearance|setting)\b.*\b(?:saved|stored|persisted)\b/i, 'local storage set item'],
   [/\bwasp\b.*\b(?:rebuild|refresh|refreshing|stale|build inputs)\b/i, 'fingerprint source sha256 ensure'],
 ];
 const INDEXES = new WeakMap();
@@ -73,6 +75,10 @@ function isSourcePath(identifier) {
   return SOURCE_FILE.test(identifier) || identifier === 'scripts/build-wasp-ui';
 }
 
+function codeQuestion(question, paths) {
+  return paths.reduce((text, path) => text.replaceAll(path, ' '), question);
+}
+
 function matchesSource(name, identifier) {
   const file = name.split(':', 1)[0].toLowerCase();
   const hint = identifier.toLowerCase();
@@ -96,7 +102,10 @@ function bestCodeWindow(passage, tokens, identifiers, phrases) {
   const lines = passage.text.split('\n');
   let best;
   for (let index = 0; index < lines.length; index++) {
-    const text = lines.slice(index, index + 4).join('\n').trim().slice(0, EVIDENCE_CHARS);
+    const window = lines.slice(index, index + 4).join('\n').trim();
+    const bounded = window.slice(0, EVIDENCE_CHARS);
+    const last_line = bounded.lastIndexOf('\n');
+    const text = window.length > EVIDENCE_CHARS && last_line >= 8 ? bounded.slice(0, last_line).trimEnd() : bounded;
     if (text.length < 8) continue;
     const words = codeTerms(text);
     const searchable = ' ' + words.join(' ') + ' ';
@@ -227,12 +236,15 @@ export function retrieveProjectReferences(documents, query, limit = 7, focus = '
   if (!code.length || limit < 2 || (!identifiers.length && !/\b(?:code|source file|handler|module|function|class|component|implementation)\b/i.test(question))) return ranked;
   const components = identifiers.filter(identifier => /^[A-Z][\w$]*$/.test(identifier));
   const owners = paths.length ? [] : code.filter(doc => components.some(component => matchesSource(doc.name, component + '.tsx')));
-  const codePool = owners.length ? owners : code;
+  const react = !paths.length && /\bReact component\b/i.test(question)
+    ? code.filter(document => /\.tsx$/i.test(document.name)) : [];
+  const codePool = owners.length ? owners : react.length ? react : code;
   const initial = retrieveReferences(codePool, query, 4, focus, identifiers);
   const primary = codePool.find(document => document.chunks.includes(initial[0]));
   const additional = primary ? retrieveReferences([primary], query, 5, focus, identifiers) : [];
-  const tokens = queryTerms(question);
-  const phrases = codeQueryPhrases(question);
+  const code_question = codeQuestion(question, paths);
+  const tokens = queryTerms(code_question);
+  const phrases = codeQueryPhrases(code_question);
   const windowIdentifiers = identifiers.filter(identifier => !/^[A-Z][\w$]*$/.test(identifier));
   const snippets = [...new Set([...initial, ...additional])].map((passage, rank) => ({
     passage, score: (bestCodeWindow(passage, tokens, windowIdentifiers, phrases)?.score ?? 0) + 1 / (rank + 2),
@@ -282,9 +294,11 @@ export function packReferenceEvidence(passages, question, limit = 4) {
   const result = chosen.map(item => item.passage);
   if (code.length && result.length < limit) {
     const identifiers = codeIdentifiers(question).filter(identifier => !/^[A-Z][\w$]*$/.test(identifier));
-    const phrases = codeQueryPhrases(question);
+    const code_question = codeQuestion(question, identifiers.filter(isSourcePath));
+    const code_tokens = queryTerms(code_question);
+    const phrases = codeQueryPhrases(code_question);
     const best = code.map((passage, rank) => {
-      const window = bestCodeWindow(passage, tokens, identifiers, phrases);
+      const window = bestCodeWindow(passage, code_tokens, identifiers, phrases);
       return window && { passage, text: window.text, score: window.score + 1 / (rank + 2) };
     }).filter(Boolean).sort((a, b) => b.score - a.score)[0];
     if (best) result.push({ ...best.passage, text: best.text });
