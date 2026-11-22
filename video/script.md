@@ -2,7 +2,7 @@
 
 62 seconds, 1920x1080, 30 fps, no voiceover. One claim per beat. Timings are in `timeline.json`; the 3D beats follow `site/src/film/timeline.ts` and `choreo.ts`.
 
-Provenance key: **3D** = the parent session's time-seekable film at `/film`, captured as plates with its headline copy and title card hidden (its in-scene labels are kept). **Own** = authored in `video/comp/comp.js`. **Stage** = screenshots of the Wasp stage at `/stage`, driven by two simulated seats through the real hub.
+Provenance key: **3D** = the parent session's time-seekable film at `/film`, captured as plates with its headline copy and title card hidden (its in-scene labels are kept). The plates in the delivered cut were captured at 1280x720 and 15 frames a second in software WebGL, then scaled and frame-blended to 1920x1080 at 30. **Own** = authored in `video/comp/comp.js`. **Stage** = screenshots of the Wasp stage at `/stage`, driven by two simulated seats through the real hub.
 
 | # | Time | Beat | Picture | Words on screen | Sound | Source |
 | --- | --- | --- | --- | --- | --- | --- |

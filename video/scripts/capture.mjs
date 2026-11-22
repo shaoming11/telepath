@@ -44,7 +44,8 @@ if (flag("serve")) {
 
 const url = film ? option("url", "http://localhost:3000/film") : `${origin}/comp/index.html${option("query", "")}`;
 const browser = await launch();
-const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
+const [width, height] = option("size", "1920x1080").split("x").map(Number);
+const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
 
 async function open() {
   const page = await context.newPage();

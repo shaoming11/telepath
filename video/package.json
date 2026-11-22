@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "stage": "node scripts/capture-stage.mjs",
-    "film": "node scripts/capture.mjs --film --keep",
+    "film": "node scripts/capture.mjs --film --keep --size=1280x720 --step=2",
     "frames": "node scripts/capture.mjs --query=?film=1",
     "audio": "python3 audio/make_audio.py",
     "encode": "bash scripts/encode.sh",

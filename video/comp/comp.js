@@ -434,7 +434,7 @@ function sceneLockup(t) {
 
 function titles(t) {
   const low = useFilm ? { y: 910 } : {};
-  type("Some things can\u2019t be said out loud.", W / 2, useFilm ? 910 : 470, { size: 40, weight: 500, color: C.ink2, alpha: window_(t, 1.4, 4.5, 0.9, 0.5), track: -0.015 });
+  type("Some things can\u2019t be said out loud.", useFilm ? 540 : W / 2, useFilm ? 540 : 470, { size: 40, weight: 500, color: C.ink2, alpha: window_(t, useFilm ? 2.1 : 1.4, 4.5, 0.9, 0.5), track: -0.015 });
   headline(t, 5.2, 7.95, "Say it without saying it.", low);
   headline(t, cues.arrive + 0.8, 17.75, "One tap. Your voice, in their ear.", low);
   headline(t, 23.6, 27.75, "Four messages, ready before you begin.", low);
@@ -453,16 +453,21 @@ function titles(t) {
   }
 }
 
-// The 3D film may be captured at a lower rate than the cut. A missing frame is the average of its nearest captured neighbours.
+// The 3D film may be captured at a lower rate than the cut. A missing frame is a weighted blend of its nearest captured neighbours.
 const plate = frame => frame < 0 ? null : image(`/out/film/f${String(frame).padStart(5, "0")}.jpg`);
-async function filmPlates(frame) {
-  const exact = await plate(frame);
-  if (exact) return [exact];
-  for (let reach = 1; reach <= 3; reach++) {
-    const near = (await Promise.all([plate(frame - reach), plate(frame + reach)])).filter(Boolean);
-    if (near.length) return near;
+async function nearest(frame, dir) {
+  for (let reach = 0; reach < 8; reach++) {
+    const img = await plate(frame + dir * reach);
+    if (img) return { img, reach };
   }
-  return [];
+  return null;
+}
+async function filmPlates(frame) {
+  const before = await nearest(frame, -1);
+  if (before?.reach === 0) return [before.img, null, 0];
+  const after = await nearest(frame + 1, 1);
+  if (!before || !after) return (before ?? after) ? [(before ?? after).img, null, 0] : [];
+  return [before.img, after.img, before.reach / (before.reach + after.reach + 1)];
 }
 
 const SCENES = [
@@ -478,7 +483,7 @@ async function draw(t) {
   const plates = useFilm && t < filmSeconds ? await filmPlates(Math.round(t * timeline.fps)) : [];
   if (plates.length) {
     ctx.drawImage(plates[0], 0, 0, W, H);
-    if (plates[1]) { ctx.globalAlpha = 0.5; ctx.drawImage(plates[1], 0, 0, W, H); ctx.globalAlpha = 1; }
+    if (plates[1]) { ctx.globalAlpha = plates[2]; ctx.drawImage(plates[1], 0, 0, W, H); ctx.globalAlpha = 1; }
   } else await scene(t);
   titles(t);
   const open = inOut(span(t, 0, 0.8)), close = inOut(span(t, timeline.seconds - 1.2, timeline.seconds - 0.2));
@@ -494,6 +499,7 @@ await document.fonts.load(`600 84px ${FONT}`);
 await document.fonts.load(`500 40px ${FONT}`);
 await document.fonts.ready;
 
+await draw(Number(query.get("t")) || 0);
 window.__film = {
   seconds: timeline.seconds,
   seek: async t => {
@@ -501,5 +507,4 @@ window.__film = {
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   },
 };
-await draw(Number(query.get("t")) || 0);
 document.body.dataset.ready = "1";
