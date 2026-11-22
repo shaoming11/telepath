@@ -1238,7 +1238,8 @@ function render_masthead() {
 }
 
 function render_banner() {
-  const key = ISSUE_ORDER.find(name => ui.issues.has(name));
+  const shows_media = ['earbuds', 'calibrate', 'live'].includes(ui.screen);
+  const key = ISSUE_ORDER.find(name => ui.issues.has(name) && (name !== 'media' || shows_media));
   const issue = key ? ui.issues.get(key) : null;
   const banner = $('banner');
   banner.hidden = !issue;

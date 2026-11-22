@@ -153,6 +153,25 @@ test('a draft that has not been heard is shown but cannot be approved until the 
   assert.equal(get_element('draft-send').disabled, false);
 });
 
+test('earbud recovery returns on Live after voice setup without blocking the voice choice', () => {
+  const anchor = get_element('keepalive');
+  const banner = get_element('banner');
+  anchor.listeners.pause[0]();
+  assert.equal(banner.hidden, false);
+  assert.match(get_element('banner-text').textContent, /Earbud controls stopped/);
+
+  get_element('settings-voice').listeners.click[0]();
+  assert.equal(banner.hidden, true);
+  assert.equal(get_element('voice-skip').disabled, false);
+
+  get_element('nav-back').listeners.click[0]();
+  get_element('nav-back').listeners.click[0]();
+  assert.equal(banner.hidden, false);
+  assert.equal(get_element('banner-action').textContent, 'Wake');
+  anchor.listeners.playing[0]();
+  assert.equal(banner.hidden, true);
+});
+
 test('repeated discard clicks target the same draft and never become a codebook gesture', async () => {
   socket.receive({ type: 'state', state: seat_state(draft({ id: 'current-preview' })) });
   await settle();
