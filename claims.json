@@ -1,19 +1,4 @@
 {
-  "revision": 45,
-  "claims": [
-    {
-      "id": "361b48b2-7f09-47fd-8ff9-0967ddc16fb8",
-      "owner": "fireheartjerry",
-      "agent": "codex-pitch-help",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/stage.mjs"
-      ],
-      "paths": [
-        "public/stage.mjs"
-      ],
-      "claimedAt": "2026-11-22T04:45:43.451Z"
-    }
-  ]
+  "revision": 46,
+  "claims": []
 }
