@@ -1,5 +1,5 @@
 {
-  "revision": 18,
+  "revision": 19,
   "claims": [
     {
       "id": "071419b2-b865-4894-9942-8da1b3e6d7ba",
@@ -22,20 +22,6 @@
         "public/phone.mjs"
       ],
       "claimedAt": "2026-11-22T03:30:29.829Z"
-    },
-    {
-      "id": "48062db0-aab7-4430-8f74-ff318b4938c5",
-      "owner": "influxtion",
-      "agent": "conversation-launcher",
-      "branch": "codex/conversation-answers",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "start"
-      ],
-      "paths": [
-        "start"
-      ],
-      "claimedAt": "2026-11-22T03:30:56.508Z"
     }
   ]
 }
