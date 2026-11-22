@@ -1,50 +1,6 @@
 {
-  "revision": 8,
+  "revision": 9,
   "claims": [
-    {
-      "id": "2ce9afb4-600c-46c6-a4cc-56d0e77cb750",
-      "owner": "fireheartjerry",
-      "agent": "codex-maritime",
-      "branch": "telepathy-demo",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "@stage-ui",
-        "hub/session.mjs",
-        "hub/server.mjs",
-        "hub/maritime.mjs",
-        "maritime",
-        "public/announcements.mjs",
-        "public/assets/bank.json",
-        "public/assets",
-        "tests",
-        "README.md",
-        "docs/protocol.md",
-        "docs/pitch.md",
-        "scripts/maritime-deploy.mjs",
-        "start",
-        ".env.example"
-      ],
-      "paths": [
-        ".env.example",
-        "README.md",
-        "docs/pitch.md",
-        "docs/protocol.md",
-        "hub/maritime.mjs",
-        "hub/server.mjs",
-        "hub/session.mjs",
-        "maritime",
-        "public/announcements.mjs",
-        "public/assets",
-        "public/assets/bank.json",
-        "public/stage.css",
-        "public/stage.html",
-        "public/stage.mjs",
-        "scripts/maritime-deploy.mjs",
-        "start",
-        "tests"
-      ],
-      "claimedAt": "2026-11-22T01:34:56.869Z"
-    },
     {
       "id": "9aed406b-dc97-4bfb-a03a-9377f0218016",
       "owner": "fireheartjerry",
