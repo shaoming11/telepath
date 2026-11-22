@@ -10,7 +10,7 @@ The implementation connects Safari earbud controls, a Mac hub, and private cues 
 
 ## Phone client, AirPods and control routing
 
-The phone app is plain HTML, CSS and JavaScript modules. Safari or Chrome renders the UI and handles Media Session events. AirPods 1 converts a configured double-tap into a next-track event. Its recognizer counts one, two or three next-track events using a calibrated window. Calibration uses two successful doubles and two successful triples; failures retry. AirPods Pro maps single squeeze to play or pause, double to next track, triple to previous track. Browser media events do not identify which earbud produced them. A single press in Pitch toggles Question Mode, unless a pending approval or receipt takes priority. The UI has touch fallbacks. Sources: public/input.mjs, public/earbuds/airpods-1/input.mjs, public/earbuds/airpods-pro/input.mjs, public/phone.mjs.
+Safari or Chrome renders the phone UI and handles Media Session events. AirPods 1 converts a configured double-tap into a next-track event. Its recognizer counts one, two or three next-track events using a calibrated window. Calibration uses two successful doubles and two successful triples; failures retry. AirPods Pro maps single squeeze to play or pause, double to next track, triple to previous track. Browser media events do not identify which earbud produced them. A single press in Pitch toggles Question Mode, unless a pending approval or receipt takes priority. The UI has touch fallbacks. Sources: public/input.mjs, public/earbuds/airpods-1/input.mjs, public/earbuds/airpods-pro/input.mjs, public/phone.mjs.
 
 ## Hub, WebSockets and private routing
 

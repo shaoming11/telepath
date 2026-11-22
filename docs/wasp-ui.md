@@ -1,6 +1,12 @@
 # Telepathy on Wasp
 
-This branch provides a Wasp 0.26 frontend for the two Telepathy surfaces. Wasp defines and builds both React routes, the phone at `/` and the Mac Stage at `/stage`. The phone and Stage use the existing media and session controllers after their React markup mounts. Their marked-up controls keep the stable IDs those controllers depend on.
+## Active frontend stack
+
+Wasp builds React routes for the phone and Mac Stage. The Node hub serves both on the same origin.
+
+Wasp 0.26 defines the phone route at `/` and the Mac Stage at `/stage`. Their React markup connects to the existing media and session controllers using stable control IDs.
+
+## Hub and browser controllers
 
 The same Mac hub serves Wasp's generated client and handles the WebSocket, microphone ownership, provider calls, and audio delivery. This allows the phones to stay on the current trusted HTTPS origin and preserves the Stage's loopback controls. No Wasp service or database needs to run to serve this client. The minimal Wasp project declares PostgreSQL because the compiler rejects SQLite in a production config. The deployed surface uses static Wasp-generated client files.
 

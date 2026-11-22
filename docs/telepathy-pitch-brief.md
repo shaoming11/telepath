@@ -12,7 +12,7 @@ A fixed cue uses cached ElevenLabs audio, which is available immediately after s
 
 ## The devices and the signal path
 
-The phones run Telepathy in Safari or Chrome. The client is plain HTML, CSS, and JavaScript modules. Each phone connects to the Node.js hub over a WebSocket, decodes cached or generated speech with Web Audio, and exposes a touch fallback. There are two fixed seats, no accounts, and no need for a native app in the demo. The devices join the same hotspot and the phones use a trusted HTTPS link to the MacBook.
+The phones run Telepathy in Safari or Chrome. Each phone connects to the Node.js hub over a WebSocket, decodes cached or generated speech with Web Audio, and exposes a touch fallback. There are two fixed seats, no accounts, and no need for a native app in the demo. The devices join the same hotspot and the phones use a trusted HTTPS link to the MacBook.
 
 AirPods 1 sends a next-track event from a configured double-tap. The app counts next-track events inside a calibrated timing window. AirPods Pro stem squeezes arrive as play/pause, next-track, and previous-track media actions. The browser maps the actions to the selected earbud profile. The app cannot tell which physical earbud sent a media command. The demo uses earbud stem and track controls.
 

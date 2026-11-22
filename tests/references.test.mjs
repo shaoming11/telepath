@@ -8,7 +8,7 @@ import { createHub } from '../hub/server.mjs';
 import { test } from 'node:test';
 import { exactExcerptQuotes, packReferenceEvidence, parseReferences, retrieveProjectReferences, retrieveReferences } from '../hub/references.mjs';
 import { buildProjectReferences } from '../hub/project-references.mjs';
-import { sourcedProjectCue } from '../hub/pitch-question.mjs';
+import { isFrontendStackQuestion, sourcedProjectCue } from '../hub/pitch-question.mjs';
 import { validateAnswer } from '../hub/questions.mjs';
 import { createCodec } from '../hub/codec.mjs';
 
@@ -234,5 +234,25 @@ test('specific raw-audio and Realtime event questions use matching project facts
     const cue = validateAnswer(sourcedProjectCue(question, passages), passages);
     assert.match(cue.sources[0].name, expectedFile);
     assert.match(cue.answer, words);
+  }
+});
+
+test('the loaded frontend owns the stack passage and corpus fingerprint', async () => {
+  const classic = await buildProjectReferences();
+  const wasp = await buildProjectReferences({ frontend: 'wasp', previous: classic });
+  const question = 'What frontend framework do you use?';
+  assert.notEqual(wasp.index.version, classic.index.version);
+  assert.equal(await buildProjectReferences({ frontend: 'wasp', previous: wasp }), wasp);
+  for (const [index, current, inactive] of [[wasp, /Wasp builds React/, /classic browser client/],
+    [classic, /HTML, CSS, and JavaScript/, /Wasp frontend/]]) {
+    assert.ok(index.documents.every(doc => !inactive.test(doc.name)));
+    const top = retrieveProjectReferences(index.documents, question, 4);
+    assert.ok(top.some(passage => current.test(passage.text)), question);
+  }
+  for (const text of ['What frontend framework do you use?', 'How did you build the UI?', 'Are you using React?']) {
+    assert.ok(isFrontendStackQuestion(text), text);
+  }
+  for (const text of ['How does the UI use the microphone?', 'Why did you choose Wasp?', 'How did you build the project?']) {
+    assert.ok(!isFrontendStackQuestion(text), text);
   }
 });

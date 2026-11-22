@@ -1,6 +1,6 @@
 import { questionKey } from './questions.mjs';
 
-const QUESTION = /(?:^|[.!?]\s+)(?:(?:so|and|okay|but)\s*[, ]\s*)?(?:why|how|what|where|when|who|which|can you|could you|would you|do you|does (?:it|that)|is (?:there|it)|tell (?:me|us)|walk (?:me|us) through|explain)\b/i;
+const QUESTION = /(?:^|[.!?]\s+)(?:(?:so|and|okay|but)\s*[, ]\s*)?(?:why|how|what|where|when|who|which|can you|could you|would you|do you|are you|does (?:it|that)|is (?:there|it|this)|tell (?:me|us)|walk (?:me|us) through|explain)\b/i;
 export const BUILD_STORY_CUE = 'Safari catches the AirPods gesture. The Mac routes messages and listens to the room. ElevenLabs transcribes, OpenAI drafts, and ElevenLabs whispers back.';
 export const BUILD_STORY_EVIDENCE = 'Safari earbud controls, a Mac hub, and private cues written by OpenAI and voiced by ElevenLabs';
 export const BUILD_STORY_NOTES = [
@@ -26,9 +26,22 @@ export function isBuildStoryQuestion(text) {
     && /\b(?:(?:build|built|develop|developed|made|make|created|create|put together) (?:the |this |your )?(?:project|app|product|telepathy|it)|development of (?:the |this |your )?(?:project|app|product|telepathy))$/.test(question);
 }
 
-export function sourcedProjectCue(question, passages) {
+export function isFrontendStackQuestion(text) {
+  const question = questionKey(text);
+  return /\b(?:front ?end|user interface|ui)\b/.test(question)
+    && (/\b(?:framework|stack|built with|made with|written in|powered by|runs on)\b/.test(question)
+      || /^(?:how (?:did|do) you|what did you use to) (?:build|make|develop)\b/.test(question))
+    || /^(?:are you using|do you use|is this (?:made|built|written) (?:with|in)) (?:react|wasp)\b/.test(question);
+}
+
+export function sourcedProjectCue(question, passages, frontendStack) {
   let answer, quote, source;
-  if (isBuildStoryQuestion(question)) {
+  if (frontendStack && isFrontendStackQuestion(question)) {
+    [quote] = frontendStack.text.replace(/^#{1,4} [^\n]+\n+/, '').split(/\n\n/, 1);
+    if (quote.length > 180 || quote.split(/\s+/).length > 20) return null;
+    answer = quote;
+    source = frontendStack;
+  } else if (isBuildStoryQuestion(question)) {
     answer = BUILD_STORY_CUE;
     quote = BUILD_STORY_EVIDENCE;
   } else if (/\bopenai\b/i.test(question) && /\braw\b/i.test(question) && /\b(?:mic|microphone|audio|recording)\b/i.test(question)) {
