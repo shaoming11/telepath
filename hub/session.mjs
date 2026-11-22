@@ -30,6 +30,9 @@ const DEFAULT_SETTINGS = Object.freeze({
   draftConfidence: 0.82,
   questionDebounceMs: 350,
   questionQuietMs: 2700,
+  automaticQuietMs: 2500,
+  automaticCooldownMs: 30000,
+  automaticPlaybackGuard: true,
   questionTimeoutMs: 8000,
   pitchHelpTimeoutMs: 4800,
   pitchComposeMs: 1850,
@@ -67,7 +70,7 @@ function createSeat(name) {
     voice: 'idle', voiceRef: null, voiceRequest: null,
     earbuds: false, calibrated: false, wantsReady: false,
     situation: '', transcript: [], level: 0, pending: null,
-    lastIn: null, lastOut: null, lastDraftAt: -Infinity, lastSuggestionAt: -Infinity,
+    audioBusyUntil: -Infinity, lastIn: null, lastOut: null, lastDraftAt: -Infinity, lastSuggestionAt: -Infinity,
     pitchHelp: null, questionMode: null, pitchPlayback: null, lastPitchCue: null, lastPitchHelpAt: -Infinity,
     pendingTimer: null, lastDraftFingerprint: null, receipt: null, awaitingHeard: new Map(),
     cacheId: null, out: false, seenSignals: new Set(), listenVersion: 0,
@@ -184,6 +187,11 @@ export class Session {
     this.references = [];
     this.researchReferences = [];
     this.research = this.researchFactory();
+    this.researchPending = null;
+    this.researchRunning = false;
+    this.researchTimer = null;
+    this.lastAutomaticCueAt = -Infinity;
+    this.automaticCueTexts = new Set();
     this.referencesLoading = false;
     this.answerVersion = 0;
     this.answerController = null;
@@ -245,6 +253,7 @@ export class Session {
       canned: this.canned,
       ...(viewer == null && { announcement: this.snapshotAnnouncement(), canReplay: this.canReplay() }),
       ...(viewer == null && { references: this.references.map(({ id, name, characters }) => ({ id, name, characters })),
+        research: { ...this.research.snapshot?.(), retained: this.researchReferences.length },
         referencesLoading: this.referencesLoading, questionAnswering: this.codec?.questionAnswering === true,
         questionState: this.questionState }),
       ...(viewer == null && { coach: { available: Boolean(this.coach), ...this.coachState } }),
@@ -588,7 +597,12 @@ export class Session {
   }
 
   cue(seat, cue, options = {}) {
-    if (this.seats[seat].online) this.emitSeat(seat, { type: 'audio', cue, sessionId: this.sessionId, ...options });
+    if (this.seats[seat].online) {
+      if (options.url && options.text) {
+        this.seats[seat].audioBusyUntil = this.now() + Math.min(15000, Math.max(2500, options.text.split(/\s+/).length * 450 + 500));
+      }
+      this.emitSeat(seat, { type: 'audio', cue, sessionId: this.sessionId, ...options });
+    }
   }
 
   async receiveSignal(seat, frame) {
@@ -807,7 +821,7 @@ export class Session {
     });
     if (this.phase === 'live') this.researchInBackground(state.transcript);
     if (seat === 'room' && state.transcript.length > 60) state.transcript.splice(0, state.transcript.length - 60);
-    if (this.phase === 'live' && !(seat === 'room' && SEATS.some(person => this.seats[person].questionMode)) && this.references.length && this.codec?.questionAnswering) {
+    if (this.phase === 'live' && !(seat === 'room' && SEATS.some(person => this.seats[person].questionMode)) && (this.references.length || this.researchReferences.length) && this.codec?.questionAnswering) {
       const key = questionKey(text);
       const duplicate = this.questionTurns.slice(-4).some(turn => this.now() - turn.at < 2000 && questionKey(turn.text) === key);
       if (!duplicate) {
@@ -904,17 +918,75 @@ export class Session {
   }
 
   researchInBackground(turns) {
+    if (this.research.enabled === false) return;
+    this.researchPending = turns.slice(-8);
+    if (this.researchRunning || this.researchTimer) return;
     const generation = this.generation;
-    void this.research.observe(turns, { signal: this.lifecycle.signal }).then(document => {
-      if (!document || this.closed || generation !== this.generation || this.phase !== 'live') return;
-      this.researchReferences = [...this.researchReferences, document].slice(-8);
-      this.clearPitchPlanning();
-      for (const seat of SEATS) {
-        const mode = this.seats[seat].questionMode;
-        mode?.candidate?.controller.abort();
-        if (mode) mode.candidate = null;
+    const run = async () => {
+      this.researchTimer = null;
+      if (this.closed || generation !== this.generation || this.phase !== 'live') return;
+      const latest = this.researchPending;
+      this.researchPending = null;
+      this.researchRunning = true;
+      try {
+        const document = await this.research.observe(latest, { signal: this.liveScope(),
+          known: [...this.references.slice(0, 4), ...this.researchReferences] });
+        if (!document || this.closed || generation !== this.generation || this.phase !== 'live') return;
+        this.researchReferences = [...this.researchReferences, document].slice(-12);
+        this.clearPitchPlanning();
+        for (const seat of SEATS) {
+          const mode = this.seats[seat].questionMode;
+          mode?.candidate?.controller.abort();
+          if (mode) mode.candidate = null;
+        }
+      } finally {
+        if (generation === this.generation && !this.closed && !this.lifecycle.signal.aborted) {
+          this.researchRunning = false;
+          // Coalesce speech received during a lookup; never lose the latest context.
+          this.researchTimer = setTimeout(() => {
+            this.researchTimer = null;
+            if (this.researchPending) this.researchInBackground(this.researchPending);
+          }, 15000);
+          this.researchTimer.unref();
+        }
       }
-    }).catch(() => {});
+    };
+    void run().catch(() => {});
+  }
+
+  lastSpeechAt() {
+    return Math.max(this.room.transcript.at(-1)?.at ?? -Infinity,
+      ...SEATS.map(seat => this.seats[seat].transcript.at(-1)?.at ?? -Infinity));
+  }
+
+  canWhisperAutomatically(seat, text = '') {
+    const state = this.seats[seat];
+    return this.phase === 'live' && !this.canned && !this.closed && state.online
+      && !this.room.partial && !this.questionSpeechPending
+      && !SEATS.some(person => this.seats[person].pending || this.seats[person].receipt?.until > this.now())
+      && (!this.settings.automaticPlaybackGuard || !SEATS.some(person => this.seats[person].audioBusyUntil > this.now()))
+      && !announcementInFlight(this.announcement)
+      && this.now() - this.lastSpeechAt() >= this.settings.automaticQuietMs
+      && this.now() - this.lastAutomaticCueAt >= this.settings.automaticCooldownMs
+      && (!text || !this.automaticCueTexts.has(questionKey(text)));
+  }
+
+  rememberAutomaticCue(text) {
+    this.lastAutomaticCueAt = this.now();
+    this.automaticCueTexts.add(questionKey(text));
+    if (this.automaticCueTexts.size > 100) this.automaticCueTexts.delete(this.automaticCueTexts.values().next().value);
+  }
+
+  async valuableWhisper(text, passages, signal) {
+    // The offline rehearsal uses deterministic emulated cues, never a live model.
+    if (!this.room.listening && SEATS.every(seat => this.seats[seat].sim) && this.codec?.mode === 'local') return true;
+    if (!this.codec?.assessWhisper) return true;
+    try {
+      return await withDeadline(deadline => this.codec.assessWhisper({ text, passages,
+        turns: [...this.room.transcript, ...SEATS.flatMap(seat => this.seats[seat].transcript)]
+          .sort((a, b) => a.at - b.at).slice(-8).map(({ text }) => ({ text })),
+        signal: deadline }), 1800, signal) === true;
+    } catch { return false; }
   }
 
   pitchContext(seat, began, includePartial = true) {
@@ -1039,7 +1111,7 @@ export class Session {
   }
 
   async waitForPitchPause(signal) {
-    while (this.room.listening && this.room.partial) {
+    while (this.room.partial || this.questionSpeechPending || this.now() - this.lastSpeechAt() < this.settings.automaticQuietMs) {
       signal.throwIfAborted();
       await new Promise(resolve => setTimeout(resolve, 75));
     }
@@ -1261,12 +1333,14 @@ export class Session {
         let cue = spoken
           ? await this.reviewPitchAnswer(question, spoken, resolved.passages, signal)
           : await this.racePitchCue(resolved, prepared, started, realtime, signal).catch(() => null)
-            ?? { answer: this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} };
+            ?? (anchor ? null : { answer: this.fallbackCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} });
         if (anchor) await this.waitForPitchPause(signal);
         let checkedAnswer = spoken || this.pitchAnswerAfter(seat, anchor);
         const reviewAnswers = this.coachScenario !== 'social';
         if (checkedAnswer && !spoken && reviewAnswers) cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
         if (!cue) return null;
+        if (anchor && ((isGroundedScenario(this.coachScenario) && !cue.sources?.length) || !this.canWhisperAutomatically(seat, cue.answer)
+          || !await this.valuableWhisper(cue.answer, resolved.passages, signal))) return null;
         const composed = performance.now();
         const showCue = () => {
           notify(cue.answer);
@@ -1298,6 +1372,12 @@ export class Session {
         } };
       }, Math.max(this.settings.pitchHelpTimeoutMs, this.settings.pitchPauseBudgetMs), lifecycle);
       if (lifecycle.aborted || !reply) return;
+      if (anchor) {
+        const latest = this.room.transcript.at(-1);
+        if (!this.canWhisperAutomatically(seat, reply.answer)
+          || latest && latest !== anchor && looksLikeQuestion(latest.text) && !sameQuestion(latest.text, anchor.text)) return;
+        this.rememberAutomaticCue(reply.answer);
+      }
       const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
       const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
         scenario: this.coachScenario, ...(reply.ungrounded && { ungrounded: true }),
@@ -1320,13 +1400,13 @@ export class Session {
         void withDeadline(reply.verify, this.settings.pitchVerifyMs, lifecycle).then(async result => {
           if (!current() || !result) return;
           const revised = result.correction;
-          const url = revised ? await this.speakPitchCue(seat, 'Correction. ' + revised.answer, lifecycle) : null;
+          const url = revised && !anchor ? await this.speakPitchCue(seat, 'Correction. ' + revised.answer, lifecycle) : null;
           if (!current()) return;
           state.lastPitchCue = revised ? {
             text: revised.answer, points: ['Correction verified by ' + result.provider, ...revised.sources.map(source => source.quote)],
           } : { ...shown, points: [...shown.points, 'Verified by ' + result.provider] };
           this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
-          if (revised && !url) this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
+          if (revised && !url && !anchor) this.emitSeat(seat, { type: 'pitch_help_audio_failed' });
           if (url) {
             const messageId = 'pitch-help-' + (this.sequence + 1);
             const correction = this.append('pitch_help', { seat, text: revised.answer, sources: revised.sources,
@@ -1349,7 +1429,7 @@ export class Session {
 
   async answerQuestion(requestedSeat) {
     const sender = requestedSeat ?? 'B';
-    if (this.closed || this.phase !== 'live' || this.canned || !this.references.length || !this.codec?.questionAnswering
+    if (this.closed || this.phase !== 'live' || this.canned || !(this.references.length || this.researchReferences.length) || !this.codec?.questionAnswering
         || !this.canDraft(sender) || !this.questionTurns.length || this.questionSpeechPending) return;
     if (this.answerTask) {
       // A manual request supersedes an automatic evaluation; a quiet timer gets one follow-up.
@@ -1391,8 +1471,12 @@ export class Session {
           return;
         }
         if (!this.canDraft(sender)) return;
+        if (!requestedSeat && (!this.canWhisperAutomatically(sender, result.answer)
+          || !await this.valuableWhisper(result.answer, passages, signal))) {
+          this.questionState = { status: 'waiting', question: result.question }; return;
+        }
         await withDeadline(previewSignal => this.previewDraft(sender, { kind: 'draft', text: result.answer, started_at: this.now(), signal: previewSignal,
-          fingerprint: key, answer: { answerVersion: version, suggestionKey: key, suggestionKind: result.suggestionKind,
+          fingerprint: key, automatic: !requestedSeat, answer: { answerVersion: version, suggestionKey: key, suggestionKind: result.suggestionKind,
             question: result.question, sources: result.sources, responseQuote: result.responseQuote } }), this.settings.serviceTimeoutMs, signal);
         if (current() && this.seats[sender].pending?.answerVersion === version) {
           this.questionState = { ...result, status: 'preview' };
@@ -1419,7 +1503,7 @@ export class Session {
   transcriptionCallbacks(seat, generation, listenVersion) {
     const current = () => generation === this.generation && (seat === 'room' ? this.room : this.seats[seat]).listenVersion === listenVersion;
     const committed = (text, meta) => { if (current()) this.addTranscript(seat, text, generation, meta); };
-    const track_questions = Boolean(this.references.length && this.codec?.questionAnswering);
+    const track_questions = Boolean(this.codec?.questionAnswering);
     const room = seat === 'room';
     if (!track_questions && !room) return committed;
     return {
@@ -1621,7 +1705,7 @@ export class Session {
   }
 
   async sense(requestedSeat) {
-    if (this.references.length && this.codec?.questionAnswering) {
+    if ((this.references.length || this.researchReferences.length) && this.codec?.questionAnswering) {
       if (requestedSeat && this.questionTurns.length) return this.answerQuestion(requestedSeat);
       if (this.answerTask || ['waiting', 'answer', 'advice', 'preview'].includes(this.questionState.status)) return;
     }
@@ -1675,7 +1759,7 @@ export class Session {
             evidence.push(this.room.transcript.at(-1)?.at ?? 0);
             const fingerprint = JSON.stringify([text, preset, ...evidence]);
             if (text && (requestedSeat || this.seats[person].lastDraftFingerprint !== fingerprint)) {
-              await this.previewDraft(person, { kind: 'draft', text, started_at, signal: preview_signal, fingerprint });
+              await this.previewDraft(person, { kind: 'draft', text, started_at, signal: preview_signal, fingerprint, automatic: !requestedSeat });
             }
             return;
           }
@@ -1685,7 +1769,7 @@ export class Session {
               && suggested !== this.preset && suggested !== 'Custom'
               && this.now() - state.lastSuggestionAt >= this.settings.draftCooldownMs) {
             const text = STATUS_LINES['sounds_like_' + suggested.toLowerCase()];
-            await this.previewDraft(person, { kind: 'preset', text, preset: suggested, started_at, signal: preview_signal });
+            await this.previewDraft(person, { kind: 'preset', text, preset: suggested, started_at, signal: preview_signal, automatic: true });
           }
         }));
       }, this.settings.serviceTimeoutMs, lifecycle);
@@ -1703,10 +1787,13 @@ export class Session {
     }
   }
 
-  async previewDraft(seat, { kind, text, preset, started_at, signal, fingerprint, answer }) {
+  async previewDraft(seat, { kind, text, preset, started_at, signal, fingerprint, answer, automatic = false }) {
     const generation = this.generation;
     const state = this.seats[seat];
     const decisionAt = this.now();
+    const speechAt = this.lastSpeechAt();
+    if (automatic && (!this.canWhisperAutomatically(seat, text)
+      || !answer && !await this.valuableWhisper(text, [], signal))) return;
     const line = kind === 'draft' ? 'Send: ' + text.replace(/[?.!]+$/, '') + '?' : text;
     try {
       const url = toUrl(await this.audio.speech(seat, line, {
@@ -1715,6 +1802,8 @@ export class Session {
       if (!url || signal.aborted || this.now() - started_at > this.settings.serviceTimeoutMs
           || generation !== this.generation || this.phase !== 'live' || this.canned
           || !state.online || state.pending || (kind === 'draft' && !this.canDraft(seat))) return;
+      if (automatic && (this.lastSpeechAt() !== speechAt || !this.canWhisperAutomatically(seat, text))) return;
+      if (automatic) this.rememberAutomaticCue(text);
       if (kind === 'draft') {
         state.lastDraftAt = this.now();
         state.lastDraftFingerprint = fingerprint;
@@ -2075,6 +2164,9 @@ export class Session {
   clearTimers() {
     for (const seat of SEATS) this.stopQuestionMode(seat);
     this.clearPitchPlanning();
+    clearTimeout(this.researchTimer);
+    this.researchTimer = null;
+    this.researchPending = null;
     this.stopRoomListening();
     this.cancelAnswers('reset');
     this.finishAnnouncement('reset');
