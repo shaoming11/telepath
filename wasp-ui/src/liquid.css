@@ -8,7 +8,7 @@ body.wasp-liquid {
   --line: #e4edff19;
   --line-2: #e4edff2e;
   --glass-solid: #192331;
-  --glass: #192331c9;
+  --glass: #192331e6;
   --glass-edge: #e4edff38;
   --glass-shadow: 0 16px 50px #0006, inset 0 1px 0 #ffffff16;
   --press: 85ms;
@@ -230,6 +230,8 @@ body.wasp-liquid {
   color: var(--fg);
   text-decoration: none;
 }
+.wasp-liquid .draft-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.wasp-liquid .draft .draft-time { color: var(--fg-2); font-variant-numeric: tabular-nums; text-align: end; }
 
 .wasp-liquid[data-surface="stage"] {
   --outer: #05070b;
@@ -408,6 +410,7 @@ body.wasp-liquid {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .wasp-liquid .draft-clock { display: none; }
   body.wasp-liquid *, body.wasp-liquid *::before, body.wasp-liquid *::after {
     animation: none !important;
     transition-duration: 0ms !important;

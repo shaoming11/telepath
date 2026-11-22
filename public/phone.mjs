@@ -78,6 +78,8 @@ const ui = {
   last_in_id: null,
   last_out_id: null,
   draft_id: null,
+  draft_deadline: 0,
+  draft_timer: null,
   signals_key: '',
   render_frame: 0,
   signal_count: 0,
@@ -420,7 +422,7 @@ function touch_signal(signal) {
 
 function touch_draft(approve) {
   const pending = my_state()?.pending;
-  if (!drafts.visible(pending) || (approve && !drafts.can_approve(pending))) return;
+  if (!drafts.visible(pending) || (approve && (!drafts.can_approve(pending) || performance.now() >= ui.draft_deadline))) return;
   const signal = approve ? 'R1' : settings.mode === 1 ? 'R2' : 'L1';
   on_signal(signal, undefined, { draft_id: pending.id });
 }
@@ -1437,26 +1439,37 @@ function render_draft(shown) {
   const pending = drafts.visible(shown) ? shown : null;
   const draft = $('live-draft');
   draft.hidden = !pending;
+  clearTimeout(ui.draft_timer);
   if (!pending) {
     ui.draft_id = null;
     return;
   }
-  // R1 only approves what the sender has heard, so the control waits for the hub to report the preview.
-  $('draft-send').disabled = !drafts.can_approve(pending);
   const is_preset = pending.kind === 'preset';
   set_text($('live-draft-label'), is_preset ? 'Switch preset?' : 'Send this?');
   set_text($('live-draft-text'), pending.text ?? '');
   set_text($('draft-send'), is_preset ? 'Switch' : 'Send');
   set_text($('draft-discard'), 'Discard');
-  if (ui.draft_id === pending.id) return;
-  ui.draft_id = pending.id;
-  const clock = $('live-draft-clock');
-  const duration = Number(pending.expiresAt) - Number(pending.decisionAt);
-  clock.style.transition = 'none';
-  clock.style.transform = 'scaleX(1)';
-  void clock.offsetWidth;
-  clock.style.transition = 'transform ' + (Number.isFinite(duration) && duration > 0 ? duration : 6000) + 'ms linear';
-  clock.style.transform = 'scaleX(0)';
+  const key = pending.id + ':' + pending.expiresAt + ':' + (pending.heardAt ?? '');
+  const now = performance.now();
+  if (ui.draft_id !== key) {
+    ui.draft_id = key;
+    const start = pending.heardAt ?? pending.decisionAt;
+    const duration = Number(pending.expiresAt) - Number(start);
+    const remaining = Number(pending.expiresAt) - Number(ui.state?.serverNow ?? start);
+    const total = duration > 0 ? duration : 6000;
+    const left = Number.isFinite(remaining) ? Math.max(0, Math.min(remaining, total)) : total;
+    ui.draft_deadline = now + left;
+    const clock = $('live-draft-clock');
+    clock.style.transition = 'none';
+    clock.style.transform = 'scaleX(' + left / total + ')';
+    void clock.offsetWidth;
+    clock.style.transition = 'transform ' + left + 'ms linear';
+    clock.style.transform = 'scaleX(0)';
+  }
+  const left = Math.max(0, ui.draft_deadline - now);
+  $('draft-send').disabled = !drafts.can_approve(pending) || !left;
+  set_text($('live-draft-time'), !left ? 'Expired' : pending.heardAt == null ? 'Waiting for preview' : Math.ceil(left / 1000) + ' s');
+  if (left) ui.draft_timer = setTimeout(schedule_render, (left % 1000 || 1000) + 1);
 }
 
 function renderPitchControls(state, mine, phase, cue) {
