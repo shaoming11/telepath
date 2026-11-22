@@ -54,6 +54,7 @@ const ui = {
   reconnect_timer: null,
   listen_wanted: false,
   mic_on_next_take: false,
+  mic_after_calibration: false,
   voice_task: null,
   voice_sample: null,
   voice_transcript_start: 0,
@@ -128,7 +129,7 @@ const calibration = createCalibration({
   set_gesture_model: set_earbud_model,
   get_seat: () => ui.seat,
   is_sim,
-  arm: arm_media,
+  arm: arm_calibration_media,
   resume_media: resume_anchor,
   on_apply: apply_profile,
   on_run_state: running => {
@@ -765,6 +766,17 @@ function stop_mic() {
   schedule_render();
 }
 
+function arm_calibration_media() {
+  if (!is_sim() && settings.gesture_model === 'next-only'
+    && (capture.open || capture.opening || ui.listen_wanted)) {
+    ui.mic_after_calibration = true;
+    ui.anchor_pause_expected = !keepalive.paused;
+    keepalive.pause();
+    stop_mic();
+  }
+  arm_media();
+}
+
 /* Navigation. */
 
 function next_setup_screen() {
@@ -777,6 +789,8 @@ function next_setup_screen() {
 }
 
 function go(screen, options = {}) {
+  const resume_mic = ui.screen === 'calibrate' && screen !== 'calibrate' && ui.mic_after_calibration;
+  if (resume_mic) ui.mic_after_calibration = false;
   ui.screen = screen;
   for (const section of document.querySelectorAll('.screen')) {
     const active = section.dataset.screen === screen;
@@ -792,6 +806,7 @@ function go(screen, options = {}) {
     ui.calibration_from = options.from ?? ui.calibration_from;
     calibration.open({ from: ui.calibration_from });
   }
+  if (resume_mic && ui.seat && screen !== 'join') void start_mic();
   render();
 }
 
