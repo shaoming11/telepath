@@ -54,7 +54,30 @@ function validateAdvice(value) {
   return { cueId: value.cueId, reason, engine: 'model' };
 }
 
-async function infer(input, instructions, { endpoint, key, model, fetchImpl, timeoutMs }) {
+const CUE_RESPONSE_FORMAT = {
+  type: 'json_schema',
+  json_schema: {
+    name: 'telepathy_private_cue',
+    strict: true,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['status', 'question', 'answer', 'sources', 'responseQuote'],
+      properties: {
+        status: { type: 'string', enum: ['answer', 'resolved', 'unsupported', 'none'] },
+        question: { type: 'string' },
+        answer: { type: 'string' },
+        sources: { type: 'array', items: {
+          type: 'object', additionalProperties: false, required: ['id', 'quote'],
+          properties: { id: { type: 'string' }, quote: { type: 'string' } },
+        } },
+        responseQuote: { type: 'string' },
+      },
+    },
+  },
+};
+
+async function infer(input, instructions, { endpoint, key, model, fetchImpl, timeoutMs }, responseFormat = { type: 'json_object' }) {
   if (!endpoint || !key) return null;
   try {
     const result = await fetchImpl(endpoint, {
@@ -67,7 +90,7 @@ async function infer(input, instructions, { endpoint, key, model, fetchImpl, tim
           { role: 'system', content: instructions },
           { role: 'user', content: JSON.stringify(input) },
         ],
-        response_format: { type: 'json_object' },
+        response_format: responseFormat,
         reasoning_effort: model === DEFAULT_MODEL ? 'minimal' : 'low',
         max_completion_tokens: 400,
         store: false,
@@ -119,7 +142,7 @@ export function createCoachServer({ env = process.env, fetchImpl = fetch, timeou
     }
     if (input.cue) {
       const instructions = input.cue.type === 'pitch_cue_review' ? CUE_REVIEW_INSTRUCTIONS : CUE_INSTRUCTIONS;
-      const result = await infer(input.cue, instructions, config);
+      const result = await infer(input.cue, instructions, config, CUE_RESPONSE_FORMAT);
       return sendJson(response, 200, { response: JSON.stringify(result ?? { status: 'unsupported' }) });
     }
     if (input.help) {

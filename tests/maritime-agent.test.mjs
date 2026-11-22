@@ -173,7 +173,8 @@ test('the hosted agent drafts and independently reviews a private cue', async t 
   const { chat } = await startCoach(t, {
     env: ENV,
     fetchImpl: async (_url, options) => {
-      const { messages } = JSON.parse(options.body);
+      const { messages, response_format } = JSON.parse(options.body);
+      assert.equal(response_format.json_schema.strict, true);
       const input = JSON.parse(messages[1].content);
       assert.deepEqual(input.passages, [{ id: passage.id, text: passage.text }]);
       if (input.type === 'pitch_cue_review') {
