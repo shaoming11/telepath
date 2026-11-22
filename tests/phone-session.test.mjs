@@ -74,13 +74,17 @@ for (const seat of ['A', 'B']) {
   button.dataset.seat = seat;
   seat_buttons.push(button);
 }
+const settings_nav = make_element('settings-nav');
+settings_nav.dataset.go = 'settings';
+const fetch_asset = globalThis.fetch;
 
 const globals = {
   document: {
     visibilityState: 'visible',
     activeElement: null,
     getElementById: get_element,
-    querySelectorAll: selector => selector === '.seat' ? seat_buttons : selector === 'input[name="settings_mode"]' ? [pro_radio] : [],
+    querySelectorAll: selector => selector === '.seat' ? seat_buttons : selector === 'input[name="settings_mode"]' ? [pro_radio]
+      : selector === '[data-go]' ? [settings_nav] : [],
     querySelector: () => null,
     createElement: () => make_element('created'),
     addEventListener(name, handler) { document_listeners.set(name, handler); },
@@ -93,6 +97,7 @@ const globals = {
     removeItem: key => stored.delete(key),
   },
   navigator: { mediaSession: { setActionHandler(action, callback) { media_actions.set(action, callback); }, playbackState: 'none' }, mediaDevices: fake_microphone },
+  fetch: async (url, options) => url === '/info' ? { ok: true, json: async () => ({ voicePreview: true }) } : fetch_asset(url, options),
   AudioWorkletNode: class {
     port = { onmessage: null, postMessage() {} };
     constructor() { mic_nodes.push(this); }
@@ -516,6 +521,20 @@ test('the live screen keeps the private cue visible until the hub clears it', as
   socket.receive({ type: 'state', state: seat_state(null, { sessionId: '2' }) });
   await settle();
   assert.equal(get_element('live-pitch-notes').hidden, true);
+});
+
+test('voice Settings offers a clone preview only after the hub confirms a clone', async () => {
+  const premade = seat_state(null, { roomInput: 'mac', sessionId: '2' });
+  premade.seats.A.voice = 'fallback';
+  socket.receive({ type: 'state', state: premade });
+  settings_nav.listeners.click[0]();
+  await settle();
+  assert.equal(get_element('settings-voice').textContent, 'Record my voice');
+  assert.equal(get_element('settings-voice-preview').hidden, true);
+  socket.receive({ type: 'state', state: seat_state(null, { roomInput: 'mac', sessionId: '2' }) });
+  await settle();
+  assert.equal(get_element('settings-voice').textContent, 'Re-record voice');
+  assert.equal(get_element('settings-voice-preview').hidden, false);
 });
 
 test('a full hub reset clears previously ready setup and returns the seat to Voice', async () => {

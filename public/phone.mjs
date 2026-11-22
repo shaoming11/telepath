@@ -1638,7 +1638,9 @@ function render_settings() {
   $('settings-listen-row').hidden = is_sim() || !uses_phone_room();
   $('settings-listen').checked = capture.open && ui.listen_wanted;
   $('settings-listen').disabled = my_state()?.roomMicSource === 'companion';
-  $('settings-voice-preview').hidden = !ui.hub_info?.voicePreview;
+  const cloned = !is_sim() && my_state()?.voice === 'ready';
+  set_text($('settings-voice'), cloned ? 'Re-record voice' : 'Record my voice');
+  $('settings-voice-preview').hidden = !cloned || !ui.hub_info?.voicePreview;
   $('settings-room-invite').hidden = is_sim() || !uses_phone_room() || !ui.hub_info?.roomMic;
   for (const name of ['cue', 'voice']) {
     const field = $('settings-volume-' + name);
