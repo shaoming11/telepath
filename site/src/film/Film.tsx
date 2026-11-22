@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { Suspense, useCallback, useMemo, useRef } from "react";
 import { Canvas } from "@react-three/fiber";
 import "../tokens.css";
 import "./film.css";
@@ -9,7 +9,9 @@ import { PULSES, SEAT_B, easeOut, ramp } from "./choreo";
 type Clock = { current: number };
 
 // Renders the frame for a moment in time. Pass `t` for a fixed frame or `clock` to drive it every frame.
-export function Film({ t, clock, copy = true, onFrame }: { t?: number; clock?: Clock; copy?: boolean; onFrame?: (delta: number) => void }) {
+type Props = { t?: number; clock?: Clock; copy?: boolean; onFrame?: (delta: number) => void; onReady?: () => void };
+
+export function Film({ t, clock, copy = true, onFrame, onReady }: Props) {
   const own = useRef(0);
   const source = clock ?? own;
   if (t !== undefined && !clock) own.current = t;
@@ -45,7 +47,9 @@ export function Film({ t, clock, copy = true, onFrame }: { t?: number; clock?: C
         gl={{ antialias: false, powerPreference: "high-performance", preserveDrawingBuffer: true }}
         aria-hidden
       >
-        <Scene clock={source} labels={labels} onTime={onTime} onFrame={onFrame} />
+        <Suspense fallback={null}>
+          <Scene clock={source} labels={labels} onTime={onTime} onFrame={onFrame} onReady={onReady} />
+        </Suspense>
       </Canvas>
       <div className="film-labels">
         {PULSES.map((pulse, i) => pulse.label && (

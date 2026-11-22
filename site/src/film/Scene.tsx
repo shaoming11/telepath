@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Environment, Lightformer } from "@react-three/drei";
 import { Bloom, EffectComposer, ToneMapping, Vignette } from "@react-three/postprocessing";
@@ -31,9 +31,10 @@ type Props = {
   labels: { current: (HTMLDivElement | null)[] };
   onTime: (t: number) => void;
   onFrame?: (delta: number) => void;
+  onReady?: () => void;
 };
 
-export function Scene({ clock, labels, onTime, onFrame }: Props) {
+export function Scene({ clock, labels, onTime, onFrame, onReady }: Props) {
   const camera = useThree(state => state.camera) as PerspectiveCamera;
   const size = useThree(state => state.size);
   const budA = useRef<Group>(null);
@@ -58,6 +59,8 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
       : pulse.label?.at === "A" ? new Vector3(-1.75, 0.75, 0.4)
       : new Vector3(2.05, 0.35, 0.6),
   })), []);
+
+  useEffect(() => { onReady?.(); }, [onReady]);
 
   const dustGeometry = useMemo(() => {
     const random = seeded(7);
@@ -179,11 +182,11 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
   return (
     <>
       <color attach="background" args={["#000"]} />
-      <Environment resolution={256} frames={1} environmentIntensity={1.35}>
+      <Environment resolution={256} frames={1} environmentIntensity={1.7}>
         <Lightformer form="rect" intensity={4.2} position={[0, 6, 2]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 4, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[-9, 1, 3]} rotation={[0, Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
         <Lightformer form="rect" intensity={1.1} position={[9, 1, 3]} rotation={[0, -Math.PI / 2, 0]} scale={[8, 2.5, 1]} />
-        <Lightformer form="rect" intensity={0.12} position={[0, 0, 12]} scale={[12, 6, 1]} />
+        <Lightformer form="rect" intensity={0.5} position={[0, 2, 12]} scale={[14, 5, 1]} />
       </Environment>
       <pointLight ref={lightA} color={SEAT_A} position={[-4.6, 1.4, -1.6]} intensity={5} distance={9} />
       <pointLight ref={lightB} color={SEAT_B} position={[4.6, 1.4, -1.6]} intensity={5} distance={9} />
@@ -208,15 +211,15 @@ export function Scene({ clock, labels, onTime, onFrame }: Props) {
         <mesh
           key={i}
           ref={node => { rings.current[i] = node; }}
-          position={tap.seat === "B" ? [B_POS.x + 0.2, B_POS.y - 1.0, 0.45] : [A_POS.x - 0.2, A_POS.y - 1.0, 0.45]}
+          position={tap.seat === "B" ? [B_POS.x, B_POS.y, 0.6] : [A_POS.x, A_POS.y, 0.6]}
         >
           <ringGeometry args={[0.2, 0.226, 64]} />
           <meshBasicMaterial color={new Color(tap.seat === "B" ? SEAT_B : SEAT_A).multiplyScalar(HDR)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
         </mesh>
       ))}
 
-      <mesh ref={hold} position={[B_POS.x + 0.2, B_POS.y - 1.0, 0.45]} rotation={[0, -0.35, 0]}>
-        <ringGeometry args={[0.42, 0.432, 96, 1, 0, Math.PI * 1.5]} />
+      <mesh ref={hold} position={[B_POS.x, B_POS.y, 0.6]} rotation={[0, -0.35, 0]}>
+        <ringGeometry args={[0.66, 0.674, 96, 1, 0, Math.PI * 1.5]} />
         <meshBasicMaterial color={new Color("#ffffff").multiplyScalar(HDR * 0.7)} toneMapped={false} transparent depthWrite={false} depthTest={false} />
       </mesh>
 

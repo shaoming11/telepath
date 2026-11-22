@@ -13,8 +13,8 @@ export const NEUTRAL = "#f5f5f7";
 
 export const A_POS = new Vector3(-3.2, 0.5, 0);
 export const B_POS = new Vector3(3.2, 0.5, 0);
-const A_EAR = new Vector3(-2.62, 0.55, 0.25);
-const B_EAR = new Vector3(2.62, 0.55, 0.25);
+const A_EAR = new Vector3(-2.78, 0.5, 0.2);
+const B_EAR = new Vector3(2.78, 0.5, 0.2);
 
 const arc = (from: Vector3, to: Vector3, apex: number, z = 0) =>
   new QuadraticBezierCurve3(from, new Vector3((from.x + to.x) / 2, from.y + apex * 2, z), to);
@@ -52,7 +52,7 @@ export const PULSES: Pulse[] = [
     label: { ...entry, at: "apex" },
   })),
   {
-    id: "draft", curve: new QuadraticBezierCurve3(new Vector3(0.4, -4.2, 1.5), new Vector3(3.4, -2.6, 2.2), new Vector3(3.1, 0.2, 0.7)),
+    id: "draft", curve: new QuadraticBezierCurve3(new Vector3(0.4, -4.2, 1.5), new Vector3(3.4, -2.6, 2.2), new Vector3(3.1, 0.3, 0.55)),
     color: NEUTRAL, launch: 29.2, land: 31.4, fade: 34.4, inReveal: false,
     label: { text: "The judge on the left looks lost", taps: "", at: "B", caption: "A draft. Only you hear it." },
   },
