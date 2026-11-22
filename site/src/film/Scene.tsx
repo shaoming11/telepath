@@ -9,7 +9,8 @@ import {
 } from "three";
 import { AirPod } from "./AirPod";
 import {
-  A_POS, B_POS, PULSES, REVEAL_START, REVEAL_Y, SEAT_A, SEAT_B, TAPS, cameraAt, clamp01, easeInOut, easeOut, ramp, span,
+  A_POS, B_POS, PULSES, REVEAL_PULSES, REVEAL_SPREAD, REVEAL_START, REVEAL_Y, SEAT_A, SEAT_B, TAPS, cameraAt, clamp01, easeInOut, easeOut, ramp,
+  revealDot, span,
 } from "./choreo";
 import { pulseMaterial } from "./pulse";
 
@@ -24,17 +25,17 @@ function seeded(seed: number) {
   };
 }
 
-const REVEAL_PULSES = PULSES.filter(pulse => pulse.inReveal);
 
 type Props = {
   clock: { current: number };
   labels: { current: (HTMLDivElement | null)[] };
+  revealLabels: { current: (HTMLDivElement | null)[] };
   onTime: (t: number) => void;
   onFrame?: (delta: number) => void;
   onReady?: () => void;
 };
 
-export function Scene({ clock, labels, onTime, onFrame, onReady }: Props) {
+export function Scene({ clock, labels, revealLabels, onTime, onFrame, onReady }: Props) {
   const camera = useThree(state => state.camera) as PerspectiveCamera;
   const size = useThree(state => state.size);
   const budA = useRef<Group>(null);
@@ -82,6 +83,7 @@ export function Scene({ clock, labels, onTime, onFrame, onReady }: Props) {
     camera.lookAt(look);
 
     const reveal = easeInOut(ramp(t, REVEAL_START + 1.8, REVEAL_START + 3.8));
+    const spread = easeInOut(ramp(t, REVEAL_START + 0.6, REVEAL_START + 3.4));
     let flareA = 0;
     let flareB = 0;
 
@@ -98,6 +100,7 @@ export function Scene({ clock, labels, onTime, onFrame, onReady }: Props) {
       const tube = tubes.current[i];
       if (tube) {
         const flat = pulse.inReveal ? 1 - reveal * 0.985 : 1;
+        tube.scale.x = pulse.inReveal ? 1 + (spread * REVEAL_SPREAD) / Math.abs(pulse.curve.v0.x) : 1;
         tube.scale.y = flat;
         tube.position.y = REVEAL_Y * (1 - flat);
         tube.visible = alive > 0 || back > 0;
@@ -151,17 +154,23 @@ export function Scene({ clock, labels, onTime, onFrame, onReady }: Props) {
       const since = t - tap.t;
       return tap.seat === seat && since >= 0 ? sum + Math.exp(-since * 5) * Math.sin(since * 22) * 0.07 : sum;
     }, 0);
-    const lift = easeInOut(ramp(t, REVEAL_START, REVEAL_START + 3)) * 0.0;
+    const apart = spread * REVEAL_SPREAD;
     if (budA.current) {
-      budA.current.position.set(A_POS.x, A_POS.y + Math.sin(t * 0.52) * 0.06 + lift, A_POS.z);
+      budA.current.position.set(A_POS.x - apart, A_POS.y + Math.sin(t * 0.52) * 0.06, A_POS.z);
       budA.current.rotation.set(0.05 + nudge("A"), 0.55 + Math.sin(t * 0.31) * 0.22, 0.16 + nudge("A"));
     }
     if (budB.current) {
-      budB.current.position.set(B_POS.x, B_POS.y + Math.sin(t * 0.52 + 1.7) * 0.06 + lift, B_POS.z);
+      budB.current.position.set(B_POS.x + apart, B_POS.y + Math.sin(t * 0.52 + 1.7) * 0.06, B_POS.z);
       budB.current.rotation.set(0.05 + nudge("B"), -0.55 + Math.sin(t * 0.31 + 2.1) * 0.22, -0.16 - nudge("B"));
     }
-    if (lightA.current) lightA.current.intensity = 34 + flareA * 320;
-    if (lightB.current) lightB.current.intensity = 34 + flareB * 320;
+    if (lightA.current) {
+      lightA.current.position.x = -4.6 - apart;
+      lightA.current.intensity = 34 + flareA * 320;
+    }
+    if (lightB.current) {
+      lightB.current.position.x = 4.6 + apart;
+      lightB.current.intensity = 34 + flareB * 320;
+    }
     if (dust.current) {
       dust.current.rotation.y = t * 0.012;
       dust.current.position.y = t * 0.01;
@@ -174,6 +183,14 @@ export function Scene({ clock, labels, onTime, onFrame, onReady }: Props) {
       dot.visible = pop > 0;
       dot.scale.setScalar(0.55 + pop * 0.45);
       (dot.material as MeshBasicMaterial).opacity = pop;
+      const label = revealLabels.current[i];
+      if (!label) return;
+      label.style.visibility = pop > 0.001 ? "visible" : "hidden";
+      if (pop > 0.001) {
+        revealDot(i, point).project(camera);
+        label.style.transform = "translate3d(" + ((point.x * 0.5 + 0.5) * size.width).toFixed(1) + "px," + ((0.5 - point.y * 0.5) * size.height).toFixed(1) + "px,0)";
+        label.style.opacity = String(pop);
+      }
     });
 
     onTime(t);
@@ -224,8 +241,8 @@ export function Scene({ clock, labels, onTime, onFrame, onReady }: Props) {
       </mesh>
 
       {REVEAL_PULSES.map((pulse, i) => (
-        <mesh key={pulse.id} ref={node => { dots.current[i] = node; }} position={[-1.7 + (3.4 * i) / (REVEAL_PULSES.length - 1), REVEAL_Y, 0.3]}>
-          <sphereGeometry args={[0.075, 32, 32]} />
+        <mesh key={pulse.id} ref={node => { dots.current[i] = node; }} position={revealDot(i, new Vector3())}>
+          <sphereGeometry args={[0.095, 32, 32]} />
           <meshBasicMaterial color={new Color(pulse.color).multiplyScalar(HDR)} toneMapped={false} transparent />
         </mesh>
       ))}

@@ -4,7 +4,7 @@ import "../tokens.css";
 import "./film.css";
 import { Scene } from "./Scene";
 import { BEATS } from "./timeline";
-import { PULSES, SEAT_B, easeOut, ramp } from "./choreo";
+import { PULSES, REVEAL_PULSES, SEAT_A, SEAT_B, easeOut, ramp } from "./choreo";
 
 type Clock = { current: number };
 
@@ -16,15 +16,25 @@ export function Film({ t, clock, copy = true, onFrame, onReady }: Props) {
   const source = clock ?? own;
   if (t !== undefined && !clock) own.current = t;
   const labels = useRef<(HTMLDivElement | null)[]>([]);
+  const revealLabels = useRef<(HTMLDivElement | null)[]>([]);
+  const title = useRef<HTMLParagraphElement>(null);
+  const veil = useRef<HTMLDivElement>(null);
   const lines = useRef<(HTMLParagraphElement | null)[]>([]);
   const words = useMemo(() => BEATS.map(beat => beat.line.split(" ")), []);
 
   const onTime = useCallback((now: number) => {
+    if (veil.current) veil.current.style.opacity = String(1 - ramp(now, 0.9, 2.6));
+    if (title.current) {
+      const shown = 1 - ramp(now, 0.5, 1.5);
+      title.current.style.opacity = String(shown);
+      title.current.style.visibility = shown > 0 ? "visible" : "hidden";
+      title.current.style.transform = "scale(" + (1 + now * 0.03).toFixed(4) + ")";
+    }
     BEATS.forEach((beat, i) => {
       const line = lines.current[i];
       if (!line) return;
       const start = beat.start + (i === 0 ? 3.8 : 1.0);
-      const out = 1 - ramp(now, beat.end - 0.9, beat.end - 0.3);
+      const out = i === BEATS.length - 1 ? 1 : 1 - ramp(now, beat.end - 0.9, beat.end - 0.3);
       const visible = now >= start && out > 0;
       line.style.visibility = visible ? "visible" : "hidden";
       if (!visible) return;
@@ -48,10 +58,17 @@ export function Film({ t, clock, copy = true, onFrame, onReady }: Props) {
         aria-hidden
       >
         <Suspense fallback={null}>
-          <Scene clock={source} labels={labels} onTime={onTime} onFrame={onFrame} onReady={onReady} />
+          <Scene clock={source} labels={labels} revealLabels={revealLabels} onTime={onTime} onFrame={onFrame} onReady={onReady} />
         </Suspense>
       </Canvas>
+      <div className="film-veil" ref={veil} />
+      {copy && <p className="film-title" ref={title}>Telepathy</p>}
       <div className="film-labels">
+        {REVEAL_PULSES.map((pulse, i) => (
+          <div key={pulse.id} className="film-anchor" ref={node => { revealLabels.current[i] = node; }}>
+            <div className="film-tick" data-seat={pulse.color === SEAT_A ? "A" : "B"} data-side={i % 2 ? "above" : "below"}>{pulse.reveal}</div>
+          </div>
+        ))}
         {PULSES.map((pulse, i) => pulse.label && (
           <div key={pulse.id} className="film-anchor" ref={node => { labels.current[i] = node; }}>
             <div className="film-label" data-at={pulse.label.at} data-seat={pulse.color === SEAT_B ? "B" : "N"}>
