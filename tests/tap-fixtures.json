@@ -1,0 +1,20 @@
+{
+  "source": "Hand-authored timestamp traces in the same format exported by Calibration. No physical AirPods recording was available.",
+  "traces": [
+    { "label": "R1 with bounce", "mode": 2, "events": [["nexttrack",83],["nexttrack",119]], "signals": ["R1"] },
+    { "label": "R2 at the fast limit", "mode": 2, "events": [["nexttrack",69],["nexttrack",609]], "signals": ["R2"] },
+    { "label": "R2 too slow", "mode": 2, "events": [["nexttrack",79],["nexttrack",620]], "signals": [], "errors": 1 },
+    { "label": "single Left", "mode": 2, "events": [["previoustrack",75]], "signals": ["L1"] },
+    { "label": "two Lefts", "mode": 2, "events": [["previoustrack",54],["previoustrack",373]], "signals": ["L2"] },
+    { "label": "Left then Right", "mode": 2, "events": [["previoustrack",40],["nexttrack",489]], "signals": ["LR"] },
+    { "label": "Right then Left", "mode": 2, "events": [["nexttrack",70],["previoustrack",430]], "signals": [], "errors": 1 },
+    { "label": "Left then Right too slow", "mode": 2, "events": [["previoustrack",50],["nexttrack",1101]], "signals": [], "errors": 1 },
+    { "label": "Earbud out, duplicate pause, back", "mode": 2, "events": [["play",55],["pause",800],["pause",830],["play",2010],["play",2040]], "signals": ["OUT","BACK"] },
+    { "label": "one left counts as R1", "mode": 1, "events": [["previoustrack",88]], "signals": ["R1"] },
+    { "label": "one-ear fast two", "mode": 1, "events": [["previoustrack",77],["previoustrack",406]], "signals": ["R2"] },
+    { "label": "one-ear slow two", "mode": 1, "events": [["nexttrack",56],["nexttrack",656]], "signals": ["L2"] },
+    { "label": "one-ear dead band", "mode": 1, "events": [["nexttrack",56],["nexttrack",654]], "signals": [], "errors": 1 },
+    { "label": "one-ear fast three", "mode": 1, "events": [["nexttrack",56],["nexttrack",359],["nexttrack",828]], "signals": ["LR"] },
+    { "label": "separate gestures", "mode": 2, "events": [["nexttrack",50],["nexttrack",1250]], "signals": ["R1","R1"] }
+  ]
+}

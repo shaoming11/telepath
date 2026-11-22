@@ -1,0 +1,573 @@
+{
+  "version": 1,
+  "generated": "ElevenLabs only: cues via /v1/sound-generation, speech via TTS with premade stock voices",
+  "model": "eleven_flash_v2_5",
+  "voices": {
+    "A": {
+      "id": "nPczCjzI2devNBz1zQrb",
+      "name": "Brian",
+      "label": "stock voice (simulated seat), not a clone"
+    },
+    "B": {
+      "id": "EXAVITQu4vr4xnSDxMaL",
+      "name": "Sarah",
+      "label": "stock voice (simulated seat), not a clone"
+    },
+    "assistant": {
+      "id": "SAz9YHcvj6GT2YYXdXww",
+      "name": "River",
+      "label": "stock voice (simulated seat), not a clone"
+    }
+  },
+  "keepalive": "keepalive.wav",
+  "cues": {
+    "soft": {
+      "file": "cue-soft.mp3",
+      "bytes": 17179,
+      "sha256": "fdb35e688f1fe2fc6b2d27f21029b37a138d74529163ddf4dd0644a097939bdf",
+      "prompt": "Soft gentle two-note glass chime notification, warm and quiet, clean tone, no background noise",
+      "seconds": 1
+    },
+    "urgent": {
+      "file": "cue-urgent.mp3",
+      "bytes": 20105,
+      "sha256": "a62daa7f22f474ad02ba39357abc605bbcfd3c471250a1d0680226d7cf5074f9",
+      "prompt": "Urgent sharp triple bell alert chime, rising pitch, bright and insistent, short, no background noise",
+      "seconds": 1.2
+    },
+    "draft": {
+      "file": "cue-draft.mp3",
+      "bytes": 15089,
+      "sha256": "68e9cdfcbe1596deeee57fefc463079c061709b6fc8c6f374c29a8616b0fddae",
+      "prompt": "Curious questioning marimba blip, two soft rising notes like a polite question, short, no background noise",
+      "seconds": 0.9
+    },
+    "sent": {
+      "file": "cue-sent.mp3",
+      "bytes": 8820,
+      "sha256": "bf2ff11c28b7efbf68c2b74586ca3831b8e083579a066c17ecf0797e54884a24",
+      "prompt": "Tiny crisp dry tick click confirmation, very short and subtle, no reverb",
+      "seconds": 0.5
+    },
+    "receipt": {
+      "file": "cue-receipt.mp3",
+      "bytes": 13835,
+      "sha256": "e231e31c90c00199812ff6064cb3d11b200bd896b8549739b1620cdab420967b",
+      "prompt": "Two clear audible bright soft pops, upbeat acknowledgement, prominent mid-range bubble notes, full volume, short",
+      "seconds": 0.8
+    },
+    "error": {
+      "file": "cue-error.mp3",
+      "bytes": 12163,
+      "sha256": "2d54b116669b5c29ba542f82f15de4cf021267aa29c2310cf31d622db488e567",
+      "prompt": "Short low dull descending error buzz, harsh and flat, negative feedback tone, no background noise",
+      "seconds": 0.7
+    },
+    "system": {
+      "file": "cue-system.mp3",
+      "bytes": 17179,
+      "sha256": "3c804edac174fcd20d61737b14168f11030081fb1a8116e4c38deca6cee06242",
+      "prompt": "Neutral clean single mid-pitch bell tone system notice, simple and calm, no background noise",
+      "seconds": 1
+    },
+    "back": {
+      "file": "cue-back.mp3",
+      "bytes": 13835,
+      "sha256": "fbe257af459fea76acfd39f2f013d05b81636093ec4400cccec93d2503870bcd",
+      "prompt": "A single short smooth upward swipe whoosh, soft and clean, rising in pitch, no glitch, no buzz, no clicks",
+      "seconds": 0.8
+    }
+  },
+  "lines": [
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "R1",
+      "text": "Slow down",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-b891b7b99d.mp3",
+      "bytes": 6103,
+      "sha256": "aae480b38bc5b080fd7df2fcd6d24d3fab768d5e7a849b1fd84687122ecb93b3"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "R2",
+      "text": "One minute left",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-1453a5a06c.mp3",
+      "bytes": 8820,
+      "sha256": "24997980e1dc2e3049a3b78e018a4644bac3c6d0c69b42d3541e8f042ee229f6"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "L1",
+      "text": "Show the demo now",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-33d4873bf3.mp3",
+      "bytes": 8402,
+      "sha256": "4f99ca7d1f5fe2b214cf42c3f8a749ad3872e55cb75c1519fb839c7c608d813c"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "OUT",
+      "text": "Wrap it up now",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-e03ed82538.mp3",
+      "bytes": 7566,
+      "sha256": "63a2fcbeb21e26de411d53e21371ffbb0ca2f882ac612b93dd8eaf2640ce3d13"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "R1",
+      "text": "Come find me",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-ba6cb7fed3.mp3",
+      "bytes": 7566,
+      "sha256": "a7d989c12ddff6ee4b68deb260bb6157a7be1fd7619907efaebec2c1c34ce063"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "R2",
+      "text": "Save me from this conversation",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-275565ea3d.mp3",
+      "bytes": 12372,
+      "sha256": "dd8eec313a04cc0ac35794ee4045b530880f5b552b22cbbab70a2760742d96b0"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "L1",
+      "text": "I'm good, stay",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-301e0e0cb7.mp3",
+      "bytes": 10909,
+      "sha256": "16309d1019daa3232f202f8e5a0800a066cb08183ba53e14a7b71fb06d14f2cf"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "OUT",
+      "text": "Let's leave",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-f9355d604e.mp3",
+      "bytes": 6521,
+      "sha256": "eb3f8cef72d3fb401b6114e2a4052750ffee32eb594db7919fe7aa5d494c1fbd"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "R1",
+      "text": "Are you following?",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-23c1491a0b.mp3",
+      "bytes": 9029,
+      "sha256": "2866724ba3140040a7bc5763306e261c86e7d2cf82586367b4392c998a4aa2ff"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "R2",
+      "text": "Let's talk after",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-32fb8c6284.mp3",
+      "bytes": 10283,
+      "sha256": "876d9c430dcf12a741c8a15c98dfeae5dea7467d5264bf8813a8beb4e608f604"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "L1",
+      "text": "I agree, back it up",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-61a6751f62.mp3",
+      "bytes": 10283,
+      "sha256": "1464ef37d47c16016c292de527b783b8743e3bdd6074d8cb9a76d780946be848"
+    },
+    {
+      "role": "A",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "OUT",
+      "text": "I'm stepping out",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-09aa62d6e8.mp3",
+      "bytes": 9447,
+      "sha256": "a32cde4c18d2a7db9522260ea62232b8c2e9056183296469895d72f6b625653f"
+    },
+    {
+      "role": "A",
+      "kind": "sent_draft",
+      "text": "The judge on the left looks lost",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-965b1e5c03.mp3",
+      "bytes": 15716,
+      "sha256": "bd5e28ce6e5523ad7e441736eccfedee7ae5b9e6b2288ca1566c9882687bd9fb"
+    },
+    {
+      "role": "A",
+      "kind": "sent_draft",
+      "text": "Show the working demo now",
+      "voiceId": "nPczCjzI2devNBz1zQrb",
+      "file": "line-a-fce210950a.mp3",
+      "bytes": 10909,
+      "sha256": "ebccf4a832b07f461658b571ef9595c5003184986eed773cbf0764b550dfb8ef"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "R1",
+      "text": "Slow down",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-2bcfbd5567.mp3",
+      "bytes": 6521,
+      "sha256": "74bf912d6d7ab880ac8f58f0678dee096d05665df878f57d06825fe8f7a43c6c"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "R2",
+      "text": "One minute left",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-2d7efd2fdb.mp3",
+      "bytes": 8820,
+      "sha256": "ab3634fede17075247aa102a988373147fef1a73baeecae298453222eee1de28"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "L1",
+      "text": "Show the demo now",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-e86f721f14.mp3",
+      "bytes": 7984,
+      "sha256": "55001d366c184170a5820026415b61845ece3bc780a1a18ef1a8bc68f560b503"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Pitch",
+      "signal": "OUT",
+      "text": "Wrap it up now",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-3533f01cf4.mp3",
+      "bytes": 6939,
+      "sha256": "48eaae6c8179c1e17ba21e88364ce3a7ce23c913c3a0af98f444031f055b475c"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "R1",
+      "text": "Come find me",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-1d3d33a132.mp3",
+      "bytes": 8820,
+      "sha256": "492d6e81f3b4f33e92649ab0e03a00f86864492a94c24a2ef0330bab74f2668e"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "R2",
+      "text": "Save me from this conversation",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-6225afa601.mp3",
+      "bytes": 13626,
+      "sha256": "3dc93f51d528d86415641a096fceeda6ea63535f25a7220cdd5384f727ef172f"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "L1",
+      "text": "I'm good, stay",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-dac8960ced.mp3",
+      "bytes": 7566,
+      "sha256": "642ffdf82dc3d66b587f25254da3e54913531c5456e1a48919fbe76f05625a37"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Party",
+      "signal": "OUT",
+      "text": "Let's leave",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-7f90d3e711.mp3",
+      "bytes": 6939,
+      "sha256": "7be5ca5f9a691cf603276598cfc267ca27a90275318ebf7536ecb2fd7df6071d"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "R1",
+      "text": "Are you following?",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-05271317fe.mp3",
+      "bytes": 7984,
+      "sha256": "2fdac6771cb8a5a67cdca453cf1f075c0a4e97e80060139d74e211af6c9d0371"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "R2",
+      "text": "Let's talk after",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-e2667159a0.mp3",
+      "bytes": 9029,
+      "sha256": "db48451f34c40bc99e400d00301b3b3110fce55ce522a0b1c195fd880648a98b"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "L1",
+      "text": "I agree, back it up",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-51d324af87.mp3",
+      "bytes": 12163,
+      "sha256": "aea54001567d91fdd306b72ee1e2a34ff02f2e35a120392185ebd02351dc435e"
+    },
+    {
+      "role": "B",
+      "kind": "fixed",
+      "preset": "Meeting",
+      "signal": "OUT",
+      "text": "I'm stepping out",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-fbb60f6490.mp3",
+      "bytes": 7984,
+      "sha256": "8b14c14bae5cd6725b696b97efa2f38fd773565dc2e1a37d31917a979e96dea6"
+    },
+    {
+      "role": "B",
+      "kind": "sent_draft",
+      "text": "The judge on the left looks lost",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-7d488a02d1.mp3",
+      "bytes": 15089,
+      "sha256": "1511be8d390d0be9ff5ea68d6279d4b379ea3dacf58c7f0d49493f83bf79a237"
+    },
+    {
+      "role": "B",
+      "kind": "sent_draft",
+      "text": "Show the working demo now",
+      "voiceId": "EXAVITQu4vr4xnSDxMaL",
+      "file": "line-b-f390412ad4.mp3",
+      "bytes": 10492,
+      "sha256": "56888c86b08569d4625009a63d7d306573cc3f923903c1afe32b15e115d114e6"
+    },
+    {
+      "role": "assistant",
+      "kind": "draft",
+      "text": "Send: The judge on the left looks lost?",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-9bd17a3224.mp3",
+      "bytes": 16970,
+      "sha256": "05f2f0f7193be40bfe6d4a8079cfe2db7e6579f9c76089692b258c53262dd14d"
+    },
+    {
+      "role": "assistant",
+      "kind": "draft",
+      "text": "Send: Show the working demo now?",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-7a5aaf77d8.mp3",
+      "bytes": 16552,
+      "sha256": "dadac52916ee2f20e78bf312d135d424ea1015068ffcfa49972b9cd3b22a7731"
+    },
+    {
+      "role": "assistant",
+      "kind": "codebook",
+      "preset": "Pitch",
+      "mode": 2,
+      "speed": 1.2,
+      "text": "Single, Slow down. Double, One minute left. Triple, Show the demo now. Out, Wrap it up now.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-1331668df6.mp3",
+      "bytes": 35569,
+      "sha256": "666623afdfc46c08b92448d62d59a31c9beaaac7ed6cf6b6a25d907f568ad6a4"
+    },
+    {
+      "role": "assistant",
+      "kind": "codebook",
+      "preset": "Pitch",
+      "mode": 1,
+      "speed": 1.2,
+      "text": "Tap, Slow down. Double tap, One minute left. Out, Wrap it up now.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-16934119f9.mp3",
+      "bytes": 31807,
+      "sha256": "5f6aa289fb9abb29cbf4e5b3d31ed1825960f88b2c428e5e5f4bae5b9307f7c9"
+    },
+    {
+      "role": "assistant",
+      "kind": "codebook",
+      "preset": "Party",
+      "mode": 2,
+      "speed": 1.2,
+      "text": "Single, Find me. Double, Rescue me. Triple, I'm good. Out, Leave.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-3e969fba74.mp3",
+      "bytes": 28464,
+      "sha256": "95f514e69e7b39406d252004560b57aff3f30f9c29227037468110bd1aea0b93"
+    },
+    {
+      "role": "assistant",
+      "kind": "codebook",
+      "preset": "Party",
+      "mode": 1,
+      "speed": 1.2,
+      "text": "Tap, Come find me. Double tap, Save me from this conversation. Out, Let's leave.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-7a09917209.mp3",
+      "bytes": 31807,
+      "sha256": "54ca6ab432cf53c5d573d25fa32e658cce3236553d2b97a9c4c3d2423426b282"
+    },
+    {
+      "role": "assistant",
+      "kind": "codebook",
+      "preset": "Meeting",
+      "mode": 2,
+      "speed": 1.2,
+      "text": "Single, Following? Double, Talk later. Triple, Back me up. Out, Stepping out.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-54f9ecc9a5.mp3",
+      "bytes": 27001,
+      "sha256": "9d2899c2310189cd4e32da5af97b7a39b303cc3351696ef22019bddbf40c1a08"
+    },
+    {
+      "role": "assistant",
+      "kind": "codebook",
+      "preset": "Meeting",
+      "mode": 1,
+      "speed": 1.2,
+      "text": "Tap, Are you following? Double tap, Let's talk after. Out, I'm stepping out.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-4f6699ec6d.mp3",
+      "bytes": 28464,
+      "sha256": "511ba6ccb637880a4d807067369694eb7bd04034f9f35f6171899f4bec95cf0c"
+    },
+    {
+      "role": "assistant",
+      "kind": "status",
+      "id": "sounds_like_pitch",
+      "text": "Sounds like a pitch. Use one gesture to switch.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-63bf932db2.mp3",
+      "bytes": 18851,
+      "sha256": "2d22e2119d4e4696f50dc0b0deeff1a5e2e23543970add8835abb8068930f6b4"
+    },
+    {
+      "role": "assistant",
+      "kind": "status",
+      "id": "sounds_like_party",
+      "text": "Sounds like a party. Use one gesture to switch.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-3cbd6db581.mp3",
+      "bytes": 20523,
+      "sha256": "d96af015d923371c98815c57a94f6d019ded914dd9e1e49af8b7e7876bc09ec8"
+    },
+    {
+      "role": "assistant",
+      "kind": "status",
+      "id": "sounds_like_meeting",
+      "text": "Sounds like a meeting. Use one gesture to switch.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-844b38a25a.mp3",
+      "bytes": 21358,
+      "sha256": "5ec95dedcf1ae8beed08d0f9bb3184ae0e3cb0f0ee8344824c042237c3252d9c"
+    },
+    {
+      "role": "assistant",
+      "kind": "status",
+      "id": "switched",
+      "text": "Preset switched.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-94fe0a4e10.mp3",
+      "bytes": 9447,
+      "sha256": "bede1756b2b002cd064a074cbf4a2f87694dbf32bd593f313d72280d29f1ab01"
+    },
+    {
+      "role": "assistant",
+      "kind": "status",
+      "id": "test_left",
+      "text": "This is the left earbud.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-f20d42b9d7.mp3",
+      "bytes": 10909,
+      "sha256": "2bd0b23da4317daddaaaa1099b527fc75248f925f45dc51bab88971d9c161b2e"
+    },
+    {
+      "role": "assistant",
+      "kind": "status",
+      "id": "test_right",
+      "text": "This is the right earbud.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-869d93d8aa.mp3",
+      "bytes": 11327,
+      "sha256": "55797e691c35c20cef687fc20c53633ada911ab9aa28b6212b46c20f270d2076"
+    },
+    {
+      "role": "assistant",
+      "kind": "announcement",
+      "id": "sound-check",
+      "text": "Sound check. Can you hear me?",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-ee9dd27dfd.mp3",
+      "bytes": 12372,
+      "sha256": "afc14c6ee025d4d324476da2a8f584f33c89335a0d48c39ede55c98f04e5abdc"
+    },
+    {
+      "role": "assistant",
+      "kind": "announcement",
+      "id": "demo-cue",
+      "text": "Show the working demo now.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-91c6355039.mp3",
+      "bytes": 12372,
+      "sha256": "f54e1f86021a57a0e0eb79f037cf51438d6bee290e215dc725cbda5815099f3c"
+    },
+    {
+      "role": "assistant",
+      "kind": "announcement",
+      "id": "time-cue",
+      "text": "Thirty seconds left.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-afbd0d0c76.mp3",
+      "bytes": 10909,
+      "sha256": "200a2b94cdc9afb6296597dcde2d65757aca8250e3b87c6143c1f270c1c64ed4"
+    },
+    {
+      "role": "assistant",
+      "kind": "announcement",
+      "id": "reveal-cue",
+      "text": "Time to bring up the reveal.",
+      "voiceId": "SAz9YHcvj6GT2YYXdXww",
+      "file": "line-asst-2924c0a08e.mp3",
+      "bytes": 12163,
+      "sha256": "145ae62816175ab17a37b42356ee7ffdd64a1b4b776544f3ebd17e28890a4aa8"
+    }
+  ]
+}
