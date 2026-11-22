@@ -28,7 +28,7 @@ Provenance key: **3D** = the parent session's time-seekable film at `/film`, cap
 
 ## Sound
 
-Synthesised locally by `audio/make_audio.py` (numpy and scipy): drone, pads, plucks, hits, taps, whooshes, riser. The whisper chime, receipt, draft and sent cues and the three spoken lines are the app's own files from `public/assets`. Seat B is panned right and Seat A left, matching the picture. Mixed to about -15 LUFS with peaks under -1 dBFS.
+Synthesised locally by `audio/make_audio.py` (numpy and scipy): drone, pads, plucks, hits, taps, whooshes, riser. The whisper chime, receipt, draft and sent cues and the three spoken lines are the app's own files from `public/assets`. Seat B is panned right and Seat A left, matching the picture. Measured on the delivered MP4: -14.7 LUFS integrated, 4.2 LU loudness range, true peak -1.6 dBFS.
 
 ## Fallback cut
 
