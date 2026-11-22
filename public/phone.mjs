@@ -3,6 +3,7 @@ import { createNetworkLink, DEFAULT_NETWORK } from './network.mjs';
 import { createCapture } from './capture.mjs';
 import { createCalibration } from './calibrate.mjs';
 import { createAudioEngine, createDraftTracker } from './phone-audio.mjs';
+import { AIRPODS_1_ID, AIRPODS_1_PLAYBACK_URL } from './earbuds/airpods-1/input.mjs';
 import {
   APP_TIMING, APP_TIMING_LIMITS, CONSENT_KEY, CONSENT_TEXT, DEFAULT_VOLUMES, PATTERN_LABELS, PRESETS,
   SEAT_NAMES, SIGNAL_LABELS, SIGNAL_ORDER, STORAGE_KEY, SYSTEM_MEANINGS, VOICE_SCRIPT,
@@ -55,6 +56,9 @@ const ui = {
   listen_wanted: false,
   mic_on_next_take: false,
   mic_after_calibration: false,
+  calibration_playback: false,
+  lock_controls: false,
+  mic_after_lock_controls: false,
   voice_task: null,
   voice_sample: null,
   voice_transcript_start: 0,
@@ -372,9 +376,19 @@ function set_playback_state(state) {
 }
 
 function resume_anchor() {
+  const airpods_playback = !is_sim() && settings.gesture_model === AIRPODS_1_ID
+    && (ui.lock_controls || ui.calibration_playback);
+  const source = airpods_playback ? AIRPODS_1_PLAYBACK_URL : '/assets/keepalive.wav';
+  if (keepalive.getAttribute('src') !== source) {
+    ui.anchor_pause_expected = !keepalive.paused;
+    keepalive.src = source;
+  }
+  if (airpods_playback) {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch {}
+  }
   const playing = keepalive.play();
-  set_playback_state('playing');
   playing?.then?.(() => {
+    set_playback_state('playing');
     if (ui.issues.get('media')?.anchor) set_issue('media', '');
   }).catch(() => {
     if (is_sim()) return;
@@ -408,7 +422,7 @@ function arm_media() {
 }
 
 async function acquire_wake_lock() {
-  if (!navigator.wakeLock || document.visibilityState !== 'visible' || ui.wake_lock) return;
+  if (!navigator.wakeLock || ui.lock_controls || document.visibilityState !== 'visible' || ui.wake_lock) return;
   try {
     ui.wake_lock = await navigator.wakeLock.request('screen');
     ui.wake_lock.addEventListener('release', () => { ui.wake_lock = null; });
@@ -556,7 +570,8 @@ function on_state(next, source) {
     audio.cancel_previews();
     audio.cancel_announcements();
     clear_clone_request();
-    ui.mic_on_next_take ||= ui.listen_wanted;
+    ui.mic_on_next_take ||= ui.listen_wanted || ui.mic_after_lock_controls;
+    if (ui.lock_controls) set_lock_controls(false, { restore_mic: false });
     if (capture.open || capture.opening || ui.listen_wanted) stop_mic();
   }
   if (!source.synced || new_session || previous?.sessionId !== next.sessionId) reconcile(next, source);
@@ -751,7 +766,8 @@ function on_capture_state(status, detail) {
 }
 
 async function start_mic() {
-  if (is_sim() || !has_consent() || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
+  if (is_sim() || ui.lock_controls || ui.calibration_playback || !has_consent()
+    || ui.state?.phase === 'reveal' || ui.state?.canned) return false;
   ui.listen_wanted = true;
   const opened = await capture.start();
   if (opened) sync_listen();
@@ -767,7 +783,8 @@ function stop_mic() {
 }
 
 function arm_calibration_media() {
-  if (!is_sim() && settings.gesture_model === 'next-only'
+  ui.calibration_playback = !is_sim() && settings.gesture_model === AIRPODS_1_ID;
+  if (ui.calibration_playback
     && (capture.open || capture.opening || ui.listen_wanted)) {
     ui.mic_after_calibration = true;
     ui.anchor_pause_expected = !keepalive.paused;
@@ -775,6 +792,24 @@ function arm_calibration_media() {
     stop_mic();
   }
   arm_media();
+}
+
+function set_lock_controls(enabled, { restore_mic = true } = {}) {
+  if (enabled === ui.lock_controls) return;
+  ui.lock_controls = enabled;
+  if (enabled) {
+    ui.mic_after_lock_controls = ui.listen_wanted || capture.open || capture.opening;
+    if (ui.mic_after_lock_controls) stop_mic();
+    ui.wake_lock?.release?.().catch(() => {});
+    ui.earbud_out = false;
+    arm_media();
+  } else {
+    const resume_mic = ui.mic_after_lock_controls && restore_mic;
+    ui.mic_after_lock_controls = false;
+    if (resume_mic) void start_mic();
+    else if (ui.seat) resume_anchor();
+  }
+  render();
 }
 
 /* Navigation. */
@@ -791,6 +826,7 @@ function next_setup_screen() {
 function go(screen, options = {}) {
   const resume_mic = ui.screen === 'calibrate' && screen !== 'calibrate' && ui.mic_after_calibration;
   if (resume_mic) ui.mic_after_calibration = false;
+  if (screen !== 'calibrate') ui.calibration_playback = false;
   ui.screen = screen;
   for (const section of document.querySelectorAll('.screen')) {
     const active = section.dataset.screen === screen;
@@ -835,6 +871,8 @@ function go_back() {
 }
 
 function leave_seat() {
+  ui.lock_controls = false;
+  ui.mic_after_lock_controls = false;
   clear_clone_request();
   const previous = connection;
   connection = null;
@@ -1292,6 +1330,10 @@ function render_live() {
   listen.dataset.state = is_sim() ? 'sim' : listening ? 'on' : 'off';
   set_text($('live-listen-text'), is_sim() ? 'Simulated' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
   set_text($('live-cache'), ui.failed_manifest ? 'Failed' : mine?.ready ? 'Cached' : state?.presetPending ? 'Caching' : 'Not ready');
+  $('lock-controls').hidden = is_sim() || settings.gesture_model !== AIRPODS_1_ID || phase === 'reveal' || Boolean(state?.canned);
+  $('lock-controls-toggle').setAttribute('aria-pressed', String(ui.lock_controls));
+  set_text($('lock-controls-toggle'), ui.lock_controls ? 'Disable lock-screen controls' : 'Enable lock-screen controls');
+  set_text($('lock-controls-status'), ui.lock_controls ? 'Room mic paused on this phone.' : '');
 
   render_draft(mine?.pending ?? null);
   render_message('in', mine?.lastIn, 'last_in_id');
@@ -1390,6 +1432,7 @@ function render_settings() {
 function set_earbud_model(model) {
   if (!['next-only', 'pro'].includes(model) || settings.gesture_model === model) return;
   settings.gesture_model = model;
+  if (ui.lock_controls && model !== AIRPODS_1_ID) set_lock_controls(false);
   input.configure({ gestureModel: is_sim() ? null : model });
   ui.signals_key = '';
   save_settings();
@@ -1400,8 +1443,11 @@ function bind_events() {
   $('nav-back').addEventListener('click', go_back);
   keepalive.addEventListener('pause', on_anchor_paused);
   keepalive.addEventListener('playing', () => {
+    set_playback_state('playing');
     if (ui.issues.get('media')?.anchor) set_issue('media', '');
   });
+  keepalive.addEventListener('timeupdate', () => input.flushAirPods1IfDue());
+  $('lock-controls-toggle').addEventListener('click', () => set_lock_controls(!ui.lock_controls));
 
   for (const button of document.querySelectorAll('.seat')) {
     button.addEventListener('click', () => join(button.dataset.seat));
@@ -1515,6 +1561,7 @@ function bind_events() {
         go('voice');
         return;
       }
+      set_lock_controls(false, { restore_mic: false });
       arm_media();
       void start_mic();
     } else {
@@ -1558,6 +1605,7 @@ function bind_events() {
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
+    input.flushAirPods1IfDue();
     void acquire_wake_lock();
     void audio.resume();
     if (ui.listen_wanted && !capture.open && !is_sim()) void start_mic();
