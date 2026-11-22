@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Telepathy room mic</title>
+  <link rel="stylesheet" href="/phone.css">
+</head>
+<body>
+  <main class="app">
+    <section class="screen">
+      <h1 class="display">Room mic</h1>
+      <p>Use this device to listen while the primary iPhone stays in earbud playback mode.</p>
+      <label class="field" for="room-seat"><span>Route audio to</span>
+        <select id="room-seat"><option value="A">Seat A</option><option value="B">Seat B</option></select>
+      </label>
+      <button class="primary" id="room-start" type="button">Start room mic</button>
+      <button id="room-stop" type="button" hidden>Stop room mic</button>
+      <p id="room-status" class="meta" role="status">Confirm everyone in the room agrees to transcription before starting.</p>
+      <a href="/stage">Return to Stage</a>
+    </section>
+  </main>
+  <script type="module" src="/room-mic.mjs"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ const restore = world.install();
 const elements = new Map();
 const sockets = [];
 const media_actions = new Map();
+const document_listeners = new Map();
 const mic_tracks = [];
 const mic_nodes = [];
 const fake_microphone = {
@@ -81,7 +82,7 @@ const globals = {
     querySelectorAll: selector => (selector === '.seat' ? seat_buttons : []),
     querySelector: () => null,
     createElement: () => make_element('created'),
-    addEventListener() {},
+    addEventListener(name, handler) { document_listeners.set(name, handler); },
     body: make_element('body'),
   },
   window: { isSecureContext: true, scrollTo() {} },
@@ -280,6 +281,23 @@ test('Reveal releases the physical mic and the next take resumes previously cons
   assert.equal(mic_tracks.at(-1).readyState, 'live');
 });
 
+test('Mac input releases the phone room microphone and leaves approval controls available', async () => {
+  const current = mic_tracks.at(-1);
+  socket.sent.length = 0;
+  socket.receive({ type: 'state', state: seat_state(draft({ heardAt: 1800, expiresAt: 999999 }), {
+    roomInput: 'mac', room: { listening: true, transcription: 'live' },
+  }) });
+  await settle();
+  assert.equal(current.readyState, 'ended');
+  assert.match(get_element('live-listen-text').textContent, /Mac listening/);
+  assert.equal(get_element('draft-send').disabled, false);
+  assert.equal(socket.sent.some(frame => frame.type === 'listen' && frame.enabled), false);
+  const count = mic_tracks.length;
+  socket.receive({ type: 'state', state: seat_state(null, { roomInput: 'mac', room: { transcription: 'off' }, phase: 'lobby', sessionId: '3' }) });
+  await settle();
+  assert.equal(mic_tracks.length, count);
+});
+
 test('a rejected clone stays on the voice screen with the provider reason and a retry', async () => {
   get_element('settings-voice').listeners.click[0]();
   get_element('voice-record').listeners.click[0]();
@@ -290,6 +308,7 @@ test('a rejected clone stays on the voice screen with the provider reason and a 
   assert.ok(upload?.requestId);
   assert.match(get_element('voice-status').textContent, /uploading/i);
   assert.equal(get_element('voice-record').disabled, true);
+  assert.equal(mic_tracks.at(-1).readyState, 'ended', 're-recording releases the phone mic');
   socket.receive({
     type: 'voice_status', status: 'fallback', requestId: upload.requestId,
     detail: 'ElevenLabs requires voice verification.',
@@ -298,6 +317,50 @@ test('a rejected clone stays on the voice screen with the provider reason and a 
   await settle();
   assert.equal(get_element('voice-status').textContent, 'ElevenLabs requires voice verification.');
   assert.equal(get_element('voice-record').disabled, false);
+});
+
+test('AirPods 1 calibration releases mic capture until leaving setup', async () => {
+  socket.receive({ type: 'state', state: seat_state(null, { phase: 'lobby', sessionId: '2' }) });
+  get_element('settings-listen').listeners.change[0]({ target: { checked: true } });
+  await settle();
+  const before = mic_tracks.at(-1);
+  assert.equal(before.readyState, 'live');
+  get_element('settings-calibrate').listeners.click[0]();
+  get_element('cal-quick-start').listeners.click[0]();
+  await settle();
+  assert.equal(before.readyState, 'ended');
+  media_actions.get('nexttrack')();
+  assert.equal(get_element('cal-quick-nexttrack').textContent, 'Next Track received');
+  get_element('cal-skip').listeners.click[0]();
+  await settle();
+  assert.notEqual(mic_tracks.at(-1), before);
+  assert.equal(mic_tracks.at(-1).readyState, 'live');
+});
+
+test('keyboard clicker signals can be sent while the phone mic stays open', async () => {
+  socket.receive({ type: 'state', state: seat_state(null, { phase: 'live', sessionId: '2' }) });
+  get_element('nav-back').listeners.click[0]();
+  await settle();
+  const mic = mic_tracks.at(-1);
+  assert.equal(mic.readyState, 'live');
+  const before = socket.sent.length;
+  document_listeners.get('keydown')({ key: 'PageDown', preventDefault() {}, target: {} });
+  assert.ok(socket.sent.slice(before).some(frame => frame.type === 'signal' && frame.signal === 'R1'));
+  assert.equal(mic.readyState, 'live');
+});
+
+test('a full hub reset clears previously ready setup and returns the seat to Voice', async () => {
+  assert.equal(JSON.parse(stored.get(STORAGE_KEY)).setup.ready, true);
+  const reset = seat_state(null, { phase: 'lobby', sessionId: '3', setupReset: '3' });
+  reset.seats.A = { online: true, ready: false, mode: 2, voice: 'idle', calibrated: false };
+  socket.sent.length = 0;
+  socket.receive({ type: 'state', state: reset });
+  world.advance(20);
+  await settle();
+  assert.equal(JSON.parse(stored.get(STORAGE_KEY)).setup.ready, false);
+  assert.equal(stored.has(CONSENT_KEY), false);
+  assert.match(get_element('voice-status').textContent, /set up your voice/i);
+  assert.ok(!socket.sent.some(frame => frame.type === 'setup' && frame.complete));
 });
 
 test.after(() => {

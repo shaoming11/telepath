@@ -1,5 +1,6 @@
 export const AIRPODS_1_ID = 'next-only';
 export const COUNT_CALIBRATION_WINDOW_MS = 2500;
+export const AIRPODS_1_PLAYBACK_URL = '/earbuds/airpods-1/playback.mp3';
 const DEFAULT_WINDOW_MS = 1200;
 const BOUNCE_MS = 95;
 const SIGNALS = ['R1', 'R2', 'L1'];
@@ -38,6 +39,9 @@ export function createAirPods1Input({ onRaw, onSignal, onError, onPlay, now, set
       timer = setTimer(flush, window_ms);
     },
     configure({ countWindowMs }) { window_ms = countWindowMs ?? DEFAULT_WINDOW_MS; },
+    flushDue() {
+      if (events.length && now() - events.at(-1).at >= window_ms) flush();
+    },
     flush,
     reset,
   };

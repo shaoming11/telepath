@@ -38,7 +38,7 @@
       <section class="screen screen-join" id="screen-join" data-screen="join" hidden>
         <div class="join-head">
           <h1 class="display"><span class="display-dim">Two seats.</span> Pick yours.</h1>
-          <p class="lede">Setup takes about ninety seconds. Keep this screen awake for the whole session.</p>
+          <p class="lede">Setup takes about 90 seconds. Keep this screen awake.</p>
         </div>
         <div class="seat-grid">
           <button class="seat" type="button" data-seat="A"><span class="seat-letter">A</span><span class="seat-role">Presenter</span></button>
@@ -62,9 +62,9 @@
           <input type="checkbox" id="voice-consent">
           <span id="voice-consent-text"></span>
         </label>
-        <p class="setup-copy">Talk naturally. The recorder gathers usable speech and lets you pause whenever you need to.</p>
+        <p class="setup-copy">Talk naturally. Pause whenever you need to.</p>
         <details class="setup-details">
-          <summary>Something to read</summary>
+          <summary>Script to read</summary>
           <p class="script" id="voice-script"></p>
         </details>
         <div class="voice-meter" id="voice-meter" hidden>
@@ -95,7 +95,7 @@
           <label><input type="radio" name="earbud_mode" value="next-only"><span><strong>AirPods 1</strong><small>One, two, or three Next Track events</small></span></label>
           <label><input type="radio" name="earbud_mode" value="pro"><span><strong>AirPods Pro</strong><small>Single, double, or triple squeeze</small></span></label>
         </fieldset>
-        <div class="split">
+        <div class="stack">
           <button id="test-audio" type="button">Test audio</button>
         </div>
         <p class="meta" id="earbuds-status" role="status"></p>
@@ -132,21 +132,21 @@
           </ol>
           <p class="meta" id="cal-quick-status" role="status"></p>
           <details class="setup-details" id="cal-full">
-          <summary>Full timing calibration</summary>
-          <fieldset class="choice">
-            <legend>Length</legend>
-            <label><input type="radio" name="cal_scope" value="mode" checked><span><strong>This earbud mode</strong><small>About 2 minutes</small></span></label>
-            <label><input type="radio" name="cal_scope" value="both"><span><strong>Both modes</strong><small>About 5 minutes</small></span></label>
-          </fieldset>
-          <label class="check" id="cal-emulate-row">
-            <input type="checkbox" id="cal-emulate">
-            <span>Let the emulator tap</span>
-          </label>
-          <p class="meta" id="cal-start-hint" role="status"></p>
-          <p class="fineprint" id="cal-measure"></p>
-          <div class="actions">
-            <button class="primary" id="cal-start" type="button">Start</button>
-          </div>
+            <summary>Full timing calibration</summary>
+            <fieldset class="choice">
+              <legend>Length</legend>
+              <label><input type="radio" name="cal_scope" value="mode" checked><span><strong>This earbud mode</strong><small>About 2 minutes</small></span></label>
+              <label><input type="radio" name="cal_scope" value="both"><span><strong>Both modes</strong><small>About 5 minutes</small></span></label>
+            </fieldset>
+            <label class="check" id="cal-emulate-row">
+              <input type="checkbox" id="cal-emulate">
+              <span>Let the emulator tap</span>
+            </label>
+            <p class="meta" id="cal-start-hint" role="status"></p>
+            <p class="fineprint" id="cal-measure"></p>
+            <div class="actions">
+              <button class="primary" id="cal-start" type="button">Start</button>
+            </div>
           </details>
           <button class="quiet" id="cal-skip" type="button">Skip and use defaults</button>
         </div>
@@ -205,6 +205,11 @@
           <div><dt>Room</dt><dd class="listen" id="live-listen" data-state="off"><i class="dot" aria-hidden="true"></i><span id="live-listen-text"></span></dd></div>
           <div><dt>Messages</dt><dd id="live-cache"></dd></div>
         </dl>
+
+        <div class="lock-controls" id="lock-controls" hidden>
+          <button id="lock-controls-toggle" type="button" aria-pressed="false">Enable lock-screen controls</button>
+          <p class="meta" id="lock-controls-status" role="status"></p>
+        </div>
 
         <div class="draft" id="live-draft" hidden>
           <div class="draft-top">
@@ -268,7 +273,7 @@
 
         <div class="toggles">
           <label class="row-toggle"><span>AI drafts</span><input type="checkbox" id="settings-drafts"></label>
-          <label class="row-toggle" id="settings-listen-row"><span>Listen to the room</span><input type="checkbox" id="settings-listen"></label>
+          <label class="row-toggle" id="settings-listen-row"><span>Listen with the phone mic</span><input type="checkbox" id="settings-listen"></label>
         </div>
 
         <div class="ranges">
@@ -278,8 +283,14 @@
 
         <div class="split">
           <button id="settings-voice" type="button">Re-record voice</button>
-          <button id="settings-calibrate" type="button">Re-calibrate</button>
+          <button id="settings-voice-preview" type="button">Hear my clone</button>
         </div>
+        <div class="split">
+          <button id="settings-calibrate" type="button">Re-calibrate</button>
+          <button id="settings-room-invite" type="button" hidden>Share room mic link</button>
+        </div>
+        <label class="field"><input id="settings-room-link" aria-label="Room mic invite link" readonly hidden></label>
+        <p class="meta" id="settings-room-status" role="status"></p>
 
         <p class="meta" id="settings-profile" role="status"></p>
         <div id="settings-groups"></div>

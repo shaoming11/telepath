@@ -480,6 +480,21 @@ async function sttRig(opts = {}) {
   return { a, clock };
 }
 
+test('STT: shared room microphone has its own stream and reset rejects late transcripts', async () => {
+  const { a } = await sttRig();
+  const received = [];
+  await a.listen('room', true, { committed: text => received.push(text), partial: text => received.push('partial:' + text) });
+  await a.mic('room', 'QUJD', 0.2);
+  const socket = FakeWS.instances[0];
+  socket.open();
+  socket.message({ message_type: 'partial_transcript', text: 'Who buys' });
+  socket.message({ message_type: 'committed_transcript', text: 'Who buys it?' });
+  assert.deepEqual(received, ['partial:Who buys', 'Who buys it?']);
+  await a.reset();
+  socket.message({ message_type: 'committed_transcript', text: 'late' });
+  assert.equal(received.length, 2);
+});
+
 test('STT: lazy socket per seat, PCM16 16 kHz + vad, committed text delivered, partials opt-in', async () => {
   const { a } = await sttRig();
   const gotA = [];

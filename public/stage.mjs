@@ -5,6 +5,7 @@
  */
 
 import { createAudioEngine } from './phone-audio.mjs';
+import { createCapture } from './capture.mjs';
 import { APP_TIMING, SIGNAL_LABELS } from './phone-data.mjs';
 import { announcementText, OPERATOR_ANNOUNCEMENTS } from './announcements.mjs';
 
@@ -39,6 +40,7 @@ const KIND_LABELS = Object.freeze({
   discard: 'discarded', expire: 'expired', situation: 'situation', preview_playback: 'preview playback',
   confirm: 'confirmed', preset_suggestion: 'suggestion', replay: 'replay',
   back: 'earbud back', cache_error: 'cache error', announcement: 'announcement',
+  answer_evidence: 'answer evidence',
 });
 
 /* ── shapes: the hub is the source of truth, so every field is read defensively ── */
@@ -220,6 +222,13 @@ export function normalizeState(raw) {
     startedAt: asNumber(source.startedAt),
     canned: normalizeCanned(source.canned),
     announcement: isObject(source.announcement) ? source.announcement : null,
+    references: asList(source.references),
+    referencesLoading: source.referencesLoading === true,
+    questionAnswering: source.questionAnswering === true,
+    questionState: isObject(source.questionState) ? source.questionState : { status: 'idle' },
+    roomInput: source.roomInput ?? 'phones',
+    room: isObject(source.room) ? source.room : { listening: false, transcription: 'off', transcript: [] },
+    answerHistory: asList(source.log).filter(entry => entry?.kind === 'answer_evidence'),
     coach: normalizeCoach(source.coach),
     codebook: normalizeCodebook(source.codebook, preset),
     seats: { A: normalizeSeat('A', seatsRaw.A, onlineMap), B: normalizeSeat('B', seatsRaw.B, onlineMap) },
@@ -486,6 +495,154 @@ function boot() {
   const seat_fingerprints = new Map();
   const live_panels = new Map();
   let lastFocus = null;
+  let uploadingReferences = false;
+  let referenceMessage = '';
+  let roomContext = null;
+  let roomWanted = false;
+  let roomStarting = false;
+  let roomAccepted = false;
+  let roomMessage = '';
+  const roomCapture = createCapture({
+    get_context: () => roomContext ??= new (window.AudioContext || window.webkitAudioContext)(),
+    frame_ms: () => 250,
+    get_constraints: () => ({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+      ...(byId('room-mic-device').value ? { deviceId: { exact: byId('room-mic-device').value } } : {}) } }),
+    on_frame: frame => {
+      if (roomWanted && state.room.listening && socket?.bufferedAmount < 256_000) sendRoomFrame({ type: 'room_mic', ...frame });
+    },
+    on_level: level => { byId('room-mic-level').value = Math.min(1, Math.max(0, level * 5)); },
+    on_state: (next, detail) => {
+      if (['blocked', 'unsupported', 'error', 'lost'].includes(next)) {
+        roomMessage = detail || 'Microphone unavailable.';
+        stopRoomCapture();
+      }
+      schedule();
+    },
+  });
+
+  function sendRoomFrame(frame) {
+    if (socket?.readyState !== 1 || !state.hubId || !state.sessionId) return false;
+    try { socket.send(JSON.stringify({ ...frame, hubId: state.hubId, sessionId: state.sessionId })); return true; }
+    catch { return false; }
+  }
+
+  function stopRoomCapture(notify = true) {
+    const wasWanted = roomWanted;
+    roomWanted = false;
+    roomStarting = false;
+    roomAccepted = false;
+    roomCapture.stop();
+    byId('room-mic-level').value = 0;
+    if (notify && wasWanted) sendRoomFrame({ type: 'operator', action: 'room_listen', enabled: false });
+    schedule();
+  }
+
+  async function refreshMicrophones() {
+    try {
+      const devices = await navigator.mediaDevices?.enumerateDevices();
+      const select = byId('room-mic-device');
+      const selected = select.value;
+      const options = [node('option', null, 'System default — select MacBook Microphone in macOS Sound settings')];
+      options[0].value = '';
+      for (const [index, device] of (devices ?? []).filter(item => item.kind === 'audioinput' && item.deviceId).entries()) {
+        const option = node('option', null, device.label || 'Microphone ' + (index + 1));
+        option.value = device.deviceId;
+        options.push(option);
+      }
+      select.replaceChildren(...options);
+      if (options.some(option => option.value === selected)) select.value = selected;
+    } catch {}
+  }
+
+  async function startRoomCapture() {
+    if (roomWanted || linkState !== 'live' || state.phase === 'reveal' || state.canned) return;
+    const sessionId = state.sessionId, hubId = state.hubId;
+    roomWanted = true;
+    roomStarting = true;
+    roomMessage = '';
+    schedule();
+    try {
+      const opened = await roomCapture.start();
+      if (!opened || !roomWanted || state.sessionId !== sessionId || state.hubId !== hubId) { stopRoomCapture(false); return; }
+      if (!sendRoomFrame({ type: 'operator', action: 'room_listen', enabled: true })) {
+        roomMessage = 'Hub disconnected. Reconnect and start the microphone again.';
+        stopRoomCapture(false);
+      }
+      await refreshMicrophones();
+    } catch {
+      roomMessage = 'Could not open the microphone. Check browser and macOS microphone permissions.';
+      stopRoomCapture();
+    } finally { roomStarting = false; schedule(); }
+  }
+
+  function renderRoomMicrophone() {
+    const otherTab = state.room.listeningRequested && !roomWanted;
+    byId('room-mic-start').disabled = roomWanted || otherTab || linkState !== 'live' || state.phase === 'reveal' || Boolean(state.canned);
+    byId('room-mic-stop').disabled = !roomWanted;
+    byId('room-mic-device').disabled = roomWanted;
+    const labels = { waiting: 'Waiting for audio', connecting: 'Connecting to transcription', live: 'Transcribing the room',
+      recovering: 'Reconnecting transcription', unavailable: 'Transcription unavailable. Check the ElevenLabs key and quota.', off: 'Microphone is off' };
+    byId('room-mic-status').textContent = roomMessage || (roomStarting ? 'Allow microphone access in your browser…' : otherTab ? 'Microphone controlled by another stage tab.'
+      : roomWanted ? `${labels[state.room.transcription] ?? 'Listening'} · ${roomCapture.deviceLabel || 'selected microphone'}`
+      : 'Microphone is off. Start it and allow browser access.');
+    const turns = asList(state.room.transcript);
+    fill(byId('room-transcript'), (state.phase === 'reveal' ? turns : turns.slice(-12)).map(turn => node('li', null, turn.text)));
+  }
+
+  function renderReferences() {
+    const busy = uploadingReferences || state.referencesLoading;
+    const editable = state.phase === 'lobby' && linkState === 'live' && !busy;
+    byId('reference-files').disabled = !editable;
+    byId('reference-upload').disabled = !editable;
+    byId('reference-clear').disabled = !editable || !state.references.length;
+    byId('reference-status').textContent = busy ? 'Reading documents…' : [referenceMessage,
+      !state.questionAnswering ? 'Document answering requires OPENAI_API_KEY and the OpenAI text provider. Fixed whispers and ordinary coaching remain available.'
+        : !referenceMessage ? state.references.length ? 'References ready. Question answering starts with the session.' : 'No references loaded. Ordinary coaching remains available.' : ''].filter(Boolean).join(' ');
+    fill(byId('reference-list'), state.references.map(item => node('li', null, `${item.name} · ${item.characters.toLocaleString()} characters`)));
+    byId('answer-panel').hidden = state.phase === 'lobby' || !state.references.length;
+    const answer = state.questionState;
+    const labels = { idle: 'Listening for questions', researching: 'Checking the conversation and references…', waiting: 'Giving the conversation time to answer',
+      answer: 'Answer found', preview: 'Private preview · awaiting approval', confirmed: 'Approved for delivery', discarded: 'Answer discarded', expired: 'Approval expired',
+      resolved: 'Question answered or no longer relevant', unsupported: 'No supported answer in these references', none: 'No unanswered question',
+      cancelled: 'Previous answer cancelled as the conversation changed', already_offered: 'Already offered this answer', unavailable: 'Answer unavailable. Fixed whispers still work.' };
+    byId('answer-status').textContent = !state.questionAnswering ? 'Document answering is unavailable with the current text provider.' : labels[answer.status] ?? 'Listening';
+    byId('answer-question').textContent = answer.question ? 'Question: ' + answer.question : '';
+    byId('answer-text').textContent = answer.answer ?? '';
+    fill(byId('answer-sources'), asList(answer.sources).map(source => node('li', null, `${source.name}: “${source.quote}”`)));
+    fill(byId('answer-history'), state.answerHistory.map(entry => node('li', null,
+      `${entry.text} — ${asList(entry.sources).map(source => `${source.name}: “${source.quote}”`).join('; ')}`)));
+  }
+
+  async function uploadReferences(clear = false) {
+    if (uploadingReferences || state.phase !== 'lobby') return;
+    const files = clear ? [] : Array.from(byId('reference-files').files ?? []);
+    if (!clear && !files.length) { referenceMessage = 'Choose at least one document first.'; schedule(); return; }
+    if (files.length > 8 || files.some(file => file.size > 5 * 1024 * 1024) || files.reduce((n, file) => n + file.size, 0) > 8 * 1024 * 1024) {
+      referenceMessage = 'Limit: 8 documents, 5 MB per file and 8 MB total.'; schedule(); return;
+    }
+    const sessionId = state.sessionId, hubId = state.hubId;
+    uploadingReferences = true;
+    referenceMessage = '';
+    schedule();
+    try {
+      const encoded = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ name: file.name, data: String(reader.result).split(',')[1] });
+        reader.onerror = () => reject(new Error('Could not read ' + file.name));
+        reader.readAsDataURL(file);
+      })));
+      const response = await fetch('/references', { method: 'POST', headers: { 'content-type': 'application/json',
+        'x-telepathy-hub': hubId, 'x-telepathy-session': sessionId }, body: JSON.stringify({ files: encoded }), signal: AbortSignal.timeout(30_000) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Upload failed.');
+      if (state.sessionId === sessionId && state.hubId === hubId) {
+        referenceMessage = clear ? 'Documents cleared.' : `${result.documents.length} document(s) loaded.`;
+        byId('reference-files').value = '';
+      }
+    } catch (error) {
+      if (state.sessionId === sessionId && state.hubId === hubId) referenceMessage = error.message || 'Upload failed.';
+    } finally { uploadingReferences = false; schedule(); }
+  }
 
   /* elements */
 
@@ -643,7 +800,7 @@ function boot() {
       : [readoutRow('—', 'the hub has not published a codebook yet', 'wait')]);
 
     const blocked = state.canBegin === false;
-    ui.begin.disabled = blocked;
+    ui.begin.disabled = blocked || uploadingReferences;
     ui.beginHint.textContent = blocked
       ? 'Begin unlocks when both seats have a voice, tested earbuds, calibration and Ready.'
       : state.phase === 'lobby' ? 'Starts the live board on both seats.' : 'The session is already running.';
@@ -999,7 +1156,7 @@ function boot() {
   function render() {
     const view = { lobby: renderLobby, live: renderLive, reveal: renderReveal };
     const steps = [
-      ['chrome', renderChrome], ['operator', renderOperator],
+      ['chrome', renderChrome], ['operator', renderOperator], ['references', renderReferences], ['room microphone', renderRoomMicrophone],
       [state.phase, view[state.phase]],
     ];
     for (const [name, step] of steps) {
@@ -1137,6 +1294,10 @@ function boot() {
     });
 
     ui.begin.addEventListener('click', () => send('begin'));
+    byId('reference-upload').addEventListener('click', () => void uploadReferences());
+    byId('reference-clear').addEventListener('click', () => void uploadReferences(true));
+    byId('room-mic-start').addEventListener('click', () => void startRoomCapture());
+    byId('room-mic-stop').addEventListener('click', () => { roomMessage = ''; stopRoomCapture(); });
     ui.reveal.addEventListener('click', () => send('reveal'));
 
     document.addEventListener('keydown', event => {
@@ -1209,9 +1370,13 @@ function boot() {
     }
     if (frame.type === 'state') {
       const next = normalizeState(isObject(frame.state) ? frame.state : frame);
+      if (next.hubId !== state.hubId || next.sessionId !== state.sessionId || next.phase === 'reveal' || next.canned
+          || roomAccepted && !next.room.listeningRequested) stopRoomCapture(false);
       if (state.canned && (!next.canned || next.hubId !== state.hubId || next.sessionId !== state.sessionId
         || next.startedAt !== state.startedAt)) canned_audio.clear_session();
       if (next.hubId !== state.hubId || next.sessionId !== state.sessionId) {
+        referenceMessage = '';
+        byId('reference-files').value = '';
         streamKeys = [];
         ui.stream.replaceChildren();
         seat_fingerprints.clear();
@@ -1222,7 +1387,21 @@ function boot() {
       return;
     }
     if (frame.type === 'operator_ack' && !frame.accepted) {
+      if (frame.action === 'room_listen') {
+        roomMessage = frame.reason === 'microphone_owned' ? 'Another stage tab is using the room microphone.' : 'The session changed. Start the microphone again.';
+        stopRoomCapture(false);
+        return;
+      }
       status('The take changed. Check the stage and try again.', 'blocked');
+      return;
+    }
+    if (frame.type === 'room_ack' && frame.sessionId === state.sessionId && frame.hubId === state.hubId) {
+      roomAccepted = frame.listening === true && roomWanted;
+      if (!frame.listening && roomWanted) {
+        roomMessage = 'Transcription unavailable. Check the ElevenLabs key and quota, then try again.';
+        stopRoomCapture(false);
+      }
+      schedule();
       return;
     }
     const detail = firstText(frame.error, frame.detail, frame.message);
@@ -1255,6 +1434,7 @@ function boot() {
     });
     next.addEventListener('close', () => {
       if (socket !== next) return;
+      stopRoomCapture(false);
       setLink('offline');
       reconnectDelay = Math.min(8000, Math.round(reconnectDelay * 1.6));
       reconnectTimer = setTimeout(connect, reconnectDelay);
@@ -1266,9 +1446,12 @@ function boot() {
   applyInfo(null);
   render();
   loadInfo();
+  void refreshMicrophones();
   connect();
   clockTimer = setInterval(() => { if (!ui.clock.hidden) tickClock(); }, 1000);
   window.addEventListener('beforeunload', () => {
+    stopRoomCapture();
+    void roomContext?.close();
     clearInterval(clockTimer);
     clearTimeout(reconnectTimer);
     socket = null;
