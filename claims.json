@@ -1,48 +1,6 @@
 {
-  "revision": 44,
+  "revision": 45,
   "claims": [
-    {
-      "id": "8a3d6395-2636-42be-a24a-19e8be50168a",
-      "owner": "fireheartjerry",
-      "agent": "codex-pitch-help",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "public/phone.mjs",
-        "public/phone-audio.mjs",
-        "public/phone-data.mjs",
-        "hub/session.mjs",
-        "hub/codec.mjs",
-        "hub/maritime.mjs",
-        "hub/server.mjs",
-        "maritime/policy.mjs",
-        "maritime/server.mjs",
-        "docs/telepathy-pitch-brief.md",
-        "docs/pitch.md",
-        "README.md",
-        "tests/session.test.mjs",
-        "tests/maritime.test.mjs",
-        "tests/phone-session.test.mjs"
-      ],
-      "paths": [
-        "README.md",
-        "docs/pitch.md",
-        "docs/telepathy-pitch-brief.md",
-        "hub/codec.mjs",
-        "hub/maritime.mjs",
-        "hub/server.mjs",
-        "hub/session.mjs",
-        "maritime/policy.mjs",
-        "maritime/server.mjs",
-        "public/phone-audio.mjs",
-        "public/phone-data.mjs",
-        "public/phone.mjs",
-        "tests/maritime.test.mjs",
-        "tests/phone-session.test.mjs",
-        "tests/session.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T04:44:41.433Z"
-    },
     {
       "id": "361b48b2-7f09-47fd-8ff9-0967ddc16fb8",
       "owner": "fireheartjerry",
