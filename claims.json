@@ -1,26 +1,6 @@
 {
-  "revision": 66,
+  "revision": 67,
   "claims": [
-    {
-      "id": "0615bf43-9508-47dc-93c0-97ddd3bffafd",
-      "owner": "fireheartjerry",
-      "agent": "codex-realtime-hardening",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/1",
-      "scopes": [
-        "hub/realtime-pitch.mjs",
-        "hub/session.mjs",
-        "tests/realtime-pitch.test.mjs",
-        "tests/session.test.mjs"
-      ],
-      "paths": [
-        "hub/realtime-pitch.mjs",
-        "hub/session.mjs",
-        "tests/realtime-pitch.test.mjs",
-        "tests/session.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T05:25:47.625Z"
-    },
     {
       "id": "f3802729-0c38-41c6-ae9e-09888aa7a990",
       "owner": "fireheartjerry",
