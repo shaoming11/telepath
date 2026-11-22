@@ -3,7 +3,7 @@ import { createNetworkLink, DEFAULT_NETWORK } from './network.mjs';
 import { createCapture } from './capture.mjs';
 import { createCalibration } from './calibrate.mjs';
 import { createAudioEngine, createDraftTracker } from './phone-audio.mjs';
-import { AIRPODS_1_ID, AIRPODS_1_PLAYBACK_URL } from './earbuds/airpods-1/input.mjs';
+import { AIRPODS_1_PLAYBACK_URL } from './earbuds/airpods-1/input.mjs';
 import {
   APP_TIMING, APP_TIMING_LIMITS, CONSENT_KEY, CONSENT_TEXT, DEFAULT_VOLUMES, PATTERN_LABELS, PRESETS,
   SEAT_NAMES, SIGNAL_LABELS, SIGNAL_ORDER, STORAGE_KEY, SYSTEM_MEANINGS, VOICE_SCRIPT,
@@ -377,8 +377,7 @@ function set_playback_state(state) {
 }
 
 function resume_anchor() {
-  const airpods_playback = !is_sim() && (ui.calibration_playback
-    || (settings.gesture_model === AIRPODS_1_ID && ui.lock_controls));
+  const airpods_playback = !is_sim() && (ui.calibration_playback || ui.lock_controls);
   const source = airpods_playback ? AIRPODS_1_PLAYBACK_URL : '/assets/keepalive.wav';
   if (keepalive.getAttribute('src') !== source) {
     ui.anchor_pause_expected = !keepalive.paused;
@@ -1358,7 +1357,7 @@ function render_live() {
   listen.dataset.state = is_sim() ? 'sim' : listening ? 'on' : 'off';
   set_text($('live-listen-text'), is_sim() ? 'Simulated' : listening ? 'Listening' : capture.open ? 'Mic only' : 'Mic off');
   set_text($('live-cache'), ui.failed_manifest ? 'Failed' : mine?.ready ? 'Cached' : state?.presetPending ? 'Caching' : 'Not ready');
-  $('lock-controls').hidden = is_sim() || settings.gesture_model !== AIRPODS_1_ID || phase === 'reveal' || Boolean(state?.canned);
+  $('lock-controls').hidden = is_sim() || phase === 'reveal' || Boolean(state?.canned);
   $('lock-controls-toggle').setAttribute('aria-pressed', String(ui.lock_controls));
   set_text($('lock-controls-toggle'), ui.lock_controls ? 'Disable lock-screen controls' : 'Enable lock-screen controls');
   set_text($('lock-controls-status'), ui.lock_controls ? 'Room mic paused on this phone.' : '');
@@ -1460,7 +1459,6 @@ function render_settings() {
 function set_earbud_model(model) {
   if (!['next-only', 'pro'].includes(model) || settings.gesture_model === model) return;
   settings.gesture_model = model;
-  if (ui.lock_controls && model !== AIRPODS_1_ID) set_lock_controls(false);
   input.configure({ gestureModel: is_sim() ? null : model });
   ui.signals_key = '';
   save_settings();

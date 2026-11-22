@@ -48,7 +48,7 @@
       <div class="hero">
         <div class="hero__copy">
           <h1 class="display" id="lobby-title"><span class="display__dim">Two seats.</span> One silent channel.</h1>
-          <p class="lede">Tap an earbud and your partner hears you in your own voice. An agent on the hub listens to both rooms, drafts the answer, and waits for your tap before it sends.</p>
+          <p class="lede">Tap an earbud and your partner hears you in your own voice. The hub listens to both rooms, drafts replies, and sends only after your tap.</p>
           <div class="cta">
             <button class="begin" id="begin-button" type="button">
               <span class="begin__label">Begin session</span>
@@ -132,12 +132,12 @@
         </svg>
 
         <div class="join">
-          <p class="kicker">JOIN FROM EACH PHONE ON THE HOTSPOT</p>
+          <p class="kicker">Join from each phone on the hotspot</p>
           <div class="join__row">
             <span class="join__url" id="join-url">&mdash;</span>
-            <a class="join__link" href="/?sim=1&amp;seat=A">Simulated seat A <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?sim=1&amp;seat=B">Simulated seat B <span aria-hidden="true">↗</span></a>
-            <a class="join__link" href="/?calibrate=1">Calibration bench <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?sim=1&amp;seat=A">Simulate A <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?sim=1&amp;seat=B">Simulate B <span aria-hidden="true">↗</span></a>
+            <a class="join__link" href="/?calibrate=1">Calibrate <span aria-hidden="true">↗</span></a>
           </div>
           <p class="join__note" id="join-guidance" hidden></p>
         </div>
@@ -211,7 +211,7 @@
       </div>
 
       <section class="lanes-wrap" aria-labelledby="lanes-title">
-        <h2 class="section-title" id="lanes-title">Timeline <span>Speech, taps and whispers on one clock</span></h2>
+        <h2 class="section-title" id="lanes-title">Timeline <span>Speech, taps and whispers</span></h2>
         <div class="lanes" id="reveal-lanes"></div>
       </section>
 
@@ -243,7 +243,7 @@
         <button class="op-action" id="op-replay" type="button" data-action="replay">Replay last</button>
         <button class="op-action" id="op-canned" type="button" data-action="canned">Canned take</button>
       </div>
-      <p class="operator__note">Canned take replays the full pitch through this Mac in about 18 seconds.</p>
+      <p class="operator__note">Canned take plays the full pitch through this Mac in about 18 seconds.</p>
     </div>
 
     <section class="operator__group" id="op-coach" aria-labelledby="op-coach-title" hidden>
@@ -290,7 +290,7 @@
         </select>
         <button class="op-action op-action--fit" id="op-set-preset" type="button">Set</button>
       </div>
-      <label class="field-label" for="op-context">Context, sent with the preset when filled</label>
+      <label class="field-label" for="op-context">Context (optional, sent with the preset)</label>
       <textarea id="op-context" class="control control--text" rows="2" spellcheck="false" placeholder="Pitch outline, slide order, judge seating"></textarea>
     </div>
 
@@ -310,7 +310,7 @@
 
     <div class="operator__group">
       <h3 class="operator__label">Reset session</h3>
-      <p class="operator__note">Clears the log, the seats and the bits. The reveal lives in memory only.</p>
+      <p class="operator__note">Clears the log, seats and bits. Reveal data is not saved.</p>
       <button class="op-action op-action--danger" id="op-reset" type="button" aria-describedby="op-reset-note">Reset</button>
       <span class="operator__note" id="op-reset-note"></span>
     </div>

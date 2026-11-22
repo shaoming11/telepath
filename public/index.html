@@ -38,7 +38,7 @@
       <section class="screen screen-join" id="screen-join" data-screen="join" hidden>
         <div class="join-head">
           <h1 class="display"><span class="display-dim">Two seats.</span> Pick yours.</h1>
-          <p class="lede">Setup takes about ninety seconds. Keep this screen awake for the whole session.</p>
+          <p class="lede">Setup takes about 90 seconds. Keep this screen awake.</p>
         </div>
         <div class="seat-grid">
           <button class="seat" type="button" data-seat="A"><span class="seat-letter">A</span><span class="seat-role">Presenter</span></button>
@@ -62,9 +62,9 @@
           <input type="checkbox" id="voice-consent">
           <span id="voice-consent-text"></span>
         </label>
-        <p class="setup-copy">Talk naturally. The recorder gathers usable speech and lets you pause whenever you need to.</p>
+        <p class="setup-copy">Talk naturally. Pause whenever you need to.</p>
         <details class="setup-details">
-          <summary>Something to read</summary>
+          <summary>Script to read</summary>
           <p class="script" id="voice-script"></p>
         </details>
         <div class="voice-meter" id="voice-meter" hidden>
@@ -95,7 +95,7 @@
           <label><input type="radio" name="earbud_mode" value="next-only"><span><strong>AirPods 1</strong><small>One, two, or three Next Track events</small></span></label>
           <label><input type="radio" name="earbud_mode" value="pro"><span><strong>AirPods Pro</strong><small>Single, double, or triple squeeze</small></span></label>
         </fieldset>
-        <div class="split">
+        <div class="stack">
           <button id="test-audio" type="button">Test audio</button>
         </div>
         <p class="meta" id="earbuds-status" role="status"></p>
@@ -132,21 +132,21 @@
           </ol>
           <p class="meta" id="cal-quick-status" role="status"></p>
           <details class="setup-details" id="cal-full">
-          <summary>Full timing calibration</summary>
-          <fieldset class="choice">
-            <legend>Length</legend>
-            <label><input type="radio" name="cal_scope" value="mode" checked><span><strong>This earbud mode</strong><small>About 2 minutes</small></span></label>
-            <label><input type="radio" name="cal_scope" value="both"><span><strong>Both modes</strong><small>About 5 minutes</small></span></label>
-          </fieldset>
-          <label class="check" id="cal-emulate-row">
-            <input type="checkbox" id="cal-emulate">
-            <span>Let the emulator tap</span>
-          </label>
-          <p class="meta" id="cal-start-hint" role="status"></p>
-          <p class="fineprint" id="cal-measure"></p>
-          <div class="actions">
-            <button class="primary" id="cal-start" type="button">Start</button>
-          </div>
+            <summary>Full timing calibration</summary>
+            <fieldset class="choice">
+              <legend>Length</legend>
+              <label><input type="radio" name="cal_scope" value="mode" checked><span><strong>This earbud mode</strong><small>About 2 minutes</small></span></label>
+              <label><input type="radio" name="cal_scope" value="both"><span><strong>Both modes</strong><small>About 5 minutes</small></span></label>
+            </fieldset>
+            <label class="check" id="cal-emulate-row">
+              <input type="checkbox" id="cal-emulate">
+              <span>Let the emulator tap</span>
+            </label>
+            <p class="meta" id="cal-start-hint" role="status"></p>
+            <p class="fineprint" id="cal-measure"></p>
+            <div class="actions">
+              <button class="primary" id="cal-start" type="button">Start</button>
+            </div>
           </details>
           <button class="quiet" id="cal-skip" type="button">Skip and use defaults</button>
         </div>
