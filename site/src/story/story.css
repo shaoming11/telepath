@@ -1,4 +1,4 @@
-.story { background: var(--void); }
+.story { background: var(--void); overflow-x: clip; }
 
 .story-bar {
   position: absolute;

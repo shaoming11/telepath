@@ -76,9 +76,10 @@ export function StoryPage() {
       }
     };
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      if (target.closest("input, textarea, select, button, [contenteditable], [data-stage]")) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (window.scrollY > (track.current?.offsetTop ?? 0) + FILM_PX + 4) return;
+      // Focus can be left on a stage control further down the page; the film owns these keys while it is on screen.
+      if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
       if ([" ", "ArrowDown", "ArrowRight", "PageDown"].includes(event.key)) {
         event.preventDefault();
         step(1, event.key === " ");
