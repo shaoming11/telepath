@@ -18,6 +18,7 @@ export const QUESTION_SCHEMA = {
 
 export const questionKey = text => String(text ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const normalized = text => text.replace(/\s+/g, ' ').trim();
+const withoutEmphasis = text => text.replace(/\*\*([^*]+)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
 
 export function validateAnswer(value, passages, turns = []) {
   if (!value || !['none', 'waiting', 'resolved', 'unsupported', 'answer', 'advice'].includes(value.status)) throw new Error('Invalid answer response.');
@@ -30,7 +31,9 @@ export function validateAnswer(value, passages, turns = []) {
   const sources = value.sources.map(source => {
     const passage = passages.find(item => item.id === source.id);
     const quote = normalized(String(source.quote ?? ''));
-    if (!passage || quote.length < 8 || quote.length > 1400 || !normalized(passage.text).includes(quote)) throw new Error('Answer source does not match the references.');
+    const text = passage ? normalized(passage.text) : '';
+    const matches = text.includes(quote) || (passage?.kind !== 'code' && withoutEmphasis(text).includes(withoutEmphasis(quote)));
+    if (!passage || quote.length < 8 || quote.length > 1400 || !matches) throw new Error('Answer source does not match the references.');
     return { id: passage.id, name: passage.name, quote };
   });
   const responseQuote = value.status === 'advice' ? normalized(String(value.responseQuote ?? '')) : '';

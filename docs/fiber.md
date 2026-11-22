@@ -16,6 +16,6 @@ Research runs off the whisper path, with one task at a time, 15 seconds between 
 
 ## When coaching speaks
 
-Automatic grounded cues require at least 2.5 seconds of quiet. Playback, pending approvals, receipts and announcements can defer them. An OpenAI value check requires evidence and a consequential correction, question or omission. A 30-second cooldown and repeated-text check reduce interruptions. Explicit requests and approved teammate messages still use their existing controls.
+Once armed, Question Mode answers a completed question after a short pause when it has supporting evidence. It can retry after an empty partial draft. Unsolicited cues and missing-point reminders require 2.5 seconds of quiet, a value check, and a 30-second cooldown. Playback, pending approvals, receipts and announcements can block either path.
 
 API contracts: [Fiber person lookup](https://api.fiber.ai/ai-docs/KitchenSinkProfile.md), [Fiber company lookup](https://api.fiber.ai/ai-docs/kitchenSinkCompany.md), [OpenAI web search](https://developers.openai.com/api/docs/guides/tools-web-search).

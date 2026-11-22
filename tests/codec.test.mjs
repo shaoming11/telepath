@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCodec } from '../hub/codec.mjs';
+import { validateAnswer } from '../hub/questions.mjs';
+
+test('quote validation accepts omitted document emphasis and rejects altered words and code', () => {
+  const result = { status: 'answer', question: 'When can I resume?', answer: 'Wait for Live and Cached.',
+    sources: [{ id: 'p', quote: 'wait for Live and Cached before resuming' }] };
+  const passage = { id: 'p', name: 'Guide', text: 'You can wait for **Live** and **Cached** before resuming cues.' };
+  assert.equal(validateAnswer(result, [passage]).answer, result.answer);
+  assert.throws(() => validateAnswer(result, [{ ...passage, kind: 'code' }]), /source does not match/);
+  assert.throws(() => validateAnswer(result, [{ ...passage, text: passage.text.replace('before', 'after') }]), /source does not match/);
+});
 
 function evaluate({ a, b, reply, requestedSeat, preset = 'Pitch' }) {
   const payload = {

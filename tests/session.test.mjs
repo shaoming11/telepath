@@ -302,7 +302,7 @@ async function createLiveSession({ audio = {}, codec = EMPTY_CODEC, coach, setti
     },
     codec,
     coach,
-    settings: { roomSenseMs: 0, automaticQuietMs: 0, automaticCooldownMs: 0, automaticPlaybackGuard: false, ...settings },
+    settings: { roomSenseMs: 0, automaticQuietMs: 0, armedQuestionQuietMs: 0, automaticCooldownMs: 0, automaticPlaybackGuard: false, ...settings },
     now: () => now,
   });
 
@@ -1581,6 +1581,38 @@ test('armed question mode prepares during speech and only plays after the matchi
   assert.equal(calls, 1);
 });
 
+test('an armed direct question retries a failed warm draft and bypasses unsolicited-cue policy', async t => {
+  let room, warmCalls = 0, reviewCalls = 0, finalCalls = 0;
+  const { session, act, advance, seatFrames } = await createLiveSession({
+    sim: { A: false, B: false },
+    settings: { roomInput: 'mac', pitchQuestionSettleMs: 5, pitchComposeMs: 20, pitchRaceMs: 300,
+      automaticQuietMs: 2500, automaticCooldownMs: 30_000, armedQuestionQuietMs: 500 },
+    audio: { listen: async (_, enabled, callbacks) => { if (enabled) room = callbacks; return { listening: enabled }; } },
+    codec: {
+      openPitchRealtime: () => ({ generate: async () => { warmCalls++; return null; } }),
+      pitchHelp: async input => {
+        if (++finalCalls === 1) return null;
+        await delay(40);
+        return supportedAnswer(input);
+      },
+      assessWhisper: async () => { reviewCalls++; return false; },
+    },
+  });
+  t.after(() => session.close());
+  session.pitchReferences = await parseReferences([{ name: 'brief.md', data: Buffer.from('The buyer is a sales team lead.').toString('base64') }]);
+  await session.setRoomListening(true);
+  await act('A', { type: 'signal', signal: 'LR', purpose: 'question_mode', id: 'on' });
+  session.rememberAutomaticCue('Previous unsolicited cue.');
+  room.partial('Who is the target customer');
+  await eventually(() => finalCalls === 1);
+  room.committed('Who is the target customer?');
+  advance(550);
+  await eventually(() => seatFrames.A.some(frame => frame.kind === 'pitch_help'));
+  assert.equal(warmCalls, 2);
+  assert.equal(finalCalls, 2);
+  assert.equal(reviewCalls, 0);
+});
+
 test('a changed question drops speculative content and provider failures stay silent unless help is explicitly requested', async t => {
   let room, calls = 0;
   const { session, act, seatFrames } = await createLiveSession({
@@ -1598,6 +1630,7 @@ test('a changed question drops speculative content and provider failures stay si
   await eventually(() => calls >= 2);
   await eventually(() => !session.seats.A.pitchHelp);
   assert.equal(seatFrames.A.some(frame => frame.kind === 'pitch_help'), false);
+  assert.ok(seatFrames.A.some(frame => frame.type === 'pitch_help_status' && frame.text === 'No supported cue for that question.'));
   session.pitchReferences = [];
   await act('B', { type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'empty' });
   assert.equal(seatFrames.B.find(frame => frame.kind === 'pitch_help')?.text, 'Mac listens. Phones keep earbud controls.');
