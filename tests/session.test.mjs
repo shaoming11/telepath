@@ -1203,15 +1203,20 @@ test('operator replay uses the exact last message asset after a preset swap and 
     audio: { retainReplayAsset: url => pins.push(url) },
   });
   t.after(() => session.close());
+  assert.equal(state().canReplay, false);
   await act('B', { type: 'signal', signal: 'R2' });
+  assert.equal(state().canReplay, true);
+  assert.equal(session.snapshot('A').canReplay, undefined);
   const original = audioFrames('A', 'soft').at(-1);
   assert.equal(original.url, undefined);
   await session.handleStage({ action: 'preset', preset: 'Party' });
   await ack('A');
   await ack('B');
   session.disconnect('A');
+  assert.equal(state().canReplay, false);
   await session.connect('A', true);
   await ack('A');
+  assert.equal(state().canReplay, true);
   const bits = state().bits;
   await session.handleStage({ action: 'replay' });
   const replay = audioFrames('A', 'soft').at(-1);
@@ -1222,6 +1227,8 @@ test('operator replay uses the exact last message asset after a preset swap and 
   assert.equal(replay.text, original.text);
   assert.equal(state().bits, bits);
   assert.equal(state().log.filter(entry => entry.kind === 'message').length, 1);
+  await session.handleStage({ action: 'reveal' });
+  assert.equal(state().canReplay, false);
 });
 
 test('one neutral system announcement fans out to both seats without tap bits or receipts', async t => {
