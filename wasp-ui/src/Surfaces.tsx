@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef } from 'react';
 import { PhoneMarkup } from './generated/PhoneMarkup';
 import { StageMarkup } from './generated/StageMarkup';
 import './liquid.css';
+import { StageTimeline } from './StageTimeline';
 
 type Surface = 'phone' | 'stage';
 
@@ -39,5 +40,5 @@ export function PhoneSurface() {
 
 export function StageSurface() {
   useSurface('stage');
-  return <StageMarkup />;
+  return <><StageTimeline /><StageMarkup /></>;
 }
