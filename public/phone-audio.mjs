@@ -93,7 +93,7 @@ async function map_limit(items, limit, work) {
   return results;
 }
 
-export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
+export function createAudioEngine({ volumes, timing, on_status, on_heard, wait_for_heard_ack = false }) {
   const cues = new Map();
   const cache_banks = new Map();
   const sources = new Map();
@@ -254,18 +254,25 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
 
   function deliver_heard(message_id) {
     if (!on_heard) return;
-    if (on_heard(message_id) !== false) return;
+    if (!wait_for_heard_ack && on_heard(message_id) !== false) return;
     heard_backlog.set(message_id, performance.now());
     backlog_timer ??= setInterval(flush_heard, HEARD_RETRY_TICK_MS);
+    if (wait_for_heard_ack) on_heard(message_id);
   }
 
-  // The hub starts its receipt clock from this ack, so a dropped send is retried, not forgotten.
   function flush_heard() {
     for (const [message_id, since] of [...heard_backlog]) {
-      if (performance.now() - since > HEARD_RETRY_MS || retired.has(message_id) || on_heard?.(message_id) !== false) {
-        heard_backlog.delete(message_id);
+      if (performance.now() - since > HEARD_RETRY_MS || retired.has(message_id)) {
+        confirm_heard(message_id);
+        continue;
       }
+      const sent = on_heard(message_id);
+      if (!wait_for_heard_ack && sent !== false) confirm_heard(message_id);
     }
+  }
+
+  function confirm_heard(message_id) {
+    heard_backlog.delete(message_id);
     if (!heard_backlog.size && backlog_timer) {
       clearInterval(backlog_timer);
       backlog_timer = null;
@@ -330,7 +337,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
 
   function stop_pitch_help(message_id) {
     retired.add(message_id);
-    heard_backlog.delete(message_id);
+    confirm_heard(message_id);
     for (const [source, meta] of [...sources]) {
       if (!meta.pitch_help || meta.message_id !== message_id) continue;
       try { source.stop(); } catch {}
@@ -505,6 +512,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     cancel_announcements,
     stop_pitch_help,
     flush_heard,
+    confirm_heard,
     play,
     play_cue,
     getOutputActivity,

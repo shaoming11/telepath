@@ -201,6 +201,12 @@ test('the stage broadcasts one bundled system clip to both seats and sees both p
   const only_a = (await stage.take(frame => stateFrame(frame) && frame.state.announcement?.heard.length === 1)).state;
   assert.deepEqual(only_a.announcement.heard, ['A']);
   assert.equal(only_a.announcement.status, 'queued');
+  const echo = await a.take(frame => frame.type === 'heard_ack' && frame.messageId === clip_a.messageId);
+  assert.deepEqual([echo.hubId, echo.sessionId], [current.hubId, current.sessionId]);
+  const duplicate_mark = a.frames.length;
+  a.send({ type: 'heard', messageId: clip_a.messageId, hubId: current.hubId, sessionId: current.sessionId });
+  await a.take(frame => frame.type === 'heard_ack' && frame.messageId === clip_a.messageId, duplicate_mark);
+  assert.ok(b.frames.every(frame => frame.type !== 'heard_ack'));
   b.send({ type: 'heard', messageId: clip_b.messageId, hubId: current.hubId, sessionId: current.sessionId });
   const complete = (await stage.take(frame => stateFrame(frame) && frame.state.announcement?.status === 'played')).state;
   assert.deepEqual(complete.announcement.heard, ['A', 'B']);

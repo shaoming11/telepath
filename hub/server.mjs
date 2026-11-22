@@ -369,6 +369,13 @@ export function createHub({
               send(ws, scope({ type: 'signal_ack', id: frame.id, accepted: current, ...reason }));
             }
             if (!current) return;
+            if (role === 'seat' && frame.type === 'heard') {
+              const { messageId } = frame;
+              if (typeof messageId !== 'string' || !messageId.length || messageId.length > 128) return;
+              const echo = scope({ type: 'heard_ack', messageId });
+              void session.handleSeat(seat, frame).then(() => send(ws, echo)).catch(() => {});
+              return;
+            }
             if (role === 'seat' && frame.type === 'diag') {
               const { type, hubId, sessionId, ...entry } = frame;
               const line = JSON.stringify({ at: new Date().toISOString(), seat, ...entry });

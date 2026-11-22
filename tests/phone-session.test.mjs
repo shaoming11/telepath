@@ -538,6 +538,33 @@ test('voice Settings offers a clone preview only after the hub confirms a clone'
   assert.equal(get_element('settings-voice-preview').hidden, false);
 });
 
+test('a playback report accepted by the socket is retried until the current hub echoes it', async () => {
+  const scope = { sessionId: '2', hubId: 'hub-a' };
+  const messageId = 'announcement-playback-report';
+  socket.receive({ type: 'state', state: seat_state(null, scope) });
+  socket.sent.length = 0;
+  socket.receive({ ...scope, type: 'audio', kind: 'announcement', cue: 'system', messageId,
+    url: '/assets/report.mp3', expiresAfterMs: 8000 });
+  await settle();
+  world.advance(1600);
+  const reports = () => socket.sent.filter(frame => frame.type === 'heard' && frame.messageId === messageId);
+  assert.ok(reports().length > 1, 'the socket accepted the first report but the hub did not echo it');
+  assert.ok(reports().every(frame => frame.sessionId === scope.sessionId && frame.hubId === scope.hubId));
+
+  const starts = () => world.contexts[0].started().filter(source => source.buffer?.url?.endsWith('/report.mp3')).length;
+  assert.equal(starts(), 1, 'a single announcement starts');
+  const report_count = reports().length;
+  socket.receive({ ...scope, type: 'heard_ack', messageId, hubId: 'old-hub' });
+  world.advance(300);
+  assert.ok(reports().length > report_count, 'an echo from another hub cannot clear the report');
+
+  socket.receive({ ...scope, type: 'heard_ack', messageId });
+  const confirmed_count = reports().length;
+  world.advance(1000);
+  assert.equal(reports().length, confirmed_count);
+  assert.equal(starts(), 1, 'a report retry does not replay audio');
+});
+
 test('a full hub reset clears previously ready setup and returns the seat to Voice', async () => {
   assert.equal(JSON.parse(stored.get(STORAGE_KEY)).setup.ready, true);
   const reset = seat_state(null, { phase: 'lobby', sessionId: '3', setupReset: '3' });
