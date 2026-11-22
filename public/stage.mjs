@@ -41,7 +41,7 @@ const KIND_LABELS = Object.freeze({
   discard: 'discarded', expire: 'expired', situation: 'situation', preview_playback: 'preview playback',
   confirm: 'confirmed', preset_suggestion: 'suggestion', replay: 'replay',
   back: 'earbud back', cache_error: 'cache error', announcement: 'announcement',
-  answer_evidence: 'answer evidence',
+  answer_evidence: 'answer evidence', pitch_help: 'private pitch cue',
 });
 
 /* ── shapes: the hub is the source of truth, so every field is read defensively ── */
@@ -229,7 +229,7 @@ export function normalizeState(raw) {
     questionState: isObject(source.questionState) ? source.questionState : { status: 'idle' },
     roomInput: source.roomInput ?? 'phones',
     room: isObject(source.room) ? source.room : { listening: false, transcription: 'off', transcript: [] },
-    answerHistory: asList(source.log).filter(entry => entry?.kind === 'answer_evidence'),
+    answerHistory: asList(source.log).filter(entry => ['answer_evidence', 'pitch_help'].includes(entry?.kind)),
     coach: normalizeCoach(source.coach),
     codebook: normalizeCodebook(source.codebook, preset),
     seats: { A: normalizeSeat('A', seatsRaw.A, onlineMap), B: normalizeSeat('B', seatsRaw.B, onlineMap) },
@@ -384,6 +384,19 @@ export function roomStatus(seat) {
   return 'Mic off';
 }
 
+export function roomConsoleStatus({ link, phase, canned, ownedElsewhere, starting, interrupted, wanted, transcription, message, device }) {
+  if (link !== 'live') return { tone: 'off', label: 'Offline', detail: 'Connect to the hub to use the Mac microphone.' };
+  if (phase === 'reveal' || canned) return { tone: 'off', label: 'Off', detail: 'Room listening is off for this take.' };
+  if (message || transcription === 'unavailable') return { tone: 'error', label: 'Unavailable', detail: message || 'Check the ElevenLabs connection and try again.' };
+  if (ownedElsewhere) return { tone: 'off', label: 'In use', detail: 'Another Stage tab is using the room microphone.' };
+  if (starting) return { tone: 'starting', label: 'Starting', detail: 'Allow microphone access in Safari if prompted.' };
+  if (interrupted) return { tone: 'starting', label: 'Interrupted', detail: 'The microphone is paused. Check the selected input.' };
+  if (wanted && transcription === 'live') return { tone: 'live', label: 'Transcribing', detail: device || 'Sending room audio to ElevenLabs.' };
+  if (wanted && transcription === 'recovering') return { tone: 'starting', label: 'Reconnecting', detail: 'Restoring the ElevenLabs connection.' };
+  if (wanted) return { tone: 'starting', label: 'Connecting', detail: 'Waiting for ElevenLabs transcription.' };
+  return { tone: 'off', label: 'Off', detail: 'Start listening and allow microphone access.' };
+}
+
 export function revealSummary(state) {
   const messages = state.log.filter(entry => entry.kind === 'message');
   const words = messages.reduce((sum, entry) =>
@@ -505,8 +518,21 @@ function boot() {
   let roomContext = null;
   let roomWanted = false;
   let roomStarting = false;
+  let roomInterrupted = false;
   let roomAccepted = false;
+  let roomAttempt = 0;
   let roomMessage = '';
+  const roomBars = Array.from({ length: 24 }, () => node('span'));
+  byId('room-mic-bars').append(...roomBars);
+
+  function setRoomLevel(level) {
+    const normalized = !roomInterrupted && Number.isFinite(level) ? Math.min(1, Math.max(0, level * 5)) : 0;
+    const filled = Math.round(normalized * roomBars.length);
+    byId('room-mic-level').value = normalized;
+    byId('room-mic-readout').textContent = roomWanted ? Math.round(normalized * 100) + '%' : '—';
+    roomBars.forEach((bar, index) => bar.toggleAttribute('data-active', index < filled));
+  }
+
   const roomCapture = createCapture({
     get_context: () => roomContext ??= new (window.AudioContext || window.webkitAudioContext)(),
     frame_ms: () => 250,
@@ -515,8 +541,10 @@ function boot() {
     on_frame: frame => {
       if (roomWanted && state.room.listening && socket?.bufferedAmount < 256_000) sendRoomFrame({ type: 'room_mic', ...frame });
     },
-    on_level: level => { byId('room-mic-level').value = Math.min(1, Math.max(0, level * 5)); },
+    on_level: setRoomLevel,
     on_state: (next, detail) => {
+      roomInterrupted = next === 'interrupted';
+      if (roomInterrupted) setRoomLevel(0);
       if (['blocked', 'unsupported', 'error', 'lost'].includes(next)) {
         roomMessage = detail || 'Microphone unavailable.';
         stopRoomCapture();
@@ -533,11 +561,13 @@ function boot() {
 
   function stopRoomCapture(notify = true) {
     const wasWanted = roomWanted;
+    roomAttempt += 1;
     roomWanted = false;
     roomStarting = false;
+    roomInterrupted = false;
     roomAccepted = false;
     roomCapture.stop();
-    byId('room-mic-level').value = 0;
+    setRoomLevel(0);
     if (notify && wasWanted) sendRoomFrame({ type: 'operator', action: 'room_listen', enabled: false });
     schedule();
   }
@@ -547,7 +577,7 @@ function boot() {
       const devices = await navigator.mediaDevices?.enumerateDevices();
       const select = byId('room-mic-device');
       const selected = select.value;
-      const options = [node('option', null, 'System default — select MacBook Microphone in macOS Sound settings')];
+      const options = [node('option', null, 'System default')];
       options[0].value = '';
       for (const [index, device] of (devices ?? []).filter(item => item.kind === 'audioinput' && item.deviceId).entries()) {
         const option = node('option', null, device.label || 'Microphone ' + (index + 1));
@@ -562,41 +592,58 @@ function boot() {
   async function startRoomCapture() {
     if (roomWanted || linkState !== 'live' || state.phase === 'reveal' || state.canned) return;
     const sessionId = state.sessionId, hubId = state.hubId;
+    const attempt = ++roomAttempt;
     roomWanted = true;
     roomStarting = true;
     roomMessage = '';
     schedule();
     try {
       const opened = await roomCapture.start();
+      if (attempt !== roomAttempt) return;
       if (!opened || !roomWanted || state.sessionId !== sessionId || state.hubId !== hubId) { stopRoomCapture(false); return; }
+      roomStarting = false;
+      schedule();
       if (!sendRoomFrame({ type: 'operator', action: 'room_listen', enabled: true })) {
         roomMessage = 'Hub disconnected. Reconnect and start the microphone again.';
         stopRoomCapture(false);
       }
       await refreshMicrophones();
     } catch {
+      if (attempt !== roomAttempt) return;
       roomMessage = 'Could not open the microphone. Check browser and macOS microphone permissions.';
       stopRoomCapture();
-    } finally { roomStarting = false; schedule(); }
+    }
   }
 
   function renderRoomMicrophone() {
     const otherTab = state.room.listeningRequested && !roomWanted;
-    byId('room-mic-start').disabled = roomWanted || otherTab || linkState !== 'live' || state.phase === 'reveal' || Boolean(state.canned);
-    byId('room-mic-stop').disabled = !roomWanted;
+    const start = byId('room-mic-start');
+    const stop = byId('room-mic-stop');
+    const active = document.activeElement;
+    start.disabled = roomWanted || otherTab || linkState !== 'live' || state.phase === 'reveal' || Boolean(state.canned);
+    start.hidden = roomWanted;
+    stop.hidden = !roomWanted;
+    if (start.hidden && active === start) stop.focus({ preventScroll: true });
+    if (stop.hidden && active === stop && !start.disabled) start.focus({ preventScroll: true });
     byId('room-mic-device').disabled = roomWanted;
-    const labels = { waiting: 'Waiting for audio', connecting: 'Connecting to transcription', live: 'Transcribing the room',
-      recovering: 'Reconnecting transcription', unavailable: 'Transcription unavailable. Check the ElevenLabs key and quota.', off: 'Microphone is off' };
-    byId('room-mic-status').textContent = roomMessage || (roomStarting ? 'Allow microphone access in your browser…' : otherTab ? 'Microphone controlled by another stage tab.'
-      : roomWanted ? `${labels[state.room.transcription] ?? 'Listening'} · ${roomCapture.deviceLabel || 'selected microphone'}`
-      : 'Microphone is off. Start it and allow browser access.');
+    const status = roomConsoleStatus({
+      link: linkState, phase: state.phase, canned: state.canned, ownedElsewhere: otherTab, starting: roomStarting,
+      interrupted: roomInterrupted, wanted: roomWanted, transcription: state.room.transcription,
+      message: roomMessage, device: roomCapture.deviceLabel,
+    });
+    byId('room-microphone-panel').dataset.state = status.tone;
+    byId('room-mic-state').textContent = status.label;
+    const detail = byId('room-mic-status');
+    const notice = status.tone === 'live' && roomCapture.deviceLabel ? 'Transcribing · ' + status.detail : status.detail;
+    if (detail.textContent !== notice) detail.textContent = notice;
     const turns = asList(state.room.transcript);
-    byId('room-transcript-clear').disabled = !turns.length || state.phase === 'reveal' || Boolean(state.canned) || linkState !== 'live';
+    byId('room-transcript-clear').hidden = !turns.length || state.phase === 'reveal' || Boolean(state.canned) || linkState !== 'live';
     const visible = state.phase === 'reveal' ? turns : turns.slice(-12);
     const speakers = new Map(turns.filter(turn => turn.streamId === state.room.speakerStream)
       .flatMap(turn => turn.speakers ?? []).filter(run => run.speaker).map(run => [run.speaker, run]));
     const panel = byId('room-speakers');
-    const key = JSON.stringify([state.room.speakerStream, state.phase, state.canned, [...speakers].map(([id, run]) => [id, run.label])]);
+    const key = JSON.stringify([state.room.speakerStream, state.phase, state.canned, linkState, [...speakers].map(([id, run]) => [id, run.label])]);
+    byId('room-speaker-controls').hidden = !speakers.size || state.phase === 'reveal' || Boolean(state.canned);
     if (panel.dataset.key !== key) {
       panel.dataset.key = key;
       fill(panel, [...speakers].map(([speaker, run]) => {
@@ -608,7 +655,7 @@ function boot() {
           select.append(option);
         }
         select.value = run.seat ?? '';
-        select.disabled = state.phase === 'reveal' || Boolean(state.canned);
+        select.disabled = linkState !== 'live';
         select.addEventListener('change', () => sendRoomFrame({
           type: 'operator', action: 'room_speaker_assign', stream: state.room.speakerStream, speaker, seat: select.value || null,
         }));
@@ -616,9 +663,24 @@ function boot() {
         return label;
       }));
     }
-    fill(byId('room-transcript'), visible.flatMap(turn => turn.speakers?.length
-      ? turn.speakers.map(run => node('li', null, run.label + ' · ' + run.text))
-      : [node('li', null, turn.text)]));
+    const transcript = byId('room-transcript');
+    const transcriptKey = JSON.stringify(visible);
+    transcript.hidden = !visible.length;
+    const empty = byId('room-transcript-empty');
+    empty.hidden = Boolean(visible.length);
+    empty.textContent = status.tone === 'live' ? 'Waiting for the first words…' : 'Speech will appear here as it’s transcribed.';
+    if (transcript.dataset.key !== transcriptKey) {
+      const previousTop = transcript.scrollTop;
+      const atBottom = transcript.scrollHeight - transcript.clientHeight - previousTop < 24;
+      transcript.dataset.key = transcriptKey;
+      fill(transcript, visible.flatMap(turn => turn.speakers?.length ? turn.speakers : [{ label: 'Room', text: turn.text }]).map(run => {
+        const row = node('li', 'room-console__turn');
+        if (run.seat) row.dataset.seat = run.seat;
+        row.append(node('span', 'room-console__speaker', run.label), node('span', null, run.text));
+        return row;
+      }));
+      transcript.scrollTop = atBottom ? transcript.scrollHeight : previousTop;
+    }
   }
 
   function renderReferences() {
@@ -629,9 +691,9 @@ function boot() {
     byId('reference-clear').disabled = !editable || !state.references.length;
     byId('reference-status').textContent = busy ? 'Reading documents…' : [referenceMessage,
       !state.questionAnswering ? 'Document answering requires OPENAI_API_KEY and the OpenAI text provider. Fixed whispers and ordinary coaching remain available.'
-        : !referenceMessage ? state.references.length ? 'References ready. Question answering starts with the session.' : 'No references loaded. Ordinary coaching remains available.' : ''].filter(Boolean).join(' ');
+        : !referenceMessage ? state.references.length ? 'References ready. Question answering starts with the session.' : 'Built-in Telepathy brief is ready. Upload files to add details.' : ''].filter(Boolean).join(' ');
     fill(byId('reference-list'), state.references.map(item => node('li', null, `${item.name} · ${item.characters.toLocaleString()} characters`)));
-    byId('answer-panel').hidden = state.phase === 'lobby' || !state.references.length;
+    byId('answer-panel').hidden = state.phase === 'lobby' || !state.references.length && !state.answerHistory.length;
     const answer = state.questionState;
     const labels = { idle: 'Listening for questions', researching: 'Checking the conversation and references…', waiting: 'Giving the conversation time to answer',
       answer: 'Answer found', preview: 'Private preview · awaiting approval', confirmed: 'Approved for delivery', discarded: 'Answer discarded', expired: 'Approval expired',
@@ -641,8 +703,15 @@ function boot() {
     byId('answer-question').textContent = answer.question ? 'Question: ' + answer.question : '';
     byId('answer-text').textContent = answer.answer ?? '';
     fill(byId('answer-sources'), asList(answer.sources).map(source => node('li', null, `${source.name}: “${source.quote}”`)));
-    fill(byId('answer-history'), state.answerHistory.map(entry => node('li', null,
-      `${entry.text} — ${asList(entry.sources).map(source => `${source.name}: “${source.quote}”`).join('; ')}`)));
+    const planners = { maritime: 'Maritime plan', 'maritime-rules': 'Maritime rules', 'local-policy': 'Local plan' };
+    fill(byId('answer-history'), state.answerHistory.map(entry => {
+      const planner = entry.kind === 'pitch_help' && Object.hasOwn(planners, entry.source) ? planners[entry.source] : '';
+      const playback = entry.kind === 'pitch_help' && Number.isFinite(entry.requestToPlaybackMs) && entry.requestToPlaybackMs >= 0
+        ? `${(entry.requestToPlaybackMs / 1000).toFixed(1)} s to playback start` : '';
+      const metadata = [planner, playback].filter(Boolean).join(' · ');
+      const evidence = asList(entry.sources).map(source => `${source.name}: “${source.quote}”`).join('; ');
+      return node('li', null, [metadata ? `${entry.text} (${metadata})` : entry.text, evidence].filter(Boolean).join(' — '));
+    }));
   }
 
   async function uploadReferences(clear = false) {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createMaritimeCoach } from '../hub/maritime.mjs';
 
-const ENV = { MARITIME_API_KEY: 'test-key', TELEPATHY_MARITIME_AGENT_ID: 'test-agent' };
+const ENV = { MARITIME_API_KEY: 'test-key', TELEPATHY_MARITIME_AGENT_ID: 'test-agent', TELEPATHY_MARITIME: 'on' };
 const ASSIST_ENV = { ...ENV, OPENAI_API_KEY: 'local-model-key', TELEPATHY_MARITIME_ASSIST: 'openai' };
 const PITCH = { beat: 'problem', elapsedSeconds: 73, onlineSeats: 2, readySeats: 2, acknowledgedMessages: 1 };
 
@@ -74,6 +74,7 @@ test('absent or invalid OpenAI candidates still let Maritime choose a cue', asyn
 
 test('an unconfigured coach is disabled and Maritime cannot inject a custom audio message', async () => {
   assert.equal(createMaritimeCoach({ env: {} }), null);
+  assert.equal(createMaritimeCoach({ env: { ...ENV, TELEPATHY_MARITIME: undefined } }), null);
   assert.equal(createMaritimeCoach({ env: { ...ENV, TELEPATHY_MARITIME: 'off' } }), null);
   for (const reply of [
     { response: JSON.stringify({ cueId: 'say custom text', engine: 'model', reason: 'anything' }) },
@@ -88,4 +89,54 @@ test('an unconfigured coach is disabled and Maritime cannot inject a custom audi
     const coach = createMaritimeCoach({ env: ENV, fetchImpl: async () => Response.json(reply) });
     await assert.rejects(coach.recommend(PITCH), /Invalid Maritime/);
   }
+});
+
+test('pitch help is opt-in and its bounded request runs against the real Maritime agent server locally', async t => {
+  const { createCoachServer } = await import('../maritime/server.mjs');
+  const { once } = await import('node:events');
+  const server = createCoachServer({ env: {} }).listen(0, '127.0.0.1');
+  t.after(() => new Promise(resolve => server.close(resolve)));
+  await once(server, 'listening');
+  const base = 'http://127.0.0.1:' + server.address().port;
+  let calls = 0;
+  const fetchImpl = (url, options) => {
+    calls++;
+    const { message } = JSON.parse(options.body);
+    const input = JSON.parse(message);
+    assert.deepEqual(Object.keys(input).sort(), ['elapsedSeconds', 'passages', 'seat', 'turns', 'type']);
+    assert.notEqual(url, base);
+    return fetch(base + '/chat', options);
+  };
+  assert.equal(createMaritimeCoach({ env: ENV, fetchImpl }).planPitchHelp, undefined);
+  assert.equal(calls, 0);
+  const adapter = createMaritimeCoach({ env: { ...ENV, TELEPATHY_MARITIME_PITCH_HELP: 'on' }, fetchImpl });
+  const result = await adapter.planPitchHelp({
+    type: 'pitch_help', seat: 'A', elapsedSeconds: 10,
+    turns: [{ speaker: 'Speaker 2', text: 'Why does it use the MacBook?' }],
+    passages: [{ id: 'brief:1', name: 'local filename', text: 'The MacBook microphone hears the room.' }],
+    extra: 'discard me',
+  });
+  assert.deepEqual(result, { intent: 'answer', passageIds: ['brief:1'], source: 'maritime-rules' });
+  assert.equal(calls, 1);
+});
+
+test('Maritime capacity errors respect Retry-After without retrying a turn', async () => {
+  let calls = 0, at = 0;
+  const coach = createMaritimeCoach({
+    env: ENV, now: () => at, fetchImpl: async () => {
+      calls++;
+      if (calls === 1) return new Response(null, { status: 429, headers: { 'Retry-After': '15' } });
+      if (calls === 2) return Response.json({ response: null, error: { code: 'uncertain_delivery' } });
+      return Response.json({ response: JSON.stringify({ cueId: 'demo-cue', engine: 'rules', reason: 'Move to the demo.' }) });
+    },
+  });
+  await assert.rejects(coach.recommend(PITCH), /429/);
+  at += 14_999;
+  await assert.rejects(coach.recommend(PITCH), /retry window/);
+  assert.equal(calls, 1);
+  at += 1;
+  await assert.rejects(coach.recommend(PITCH), /did not confirm/);
+  assert.equal(calls, 2);
+  assert.equal((await coach.recommend(PITCH)).source, 'maritime-rules');
+  assert.equal(calls, 3);
 });

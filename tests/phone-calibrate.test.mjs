@@ -14,7 +14,7 @@ function make_element(id) {
   const base = {
     id, dataset: {}, style: {}, hidden: false, textContent: '', value: '', checked: false, disabled: false,
     listeners: {}, addEventListener(type, fn) { (this.listeners[type] ??= []).push(fn); },
-    append() {}, replaceChildren() {}, querySelector: () => null,
+    append() {}, replaceChildren(...nodes) { this.children = nodes; }, querySelector: () => null,
   };
   return new Proxy(base, {
     get: (target, prop) => (prop in target ? target[prop] : prop === 'then' || typeof prop === 'symbol' ? undefined : () => undefined),
@@ -133,9 +133,9 @@ test('the Pro earbud check reports three squeezes and ignores injected gestures'
   assert.deepEqual(exits, [{ skipped: true }]);
 });
 
-test('AirPods 1 calibration collects three doubles and three triples', () => {
+test('AirPods 1 calibration collects two doubles and two triples', () => {
   const steps = build_plan('both', 2, 'next-only');
-  assert.deepEqual(steps.map(step => step.signal), ['R2', 'R2', 'R2', 'L1', 'L1', 'L1']);
+  assert.deepEqual(steps.map(step => step.signal), ['R2', 'R2', 'L1', 'L1']);
   assert.ok(steps.every(step => step.gestureModel === 'next-only'));
 });
 
@@ -155,7 +155,7 @@ test('the AirPods 1 precheck keeps timing trials off until Safari receives Next 
   calibration.stop();
 });
 
-test('AirPods 1 calibration saves timing measured over its six trials', async () => {
+test('AirPods 1 calibration saves timing measured over its four trials', async () => {
   const { applied } = make_services({ respond: true, gesture_model: 'next-only' });
   await run_to_result();
   assert.equal(element('cal-verdict').textContent, 'Calibrated');
@@ -164,12 +164,25 @@ test('AirPods 1 calibration saves timing measured over its six trials', async ()
   assert.equal(applied[0].timing.countWindowMs, 1053);
 });
 
-test('AirPods 1 retries a missed trial in place and saves only after six accepted trials', async () => {
+test('the timing screen shows the real repeat total and fills a bar for a received Next Track', async () => {
+  const { calibration } = make_services({ respond: false, gesture_model: 'next-only' });
+  element('cal-start').listeners.click[0]();
+  world.advance(5);
+  await world.flush();
+  assert.equal(element('cal-count').textContent, 'Trial 1 / 4');
+  assert.match(element('cal-repetition').textContent, /1 of 2/);
+  assert.deepEqual(element('cal-beats').children.map(beat => beat.dataset.filled), ['false', 'false']);
+  calibration.note_raw({ action: 'nexttrack', at: performance.now() });
+  assert.deepEqual(element('cal-beats').children.map(beat => beat.dataset.filled), ['true', 'false']);
+  calibration.stop();
+});
+
+test('AirPods 1 retries a missed trial in place and saves only after four accepted trials', async () => {
   const { applied, attempts } = make_services({ respond: true, gesture_model: 'next-only', miss_first: true });
   await run_to_result();
-  assert.equal(attempts(), 7);
-  assert.equal(applied[0].metrics.recognized, 6);
-  assert.equal(applied[0].metrics.trials, 6);
+  assert.equal(attempts(), 5);
+  assert.equal(applied[0].metrics.recognized, 4);
+  assert.equal(applied[0].metrics.trials, 4);
   assert.equal(applied[0].timing.countMedianMs, 780);
 });
 

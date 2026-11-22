@@ -1,10 +1,12 @@
+import { BUILD_STORY_EVIDENCE, BUILD_STORY_NOTES, fallbackPitchCue, isBuildStoryQuestion, isUsefulPitchCue, looksLikeQuestion, missingBuildPoint, sameQuestion, sourcedProjectCue } from './pitch-question.mjs';
 import { BOOKS, CANNED_PITCH, DEFAULT_CONTEXT, SEATS, SIGNALS, bitsForMode, partnerOf } from './codebook.mjs';
 
 import { codebookReadout, draftPrompt, STATUS_LINES } from './audio.mjs';
-import { retrieveReferences } from './references.mjs';
+import { exactExcerptQuotes, packReferenceEvidence, recallRoomTurns, retrieveProjectReferences, retrieveReferences } from './references.mjs';
 import { questionKey, validateAnswer } from './questions.mjs';
 import { announcementText, OPERATOR_ANNOUNCEMENTS } from '../public/announcements.mjs';
-import { normalizePitch, recommendLocally } from '../maritime/policy.mjs';
+import { normalizePitch, normalizePitchHelp, recommendLocally } from '../maritime/policy.mjs';
+import { createPitchPlanner } from './pitch-planner.mjs';
 import { createSessionMonitor } from '../monitor/session.mjs';
 import { createSpeakerBindings, splitDiarizedSegment } from '../monitor/speakers.mjs';
 
@@ -24,6 +26,20 @@ const DEFAULT_SETTINGS = Object.freeze({
   questionDebounceMs: 350,
   questionQuietMs: 2700,
   questionTimeoutMs: 8000,
+  pitchHelpTimeoutMs: 4800,
+  pitchComposeMs: 1850,
+  pitchSpeechMs: 1800,
+  pitchPauseBudgetMs: 12_000,
+  pitchReviewMs: 1200,
+  pitchQuestionSettleMs: 120,
+  pitchRevisionMinMs: 350,
+  pitchRealtimeReconnectMs: 3000,
+  pitchRealtimeReplyMs: 1550,
+  pitchQuestionRepeatMs: 2500,
+  pitchPlanWaitMs: 120,
+  pitchPlanDebounceMs: 220,
+  pitchHelpRepeatMs: 1500,
+  pitchPartialMaxMs: 2500,
   pitchContext: DEFAULT_CONTEXT.Pitch,
   names: { A: 'Presenter', B: 'Coach' },
 });
@@ -31,6 +47,7 @@ const DEFAULT_SETTINGS = Object.freeze({
 const USABLE_VOICES = new Set(['ready', 'fallback']);
 const SYNCHRONIZED_STEPS = { earbuds: 'earbuds', calibrate: 'calibrated', ready: 'wantsReady' };
 const CACHE_SIGNALS = Object.keys(BOOKS.Pitch);
+const MAX_PITCH_CUE_WORDS = 20;
 const TRANSCRIPTION_STATUSES = new Set(['waiting', 'connecting', 'live', 'recovering', 'unavailable']);
 
 function createSeat(name) {
@@ -42,6 +59,7 @@ function createSeat(name) {
     earbuds: false, calibrated: false, wantsReady: false,
     situation: '', transcript: [], level: 0, pending: null,
     lastIn: null, lastOut: null, lastDraftAt: -Infinity, lastSuggestionAt: -Infinity,
+    pitchHelp: null, questionMode: null, pitchPlayback: null, lastPitchCue: null, lastPitchHelpAt: -Infinity,
     pendingTimer: null, lastDraftFingerprint: null, receipt: null, awaitingHeard: new Map(),
     cacheId: null, out: false, seenSignals: new Set(), listenVersion: 0,
   };
@@ -118,8 +136,11 @@ export class Session {
     this.sequence = 0;
     this.senseTimer = null;
     this.cannedTimers = new Set();
+    this.pitchReferences = [];
     this.closed = false;
     this.monitor = createSessionMonitor(now);
+    this.pitchPlanner = createPitchPlanner({ remote: coach?.planPitchHelp?.bind(coach), now });
+    this.pitchPlanTimer = null;
     this.initialize();
   }
 
@@ -156,7 +177,7 @@ export class Session {
     this.questionSpeechPending = false;
     this.questionPartialSeats = new Set();
     this.roomInput = this.settings.roomInput === 'mac' ? 'mac' : 'phones';
-    this.room = { listening: false, listeningRequested: false, transcription: 'off', listenVersion: 0, level: 0, transcript: [] };
+    this.room = { listening: false, listeningRequested: false, transcription: 'off', listenVersion: 0, level: 0, transcript: [], partial: null };
     this.questionState = { status: 'idle' };
     this.dismissedQuestions = new Set();
     this.seats = Object.fromEntries(SEATS.map(seat => [
@@ -170,6 +191,8 @@ export class Session {
       ...(this.setupReset && { setupReset: this.setupReset }),
       phase: this.phase,
       preset: this.preset,
+      pitchHelp: this.preset === 'Pitch',
+      questionModeAvailable: this.preset === 'Pitch' && this.roomInput === 'mac',
       presetPending: this.cacheCandidate?.preset ?? (this.targetPreset.preset !== this.preset ? this.targetPreset.preset : null),
       cacheId: this.activeCache?.id ?? null,
       context: this.context,
@@ -191,6 +214,8 @@ export class Session {
           situation: visible ? state.situation : '',
           transcript: visible ? state.transcript.slice() : [],
           pending: visible ? state.pending : null,
+          questionMode: visible && Boolean(state.questionMode),
+          lastPitchCue: visible ? state.lastPitchCue : null,
           receipt: visible && state.receipt?.until >= this.now()
             ? { messageId: state.receipt.messageId, until: state.receipt.until }
             : null,
@@ -232,7 +257,10 @@ export class Session {
 
   monitorFrame(viewer) {
     const phase = this.questionState.status;
-    const activity = phase === 'researching'
+    const helping = (viewer ? [viewer] : SEATS).some(seat => this.seats[seat].pitchHelp);
+    const activity = helping
+      ? { phase: 'evaluating', summary: 'Preparing a private pitch cue', preset: this.preset }
+      : phase === 'researching'
       ? { phase: 'evaluating', summary: 'Checking the team references', preset: this.preset }
       : phase === 'preview'
         ? { phase: 'ready', summary: 'An answer is ready for a private preview', preset: this.preset }
@@ -289,6 +317,7 @@ export class Session {
   }
 
   endConnection(seat) {
+    this.stopQuestionMode(seat);
     this.cancelAnswers('disconnect');
     this.questionPartialSeats.delete(seat);
     this.questionSpeechPending = this.questionPartialSeats.size > 0;
@@ -316,6 +345,8 @@ export class Session {
   }
 
   cancelScene(reason) {
+    this.clearPitchPlanning();
+    for (const seat of SEATS) this.stopQuestionMode(seat);
     this.cancelAnswers(reason);
     this.questionTurns = [];
     this.questionSpeechPending = false;
@@ -324,7 +355,11 @@ export class Session {
     this.scene.abort();
     this.scene = new AbortController();
     this.coachState = { status: 'idle' };
-    for (const seat of SEATS) this.clearPending(seat, reason);
+    for (const seat of SEATS) {
+      this.seats[seat].lastPitchCue = null;
+      this.seats[seat].pitchPlayback = null;
+      this.clearPending(seat, reason);
+    }
   }
 
   sendManifest(seat, candidate) {
@@ -576,7 +611,9 @@ export class Session {
       }
     } else if (signal === 'LR') {
       this.publish();
-      await this.sense(seat);
+      if (frame.purpose === 'question_mode' && this.preset === 'Pitch') this.toggleQuestionMode(seat);
+      else if (frame.purpose === 'pitch_help' && this.preset === 'Pitch') await this.requestPitchHelp(seat);
+      else await this.sense(seat);
     } else if (signal === 'L2') {
       this.publish();
       await this.readCodebook(seat);
@@ -649,6 +686,11 @@ export class Session {
     const playedAt = this.now();
     entry.playedAt = playedAt;
     entry.playbackLatencyMs = Math.max(0, playedAt - entry.at);
+    if (entry.kind === 'pitch_help') {
+      entry.requestToPlaybackMs = Math.max(0, playedAt - entry.requestedAt);
+      this.publish();
+      return;
+    }
     state.receipt = {
       from: entry.seat,
       text: entry.text,
@@ -734,12 +776,13 @@ export class Session {
     const wasSpeaking = this.questionPartialSeats.delete(seat);
     this.questionSpeechPending = this.questionPartialSeats.size > 0;
     this.monitor.updatePartial(seat, '');
+    if (seat === 'room') this.room.partial = null;
     state.transcript.push({
       at: this.now(), text,
       ...(Number.isInteger(meta?.segment) && { streamId: meta.streamId, segment: meta.segment }),
     });
     if (seat === 'room' && state.transcript.length > 60) state.transcript.splice(0, state.transcript.length - 60);
-    if (this.phase === 'live' && this.references.length && this.codec?.questionAnswering) {
+    if (this.phase === 'live' && !(seat === 'room' && SEATS.some(person => this.seats[person].questionMode)) && this.references.length && this.codec?.questionAnswering) {
       const key = questionKey(text);
       const duplicate = this.questionTurns.slice(-4).some(turn => this.now() - turn.at < 2000 && questionKey(turn.text) === key);
       if (!duplicate) {
@@ -755,6 +798,10 @@ export class Session {
         this.questionTimer.unref();
         this.questionQuietTimer.unref();
       }
+    }
+    if (seat === 'room') {
+      this.schedulePitchPlanning();
+      this.commitPitchQuestion(state.transcript.at(-1));
     }
     this.publish();
   }
@@ -775,6 +822,7 @@ export class Session {
       if (!entry) return;
       entry.speakers = segment.runs.map(run => ({ text: run.text, ...bindings.describe(run.speaker) }));
     }
+    if (seat === 'room') this.schedulePitchPlanning();
     this.publish();
   }
 
@@ -790,6 +838,7 @@ export class Session {
     if (this.roomInput !== 'mac' || this.canned || this.phase === 'reveal' || !Number.isInteger(stream)
         || stream !== this.room.speakerStream || !this.room.speakerBindings?.assign(speaker, seat)) return;
     this.refreshSpeakerLabels(this.room);
+    this.schedulePitchPlanning();
     this.publish();
   }
 
@@ -808,6 +857,341 @@ export class Session {
     }
     if (this.questionState?.status === 'preview' || this.questionState?.status === 'researching') {
       this.questionState = { ...this.questionState, status: 'cancelled', reason };
+    }
+  }
+
+  schedulePitchPlanning() {
+    if (!this.coach?.planPitchHelp || this.closed || this.canned || this.phase !== 'live' || this.preset !== 'Pitch'
+        || !this.pitchReferences.length || !this.seats.A.online || this.seats.A.sim) return;
+    clearTimeout(this.pitchPlanTimer);
+    this.pitchPlanTimer = setTimeout(() => {
+      if (!this.room.listening || !this.seats.A.online || this.seats.A.sim || this.closed || this.canned || this.phase !== 'live' || this.preset !== 'Pitch') return;
+      const { context } = this.pitchContext('A', this.now(), false);
+      if (context.turns.length) this.pitchPlanner.prepare(context);
+    }, this.settings.pitchPlanDebounceMs);
+    this.pitchPlanTimer.unref();
+  }
+
+  clearPitchPlanning() {
+    clearTimeout(this.pitchPlanTimer);
+    this.pitchPlanTimer = null;
+    this.pitchPlanner.clear();
+  }
+
+  pitchContext(seat, began, includePartial = true) {
+    const history = this.room.transcript.flatMap(turn =>
+      turn.speakers?.length ? turn.speakers.map(run => ({ at: turn.at, speaker: run.label, text: run.text }))
+        : [{ at: turn.at, speaker: 'Room', text: turn.text }]);
+    const turns = history.filter(turn => began - turn.at <= this.settings.roomContextMs);
+    const partial = this.room.partial;
+    if (includePartial && partial && began - partial.at <= this.settings.pitchPartialMaxMs
+        && questionKey(partial.text) !== questionKey(turns.at(-1)?.text)) {
+      turns.push({ speaker: 'Room (live partial)', text: partial.text });
+    }
+    const recent = turns.slice(-6);
+    const earlier = recallRoomTurns(history.filter(turn => !recent.includes(turn)), recent.at(-1)?.text ?? '');
+    const query = recent.slice(-3).map(turn => turn.text).join(' ') || 'Telepathy live pitch demo';
+    const passages = retrieveProjectReferences([...this.references, ...this.pitchReferences], query, 7, recent.at(-1)?.text);
+    const project = this.pitchReferences.find(doc => doc.name === 'Telepathy technical reference.md')
+      ?.chunks.find(chunk => chunk.heading === 'Project overview')?.text;
+    return { passages, recent, earlier, project, context: normalizePitchHelp({
+      type: 'pitch_help', seat, elapsedSeconds: Math.min(86400, Math.max(0, Math.floor((began - this.startedAt) / 1000))),
+      turns: recent, passages,
+    }) };
+  }
+
+  stopQuestionMode(seat) {
+    const state = this.seats[seat];
+    const mode = state.questionMode;
+    if (!mode) return;
+    clearTimeout(mode.timer);
+    mode.controller.abort();
+    state.questionMode = null;
+  }
+
+  toggleQuestionMode(seat) {
+    if (this.seats[seat].questionMode) this.stopQuestionMode(seat);
+    else {
+      this.cancelAnswers('question_mode');
+      const controller = new AbortController();
+      const scope = AbortSignal.any([this.liveScope([seat]), controller.signal]);
+      const realtime = this.codec?.openPitchRealtime?.(scope);
+      this.seats[seat].questionMode = { controller, scope, realtime, realtimeOpenedAt: this.now(), revisions: 0, candidate: null, timer: null };
+      if (this.room.partial && this.now() - this.room.partial.at <= this.settings.pitchPartialMaxMs) {
+        this.preparePitchQuestion(this.room.partial.text);
+      }
+    }
+    this.publish();
+  }
+
+  pitchRealtime(mode) {
+    if (mode.realtime?.closed && !mode.scope.aborted
+        && this.now() - mode.realtimeOpenedAt >= this.settings.pitchRealtimeReconnectMs) {
+      mode.realtimeOpenedAt = this.now();
+      mode.realtime = this.codec.openPitchRealtime(mode.scope);
+    }
+    return mode.realtime;
+  }
+
+  preparePitchQuestion(text) {
+    if (this.phase !== 'live' || this.canned || this.preset !== 'Pitch' || !looksLikeQuestion(text)) return;
+    for (const seat of SEATS) {
+      const mode = this.seats[seat].questionMode;
+      if (!mode || (this.seats[seat].pitchHelp && !mode.delivery)) continue;
+      const previous = mode.candidate;
+      if (previous) {
+        const growth = questionKey(text).split(' ').length - questionKey(previous.text).split(' ').length;
+        if (!mode.realtime || mode.revisions >= 2 || growth < 3 || this.now() - previous.at < this.settings.pitchRevisionMinMs) continue;
+        previous.controller.abort();
+      }
+      mode.revisions++;
+      const controller = new AbortController();
+      const scope = AbortSignal.any([this.liveScope([seat]), mode.controller.signal, controller.signal]);
+      const input = this.pitchContext(seat, this.now());
+      const started = performance.now();
+      const realtime = this.pitchRealtime(mode);
+      const task = withDeadline(signal => this.composePitchCue(input, signal, started, realtime),
+        this.settings.pitchComposeMs, scope).catch(() => null);
+      mode.candidate = { text, controller, task, at: this.now(), corpus: this.pitchReferences, uploads: this.references };
+    }
+  }
+
+  holdActivePitchCues() {
+    for (const seat of SEATS) {
+      const state = this.seats[seat];
+      const playback = state.pitchPlayback;
+      if (!playback || playback.held || playback.until <= this.now()) continue;
+      playback.held = true;
+      state.awaitingHeard.delete(playback.entry.messageId);
+      this.emitSeat(seat, { type: 'pitch_help_hold', messageId: playback.entry.messageId });
+    }
+  }
+
+  async waitForPitchPause(signal) {
+    while (this.room.listening && this.room.partial) {
+      signal.throwIfAborted();
+      await new Promise(resolve => setTimeout(resolve, 75));
+    }
+    signal.throwIfAborted();
+  }
+
+  pitchAnswerAfter(seat, anchor) {
+    if (!anchor) return '';
+    const turns = this.room.transcript;
+    const index = turns.indexOf(anchor);
+    if (index < 0) return '';
+    const answer = [];
+    for (const candidate of turns.slice(index + 1, index + 4)) {
+      if (looksLikeQuestion(candidate.text)) break;
+      if (candidate.speakers?.some(run => run.seat)) {
+        answer.push(...candidate.speakers.filter(run => run.seat === seat).map(run => run.text));
+      } else answer.push(candidate.text);
+    }
+    return answer.join(' ');
+  }
+
+  async reviewPitchAnswer(question, spoken, passages, signal) {
+    if (questionKey(spoken).split(' ').length < 4) return null;
+    if (isBuildStoryQuestion(question)) {
+      const answer = missingBuildPoint(spoken);
+      const source = passages.find(passage => passage.text.includes(BUILD_STORY_EVIDENCE));
+      return answer && source ? { answer, source: 'project-reference', sources: [{ id: source.id, name: source.name, quote: BUILD_STORY_EVIDENCE }], timing: {} } : null;
+    }
+    if (!this.codec?.questionAnswering || !passages.length) return null;
+    const turns = [{ text: question }, { text: spoken }];
+    try {
+      const value = await withDeadline(deadline => this.codec.answer({
+        activeQuestion: question, turns, passages, requested: true, quietMs: 2500, signal: deadline,
+      }), this.settings.pitchReviewMs, signal);
+      const reviewed = validateAnswer(value, passages, turns);
+      return reviewed.status === 'advice' ? { ...reviewed, source: 'answer-review', timing: {} } : null;
+    } catch { return null; }
+  }
+
+  commitPitchQuestion(entry) {
+    for (const seat of SEATS) {
+      const state = this.seats[seat];
+      const mode = state.questionMode;
+      if (!mode) continue;
+      const playback = state.pitchPlayback;
+      if (playback?.held) {
+        state.pitchPlayback = null;
+        if (!looksLikeQuestion(entry.text)) {
+          const prior = playback;
+          clearTimeout(mode.timer);
+          mode.timer = setTimeout(() => {
+            if (this.seats[seat].questionMode !== mode) return;
+            const spoken = this.pitchAnswerAfter(seat, prior.anchor);
+            if (spoken) void this.requestPitchHelp(seat, {
+              question: prior.question, anchor: prior.anchor, spoken, scope: mode.scope,
+            });
+          }, this.settings.pitchQuestionSettleMs);
+          mode.timer.unref();
+          continue;
+        }
+      }
+      const candidate = mode.candidate;
+      mode.candidate = null;
+      mode.revisions = 0;
+      if (!looksLikeQuestion(entry.text) || (this.seats[seat].pitchHelp && !mode.delivery)
+          || (mode.lastQuestion && sameQuestion(mode.lastQuestion.text, entry.text)
+            && entry.at - mode.lastQuestion.at < this.settings.pitchQuestionRepeatMs)
+          || (mode.pendingQuestion && sameQuestion(mode.pendingQuestion.text, entry.text))) {
+        candidate?.controller.abort();
+        continue;
+      }
+      clearTimeout(mode.timer);
+      mode.pending?.controller.abort();
+      mode.pending = candidate;
+      mode.pendingQuestion = entry;
+      mode.timer = setTimeout(() => {
+        if (this.seats[seat].questionMode !== mode) return;
+        mode.pending = null;
+        mode.pendingQuestion = null;
+        if (this.seats[seat].pitchHelp && !mode.delivery) {
+          candidate?.controller.abort();
+          return;
+        }
+        const questions = entry.speakers?.filter(run => looksLikeQuestion(run.text)) ?? [];
+        if (questions.length && questions.every(run => run.seat === seat)) {
+          candidate?.controller.abort();
+          return;
+        }
+        const prepared = candidate && candidate.corpus === this.pitchReferences && candidate.uploads === this.references
+          && sameQuestion(candidate.text, entry.text) ? candidate : null;
+        if (!prepared) candidate?.controller.abort();
+        mode.lastQuestion = entry;
+        mode.delivery?.abort();
+        const delivery = new AbortController();
+        mode.delivery = delivery;
+        const input = this.pitchContext(seat, this.now(), false);
+        const scope = AbortSignal.any([mode.scope, delivery.signal]);
+        void this.requestPitchHelp(seat, { input, prepared, question: entry.text, anchor: entry, scope, realtime: this.pitchRealtime(mode) })
+          .finally(() => { if (mode.delivery === delivery) mode.delivery = null; });
+      }, this.settings.pitchQuestionSettleMs);
+      mode.timer.unref();
+    }
+  }
+
+  async composePitchCue({ context, passages, recent, earlier, project }, signal, started, realtime) {
+    const question = recent.at(-1)?.text ?? '';
+    const known = sourcedProjectCue(question, passages);
+    if (known) {
+      return { ...validateAnswer(known, passages, recent), source: 'project-reference', timing: {} };
+    }
+    if (!this.codec?.pitchHelp || !passages.length) return null;
+    const { plan, source } = await this.pitchPlanner.select(context, { signal, waitMs: this.settings.pitchPlanWaitMs });
+    const planned = performance.now();
+    const selected = new Set(plan.passageIds);
+    const ranked = [...passages.filter(passage => selected.has(passage.id)), ...passages.filter(passage => !selected.has(passage.id))];
+    const input = { ...context, project, turns: recent.map(({ speaker, text }) => ({ speaker, text })),
+      ...(earlier?.length && { earlierRoomContext: earlier }), passages: ranked, plan };
+    const evidence = realtime ? packReferenceEvidence(ranked, recent.at(-1)?.text ?? '') : [];
+    const raw = realtime ? await withDeadline(deadline => realtime.generate({
+      ...input, turns: input.turns.slice(-4), passages: evidence,
+      plan: { ...plan, passageIds: plan.passageIds.filter(id => evidence.some(passage => passage.id === id)) },
+    }, deadline), this.settings.pitchRealtimeReplyMs, signal).catch(() => null) : null;
+    signal.throwIfAborted();
+    let cue;
+    if (raw) {
+      try {
+        cue = validateAnswer({ ...raw, sources: exactExcerptQuotes(raw.sources, evidence) }, evidence, recent);
+      } catch {}
+      if (cue?.status === 'answer' && cue.answer.split(/\s+/).length <= MAX_PITCH_CUE_WORDS && isUsefulPitchCue(cue.answer, question)) {
+        return { ...cue, source: 'openai-realtime', timing: { planMs: Math.round(planned - started), composeMs: Math.round(performance.now() - planned) } };
+      }
+    }
+    const result = await this.codec.pitchHelp({ signal, ...input });
+    if (!result) return null;
+    cue = validateAnswer(result, ranked, recent);
+    if (cue.status !== 'answer' || cue.answer.split(/\s+/).length > MAX_PITCH_CUE_WORDS || !isUsefulPitchCue(cue.answer, question)) return null;
+    return { ...cue, source, timing: { planMs: Math.round(planned - started), composeMs: Math.round(performance.now() - planned) } };
+  }
+
+  async requestPitchHelp(seat, { input, prepared, question, anchor, spoken, scope, realtime } = {}) {
+    const state = this.seats[seat];
+    const began = this.now();
+    if (!state.online || (state.pitchHelp && !state.pitchHelp.signal.aborted && !question)
+        || (!question && began - state.lastPitchHelpAt < this.settings.pitchHelpRepeatMs)) {
+      prepared?.controller.abort();
+      return;
+    }
+    const notify = text => this.emitSeat(seat, { type: 'pitch_help_status', text });
+    if (state.sim) {
+      notify('Live pitch help requires a real seat.');
+      return;
+    }
+    state.lastPitchHelpAt = began;
+    const controller = new AbortController();
+    state.pitchHelp = controller;
+    const lifecycle = AbortSignal.any([controller.signal, this.liveScope([seat]), ...(scope ? [scope] : [])]);
+    const resolved = input ?? this.pitchContext(seat, began);
+    const started = performance.now();
+    let surfacedCue = false;
+    notify('Preparing a private pitch cue…');
+    this.publishMonitor();
+    try {
+      const reply = await withDeadline(async signal => {
+        let cue = spoken
+          ? await this.reviewPitchAnswer(question, spoken, resolved.passages, signal)
+          : await withDeadline(deadline => prepared?.task ?? this.composePitchCue(resolved, deadline, started, realtime),
+            this.settings.pitchComposeMs, signal).catch(() => null)
+            ?? { answer: fallbackPitchCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)), source: 'local-fallback', sources: [], timing: {} };
+        if (anchor) await this.waitForPitchPause(signal);
+        let checkedAnswer = spoken || this.pitchAnswerAfter(seat, anchor);
+        if (checkedAnswer && !spoken) cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
+        if (!cue) return null;
+        const composed = performance.now();
+        const speak = async text => {
+          try { return toUrl(await withDeadline(deadline => this.audio.speech(seat, text, {
+            voice: null, sim: false, role: 'assistant', signal: deadline, whisper: true,
+          }), this.settings.pitchSpeechMs, signal)); } catch { return null; }
+        };
+        const showCue = () => {
+          notify(cue.answer);
+          surfacedCue = true;
+          state.lastPitchCue = {
+            text: cue.answer,
+            points: !checkedAnswer && isBuildStoryQuestion(question ?? resolved.recent.at(-1)?.text ?? '')
+              ? BUILD_STORY_NOTES
+              : cue.sources.slice(0, 1).map(source => source.quote.slice(0, 180)),
+          };
+          this.emitSeat(seat, { type: 'state', state: this.snapshot(seat) });
+        };
+        showCue();
+        let url = await speak(cue.answer);
+        if (anchor) await this.waitForPitchPause(signal);
+        const latestAnswer = this.pitchAnswerAfter(seat, anchor);
+        if (latestAnswer && latestAnswer !== checkedAnswer) {
+          checkedAnswer = latestAnswer;
+          cue = await this.reviewPitchAnswer(question, checkedAnswer, resolved.passages, signal);
+          if (!cue) return null;
+          showCue();
+          url = await speak(cue.answer);
+          if (anchor) await this.waitForPitchPause(signal);
+          if (this.pitchAnswerAfter(seat, anchor) !== checkedAnswer) return null;
+        }
+        const rendered = performance.now();
+        return { ...cue, url, reviewed: Boolean(checkedAnswer), timing: {
+          ...cue.timing, speechMs: Math.round(rendered - composed), hubMs: Math.round(rendered - started),
+        } };
+      }, Math.max(this.settings.pitchHelpTimeoutMs, this.settings.pitchPauseBudgetMs), lifecycle);
+      if (lifecycle.aborted || !reply) return;
+      const messageId = reply.url ? 'pitch-help-' + (this.sequence + 1) : null;
+      const entry = this.append('pitch_help', { seat, text: reply.answer, source: reply.source, sources: reply.sources,
+        timing: reply.timing, requestedAt: began, messageId });
+      if (messageId) {
+        state.awaitingHeard.set(messageId, entry);
+        if (state.awaitingHeard.size > 32) state.awaitingHeard.delete(state.awaitingHeard.keys().next().value);
+        if (anchor && !reply.reviewed) state.pitchPlayback = { entry, question, anchor, until: this.now() + 10_000 };
+        this.cue(seat, 'sent', { kind: 'pitch_help', url: reply.url, text: reply.answer, messageId, expiresAfterMs: 2000 });
+      }
+    } catch {
+      if (!lifecycle.aborted && !surfacedCue) notify(fallbackPitchCue(question ?? resolved.recent.at(-1)?.text ?? '', Boolean(question)));
+    } finally {
+      prepared?.controller.abort();
+      if (state.pitchHelp === controller) state.pitchHelp = null;
+      if (!lifecycle.aborted) this.publish();
     }
   }
 
@@ -890,7 +1274,12 @@ export class Session {
       committed,
       partial: text => {
         if (!current() || !text?.trim()) return;
-        if (room) this.monitor.updatePartial(seat, text);
+        if (room) {
+          this.room.partial = { at: this.now(), text: cleanText(text, 260) };
+          this.monitor.updatePartial(seat, text);
+          this.holdActivePitchCues();
+          this.preparePitchQuestion(text);
+        }
         if (track_questions && this.phase === 'live') {
           this.questionPartialSeats.add(seat);
           this.questionSpeechPending = true;
@@ -1030,11 +1419,17 @@ export class Session {
 
   stopRoomListening() {
     const wasRequested = this.room.listeningRequested;
+    this.clearPitchPlanning();
+    for (const seat of SEATS) {
+      this.stopQuestionMode(seat);
+      this.seats[seat].pitchHelp?.abort();
+    }
     this.room.listenVersion++;
     this.room.listening = false;
     this.room.listeningRequested = false;
     this.room.transcription = 'off';
     this.room.level = 0;
+    this.room.partial = null;
     this.monitor.updatePartial('room', '');
     this.questionPartialSeats.delete('room');
     this.questionSpeechPending = this.questionPartialSeats.size > 0;
@@ -1406,13 +1801,20 @@ export class Session {
         this.phase = 'live';
         this.startedAt = this.now();
         this.startSensing();
+        if (this.room.listening) this.schedulePitchPlanning();
         break;
       case 'preset': return this.selectPreset(frame.preset, frame.context);
       case 'announce': return this.announce(frame.text);
       case 'room_speaker_assign': return this.assignRoomSpeaker(frame);
       case 'room_transcript_clear':
         if (this.roomInput !== 'mac' || this.canned || this.phase === 'reveal') return;
+        this.clearPitchPlanning();
+        for (const seat of SEATS) {
+          this.stopQuestionMode(seat);
+          this.seats[seat].pitchHelp?.abort();
+        }
         this.room.transcript = [];
+        this.room.partial = null;
         this.questionTurns = this.questionTurns.filter(turn => turn.seat !== 'room');
         this.monitor.updatePartial('room', '');
         this.cancelAnswers('room_transcript_cleared');
@@ -1519,6 +1921,8 @@ export class Session {
   }
 
   clearTimers() {
+    for (const seat of SEATS) this.stopQuestionMode(seat);
+    this.clearPitchPlanning();
     this.stopRoomListening();
     this.cancelAnswers('reset');
     this.finishAnnouncement('reset');

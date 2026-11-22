@@ -92,6 +92,29 @@ test('coach reports rule-based advice when model credentials are absent', async 
   assert.deepEqual(await readAdvice(await chat()), { ...recommendLocally(PITCH), engine: 'rules' });
 });
 
+test('the custom agent uses the configured OpenAI endpoint for a contextual plan and keeps envelope metadata out of the prompt', async t => {
+  const context = {
+    type: 'pitch_help', seat: 'A', elapsedSeconds: 12,
+    turns: [{ speaker: 'Speaker 1', text: 'What is the Mac doing?' }],
+    passages: [{ id: 'brief:1', text: 'The Mac transcribes the room.', name: 'private filename' }],
+  };
+  const { chat } = await startCoach(t, {
+    env: { OPENAI_API_KEY: 'test-token' },
+    fetchImpl: async (url, options) => {
+      assert.equal(url, 'https://api.openai.com/v1/chat/completions');
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.store, false);
+      const actual = JSON.parse(payload.messages[1].content);
+      assert.deepEqual(actual.turns, context.turns);
+      assert.deepEqual(actual.passages, [{ id: 'brief:1', text: 'The Mac transcribes the room.' }]);
+      assert.doesNotMatch(options.body, /private filename|private-meta/);
+      return modelResponse({ intent: 'answer', passageIds: ['brief:1'], answer: 'must not speak this' });
+    },
+  });
+  const result = await readAdvice(await chat(context, { context: { token: 'private-meta' } }));
+  assert.deepEqual(result, { intent: 'answer', passageIds: ['brief:1'], engine: 'model' });
+});
+
 test('hosted review accepts a useful candidate and overrides cues that clash with current telemetry', async t => {
   const { chat } = await startCoach(t, {
     env: ENV,

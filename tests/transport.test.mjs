@@ -3,8 +3,11 @@ import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 import { test } from 'node:test';
 import { WebSocket } from 'ws';
+import { createCodec } from '../hub/codec.mjs';
+import { createMaritimeCoach } from '../hub/maritime.mjs';
 import { createHub } from '../hub/server.mjs';
 import { findLanAddress, hotspotIPv6Peers } from '../hub/tls.mjs';
+import { createCoachServer } from '../maritime/server.mjs';
 
 async function open(base, params) {
   const url = new URL('/ws?' + new URLSearchParams(params), base);
@@ -209,6 +212,7 @@ test('the stage broadcasts one bundled system clip to both seats and sees both p
 test('the pitch coach sends a reviewed cue through the real two-seat transport', async context => {
   const live = process.env.TELEPATHY_VERIFY_MARITIME === '1';
   const env = live ? {
+    TELEPATHY_MARITIME: 'on',
     MARITIME_API_KEY: process.env.MARITIME_API_KEY,
     TELEPATHY_MARITIME_AGENT_ID: process.env.TELEPATHY_MARITIME_AGENT_ID,
     TELEPATHY_MARITIME_ASSIST: process.env.TELEPATHY_MARITIME_ASSIST,
@@ -267,6 +271,80 @@ test('the pitch coach sends a reviewed cue through the real two-seat transport',
   assert.deepEqual(result.announcement.heard, ['A', 'B']);
   assert.equal(result.bits, exchange.bits);
   if (live) context.diagnostic(draft.source + ' response at the Operator in ' + latency + ' ms. Both simulated seats acknowledged the ElevenLabs clip.');
+});
+
+test('a phone request uses a prepared Maritime context plan and reports private playback through the hub', async t => {
+  let prepared = 0;
+  const agent = createCoachServer({ env: {} }).listen(0, '127.0.0.1');
+  t.after(() => new Promise(resolve => agent.close(resolve)));
+  await once(agent, 'listening');
+  const coach = createMaritimeCoach({
+    env: { TELEPATHY_MARITIME: 'on', TELEPATHY_MARITIME_PITCH_HELP: 'on', MARITIME_API_KEY: 'stub', TELEPATHY_MARITIME_AGENT_ID: 'stub' },
+    fetchImpl: async (_, request) => {
+      const response = await fetch('http://127.0.0.1:' + agent.address().port + '/chat', request);
+      await response.clone().json();
+      prepared++;
+      return response;
+    },
+  });
+  const finalLine = 'Mac listens. Phones keep earbud controls.';
+  const codec = createCodec({
+    env: { OPENAI_API_KEY: 'stub' },
+    fetchImpl: async (_, request) => {
+      const input = JSON.parse(JSON.parse(request.body).input);
+      assert.equal(input.plan.intent, 'answer');
+      assert.equal(input.turns.at(-1)?.speaker, 'Speaker 1');
+      const passage = input.passages.find(item => item.name === 'Telepathy pitch brief.md');
+      const answer = { status: 'answer', question: 'Why the MacBook?', answer: finalLine, responseQuote: '',
+        sources: [{ id: passage.id, quote: passage.text.slice(0, 50).trim() }] };
+      return Response.json({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(answer) }] }] });
+    },
+  });
+  const { base } = await hubFixture(t, {
+    coach, codec, settings: { roomSenseMs: 0, pitchPlanDebounceMs: 5 },
+    audio: {
+      buildCache: async (seat, preset, messages) => Object.keys(messages).map(signal => ({ key: seat + ':' + preset + ':' + signal, url: '/assets/cue-system.mp3' })),
+      listen: async (_, enabled) => ({ listening: enabled }),
+      mic: async (_, audio, level, callbacks) => {
+        callbacks.committed('Why does this pitch use the MacBook microphone?', { streamId: 1, segment: 0 });
+        callbacks.diarized({ segment_index: 0, words: [{ speaker_id: 'speaker_1', text: 'Why does this pitch use the MacBook microphone?' }] }, 1);
+      },
+      speech: async (_, text) => { assert.equal(text, finalLine); return '/assets/cue-system.mp3'; },
+    },
+  });
+  const stage = await open(base, { role: 'stage' });
+  const a = await open(base, { role: 'seat', seat: 'A' });
+  const b = await open(base, { role: 'seat', seat: 'B' });
+  for (const seat of [a, b]) {
+    seat.send({ type: 'setup', step: 'voice', complete: true, choice: 'premade' });
+    for (const step of ['earbuds', 'calibrate', 'ready']) seat.send({ type: 'setup', step, complete: true });
+  }
+  await Promise.all([a, b].map(async seat => {
+    const cache = await seat.take(frame => frame.type === 'cache');
+    seat.send({ type: 'cache_ready', activeId: cache.activeId });
+  }));
+  await stage.take(frame => frame.state?.canBegin);
+  stage.send({ type: 'operator', action: 'begin' });
+  const { state } = await stage.take(frame => frame.state?.phase === 'live');
+  const tags = { hubId: state.hubId, sessionId: state.sessionId };
+  stage.send({ type: 'operator', action: 'room_listen', enabled: true, ...tags });
+  await stage.take(frame => frame.type === 'room_ack' && frame.listening);
+  stage.send({ type: 'room_mic', audio: 'PCM', level: 0.1, ...tags });
+  const deadline = Date.now() + 750;
+  while (!prepared && Date.now() < deadline) await delay(10);
+  assert.equal(prepared, 1);
+  a.send({ type: 'signal', signal: 'LR', purpose: 'pitch_help', id: 'phone-help', ...tags });
+  const audio = await a.take(frame => frame.kind === 'pitch_help');
+  assert.equal(audio.cue, 'sent');
+  assert.equal(audio.text, finalLine);
+  b.send({ type: 'heard', messageId: audio.messageId, ...tags });
+  a.send({ type: 'heard', messageId: audio.messageId, ...tags });
+  const result = await stage.take(frame => frame.state?.log.some(entry => entry.kind === 'pitch_help' && entry.requestToPlaybackMs >= 0));
+  assert.equal(result.state.log.find(entry => entry.kind === 'pitch_help').source, 'maritime-rules');
+  assert.equal(result.state.seats.A.receipt, null);
+  assert.equal(result.state.seats.B.receipt, null);
+  assert.ok(!b.frames.some(frame => frame.kind === 'pitch_help' || frame.state?.log.some(entry => entry.kind === 'pitch_help')));
+  assert.equal(prepared, 1);
 });
 
 test('loopback rehearsal advertises the address it actually listens on', async context => {

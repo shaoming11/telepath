@@ -44,19 +44,45 @@
 
   <main id="stage-main">
 
-    <section class="reference-panel" id="room-microphone-panel" aria-labelledby="room-mic-title">
-      <h2 class="kicker" id="room-mic-title">ROOM MICROPHONE</h2>
-      <p>Use this Mac’s microphone for the conversation. Phones handle whispers and approval; their room microphones stay off.</p>
-      <label for="room-mic-device">Microphone input</label>
-      <select id="room-mic-device"><option value="">System default — choose MacBook Microphone in macOS Sound settings</option></select>
-      <div class="reference-actions">
-        <button id="room-mic-start" type="button">Start Mac microphone</button>
-        <button id="room-mic-stop" type="button" disabled>Stop microphone</button>
+    <section class="room-console" id="room-microphone-panel" aria-labelledby="room-mic-title" data-state="off">
+      <header class="room-console__head">
+        <div>
+          <h2 id="room-mic-title">Room microphone</h2>
+          <p>One Mac input for both seats. Phones handle whispers and taps.</p>
+        </div>
+        <div class="room-console__actions">
+          <span class="room-console__state" id="room-mic-state" aria-hidden="true">Off</span>
+          <button class="room-console__start" id="room-mic-start" type="button" disabled>Start listening</button>
+          <button id="room-mic-stop" type="button" hidden>Stop listening</button>
+        </div>
+      </header>
+      <div class="room-console__input">
+        <div class="room-console__device">
+          <label class="kicker" for="room-mic-device">Input device</label>
+          <select id="room-mic-device"><option value="">System default</option></select>
+        </div>
+        <div class="room-console__signal">
+          <div class="room-console__meter-head">
+            <label class="kicker" for="room-mic-level">Input level</label>
+            <span class="mono" id="room-mic-readout" aria-hidden="true">—</span>
+          </div>
+          <meter class="sr-only" id="room-mic-level" min="0" max="1" value="0">0</meter>
+          <div class="room-console__meter" id="room-mic-bars" aria-hidden="true"></div>
+        </div>
       </div>
-      <p id="room-mic-status" role="status" aria-live="polite">Microphone is off. Start it and allow browser access.</p>
-      <label for="room-mic-level">Input level</label>
-      <meter id="room-mic-level" min="0" max="1" value="0">0</meter>
-      <details><summary>Shared room transcript</summary><div class="reference-actions" id="room-speakers"></div><ul id="room-transcript"></ul><button id="room-transcript-clear" type="button" disabled>Clear transcript</button></details>
+      <p class="room-console__notice" id="room-mic-status" role="status">Start listening and allow microphone access.</p>
+      <div class="room-console__transcript" aria-labelledby="room-transcript-title">
+        <div class="room-console__transcript-head">
+          <h3 class="kicker" id="room-transcript-title">Room transcript</h3>
+          <button id="room-transcript-clear" class="room-console__clear" type="button" hidden>Clear transcript</button>
+        </div>
+        <p class="room-console__empty" id="room-transcript-empty">Speech will appear here as it’s transcribed.</p>
+        <ul class="room-console__turns" id="room-transcript" aria-labelledby="room-transcript-title" tabindex="0" hidden></ul>
+        <details class="room-console__speakers" id="room-speaker-controls" hidden>
+          <summary>Assign speakers</summary>
+          <div id="room-speakers"></div>
+        </details>
+      </div>
     </section>
 
     <!-- Lobby -->

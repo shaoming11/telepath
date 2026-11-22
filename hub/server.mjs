@@ -11,6 +11,7 @@ import { Worker } from 'node:worker_threads';
 import { bankFileName, createAudio, STATUS_LINES, STOCK_VOICES } from './audio.mjs';
 import { createCodec } from './codec.mjs';
 import { createMaritimeCoach } from './maritime.mjs';
+import { buildProjectReferences } from './project-references.mjs';
 import { Session } from './session.mjs';
 import { findLanAddress, hotspotIPv6Peers, resolveTLS } from './tls.mjs';
 
@@ -18,6 +19,7 @@ const PUBLIC = fileURLToPath(new URL('../public/', import.meta.url));
 const RUNTIME = fileURLToPath(new URL('../.runtime/', import.meta.url));
 const DIAG_LOG = resolve(RUNTIME, 'diag.log');
 const MAX_SOCKET_BACKLOG = 2 * 1024 * 1024;
+const PROJECT_REFERENCE_REFRESH_MS = 2500;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 const LOOPBACK_PEERS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 const TEST_AUDIO = {
@@ -76,7 +78,8 @@ function listen(server, port, host) {
 
 export function createHub({
   env = process.env, audio, codec, coach, settings, tls = null,
-  lan = env.TELEPATHY_HOST ?? findLanAddress(), localPath = null, ledgerPath,
+  lan = env.TELEPATHY_HOST ?? findLanAddress(), localPath = null, ledgerPath, projectRoot,
+  projectRefreshMs = PROJECT_REFERENCE_REFRESH_MS,
 } = {}) {
   const assets = new Map();
   const seats = new Map();
@@ -127,6 +130,29 @@ export function createHub({
     settings: { roomInput: env.TELEPATHY_ROOM_INPUT ?? 'mac', ...settings },
   });
   let info = {};
+  let project;
+  let projectTimer;
+  let projectReloading = false;
+
+  async function refreshProjectReferences() {
+    if (projectReloading) return;
+    projectReloading = true;
+    try {
+      const next = await buildProjectReferences({ previous: project, root: projectRoot });
+      if (!projectTimer) return;
+      if (next.index.version !== project.index.version) {
+        session.pitchReferences = next.documents;
+        session.clearPitchPlanning();
+        info.referenceIndex = next.index;
+      }
+      project = next;
+      info.referenceRefresh = 'ready';
+    } catch {
+      if (projectTimer) info.referenceRefresh = 'using-last-good-index';
+    } finally {
+      projectReloading = false;
+    }
+  }
 
   function respond(req, res, status, mime, value) {
     res.writeHead(status, {
@@ -368,6 +394,8 @@ export function createHub({
     session, assets,
     async start({ port = 5780, tlsPort = 5743, host = '0.0.0.0' } = {}) {
       if (ledgerPath) await speech.sweepLedger?.();
+      project = await buildProjectReferences({ root: projectRoot });
+      session.pitchReferences = project.documents;
       const http_address = await listen(http, port, host);
       const https_address = https ? await listen(https, tlsPort, host) : null;
       const join_host = LOOPBACK_HOSTS.has(host) ? host : lan;
@@ -390,11 +418,17 @@ export function createHub({
         voicePreview: true,
         roomMic: true,
         roomInput: session.roomInput,
+        referenceIndex: project.index,
+        referenceRefresh: 'ready',
       };
+      projectTimer = setInterval(refreshProjectReferences, projectRefreshMs);
+      projectTimer.unref();
       return info;
     },
     async close() {
       clearInterval(heartbeat);
+      clearInterval(projectTimer);
+      projectTimer = null;
       for (const ws of wss.clients) ws.terminate();
       wss.close();
       await Promise.all([session.close(), end(http), end(https)]);

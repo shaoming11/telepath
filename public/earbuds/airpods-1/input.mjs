@@ -4,6 +4,7 @@ export const AIRPODS_1_PLAYBACK_URL = '/earbuds/airpods-1/playback.mp3';
 const DEFAULT_WINDOW_MS = 1200;
 const BOUNCE_MS = 95;
 const SIGNALS = ['R1', 'R2', 'L1'];
+const CALIBRATION_TRIALS = { R2: 2, L1: 2 };
 
 export function createAirPods1Input({ onRaw, onSignal, onError, onPlay, now, setTimer, clearTimer }) {
   let window_ms = DEFAULT_WINDOW_MS;
@@ -51,8 +52,8 @@ export function countPattern(signal) {
   return Array.from({ length: SIGNALS.indexOf(signal) + 1 }, () => ({ action: 'nexttrack' }));
 }
 
-export function buildCountTrials(mode, trials_per_pattern) {
-  return SIGNALS.slice(1).flatMap(signal => Array.from({ length: trials_per_pattern }, (_, trial) =>
+export function buildCountTrials(mode) {
+  return Object.entries(CALIBRATION_TRIALS).flatMap(([signal, count]) => Array.from({ length: count }, (_, trial) =>
     ({ signal, trial, mode, kind: 'tap', gestureModel: AIRPODS_1_ID })));
 }
 

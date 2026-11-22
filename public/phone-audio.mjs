@@ -108,6 +108,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
   let context = null;
   let cue_gain = null;
   let voice_gain = null;
+  let pitch_gain = null;
   let output_analyser = null;
   let output_samples = null;
   let levels = { ...volumes };
@@ -124,6 +125,9 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     context = new Context({ latencyHint: 'interactive' });
     cue_gain = context.createGain();
     voice_gain = context.createGain();
+    pitch_gain = context.createGain();
+    pitch_gain.gain.value = 0.65;
+    pitch_gain.connect(voice_gain);
     if (typeof context.createAnalyser === 'function') {
       output_analyser = context.createAnalyser();
       output_analyser.fftSize = 256;
@@ -324,6 +328,18 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     return cancel_unstarted(meta => meta.announcement);
   }
 
+  function stop_pitch_help(message_id) {
+    retired.add(message_id);
+    heard_backlog.delete(message_id);
+    for (const [source, meta] of [...sources]) {
+      if (!meta.pitch_help || meta.message_id !== message_id) continue;
+      try { source.stop(); } catch {}
+      sources.delete(source);
+      drop_ack(source);
+    }
+    recompute_playhead();
+  }
+
   function schedule(frame, cue, speech, guard) {
     const earliest = context.currentTime + START_MARGIN_S;
     const serial = Boolean(speech) || !IMMEDIATE_CUES.has(frame.cue);
@@ -334,6 +350,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     if (guard.deadline != null && (first_speech_at - context.currentTime) * 1000 > guard.deadline - performance.now()) return;
     const meta = {
       message_id: frame.messageId ?? null, preview: guard.preview, announcement: guard.announcement != null, serial,
+      pitch_help: frame.kind === 'pitch_help',
       title: frame.text || (frame.cue ? frame.cue + ' cue' : ''),
     };
     let cursor = cue_at;
@@ -348,7 +365,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     if (voice_audible) {
       speech_at = cursor;
       const rate = Number.isFinite(frame.rate) ? Math.max(0.8, Math.min(1.2, frame.rate)) : 1;
-      speech_source = start_source(speech, voice_gain, speech_at, rate, meta);
+      speech_source = start_source(speech, meta.pitch_help ? pitch_gain : voice_gain, speech_at, rate, meta);
       cursor += speech.duration / rate;
     }
     if (serial) playhead = cursor + QUEUE_TAIL_S;
@@ -383,7 +400,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
   function play(frame) {
     if (frame.messageId && retired.has(frame.messageId)) return;
     const preview = is_preview(frame);
-    const announcement = frame.kind === 'announcement';
+    const announcement = frame.kind === 'announcement' || frame.kind === 'pitch_help';
     const window_ms = Number(frame.expiresAt) - Number(frame.decisionAt);
     const guard = {
       generation: session_generation,
@@ -486,6 +503,7 @@ export function createAudioEngine({ volumes, timing, on_status, on_heard }) {
     clear_session,
     cancel_previews,
     cancel_announcements,
+    stop_pitch_help,
     flush_heard,
     play,
     play_cue,
