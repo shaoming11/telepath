@@ -397,6 +397,29 @@ test('Mac input releases the phone room microphone and leaves approval controls 
   assert.equal(mic_tracks.length, count);
 });
 
+test('Mac-only voice consent never grants the phone permission to listen to the room', async () => {
+  socket.receive({ type: 'state', state: seat_state(null, { roomInput: 'mac', sessionId: '3' }) });
+  get_element('settings-voice').listeners.click[0]();
+  await settle();
+  assert.match(get_element('voice-consent-text').textContent, /temporary clone/);
+  assert.equal(get_element('voice-room').hidden, true);
+  const captured = mic_tracks.length;
+  get_element('voice-consent').listeners.change[0]({ target: { checked: true } });
+  get_element('voice-room').listeners.click[0]();
+  await settle();
+  assert.equal(stored.get(CONSENT_KEY), 'voice');
+  assert.equal(mic_tracks.length, captured);
+
+  socket.receive({ type: 'state', state: seat_state(null, { roomInput: 'phones', sessionId: '3' }) });
+  get_element('settings-listen').listeners.change[0]({ target: { checked: true } });
+  await settle();
+  assert.match(get_element('voice-consent-text').textContent, /listen to this room/);
+  assert.equal(get_element('voice-consent').checked, false);
+  assert.equal(get_element('voice-room').hidden, false);
+  assert.equal(mic_tracks.length, captured);
+  socket.receive({ type: 'state', state: seat_state(null, { roomInput: 'mac', sessionId: '3' }) });
+});
+
 test('a rejected clone stays on the voice screen with the provider reason and a retry', async () => {
   get_element('settings-voice').listeners.click[0]();
   get_element('voice-record').listeners.click[0]();
@@ -416,6 +439,7 @@ test('a rejected clone stays on the voice screen with the provider reason and a 
   await settle();
   assert.equal(get_element('voice-status').textContent, 'ElevenLabs requires voice verification.');
   assert.equal(get_element('voice-record').disabled, false);
+  stored.set(CONSENT_KEY, '1');
 });
 
 test('AirPods 1 calibration releases mic capture until leaving setup', async () => {
