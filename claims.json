@@ -1,33 +1,4 @@
 {
-  "revision": 41,
-  "claims": [
-    {
-      "id": "47a5821d-b5a2-49e5-ba46-37d90191e7e2",
-      "owner": "fireheartjerry",
-      "agent": "codex-monitor-integration",
-      "branch": "jerry/airpods-1",
-      "thread": "https://github.com/fireheartjerry/telepathy/discussions/2",
-      "scopes": [
-        "hub/audio.mjs",
-        "hub/server.mjs",
-        "hub/session.mjs",
-        "public/phone.mjs",
-        "public/index.html",
-        "public/stage.mjs",
-        "public/stage.html",
-        "tests/session.test.mjs"
-      ],
-      "paths": [
-        "hub/audio.mjs",
-        "hub/server.mjs",
-        "hub/session.mjs",
-        "public/index.html",
-        "public/phone.mjs",
-        "public/stage.html",
-        "public/stage.mjs",
-        "tests/session.test.mjs"
-      ],
-      "claimedAt": "2026-11-22T04:25:32.870Z"
-    }
-  ]
+  "revision": 42,
+  "claims": []
 }
