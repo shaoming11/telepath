@@ -273,7 +273,7 @@
 
         <div class="toggles">
           <label class="row-toggle"><span>AI drafts</span><input type="checkbox" id="settings-drafts"></label>
-          <label class="row-toggle" id="settings-listen-row"><span>Listen to the room</span><input type="checkbox" id="settings-listen"></label>
+          <label class="row-toggle" id="settings-listen-row"><span>Listen with the phone mic</span><input type="checkbox" id="settings-listen"></label>
         </div>
 
         <div class="ranges">
@@ -283,8 +283,14 @@
 
         <div class="split">
           <button id="settings-voice" type="button">Re-record voice</button>
-          <button id="settings-calibrate" type="button">Re-calibrate</button>
+          <button id="settings-voice-preview" type="button">Hear my clone</button>
         </div>
+        <div class="split">
+          <button id="settings-calibrate" type="button">Re-calibrate</button>
+          <button id="settings-room-invite" type="button" hidden>Share room mic link</button>
+        </div>
+        <label class="field"><input id="settings-room-link" aria-label="Room mic invite link" readonly hidden></label>
+        <p class="meta" id="settings-room-status" role="status"></p>
 
         <p class="meta" id="settings-profile" role="status"></p>
         <div id="settings-groups"></div>

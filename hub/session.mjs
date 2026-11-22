@@ -30,7 +30,7 @@ function createSeat(name) {
   return {
     name, online: false, sim: false, mode: 2, drafts: true,
     connected: false, connection: new AbortController(),
-    listening: false, listeningRequested: false, transcription: 'off',
+    listening: false, listeningRequested: false, roomMicSource: null, transcription: 'off',
     voice: 'idle', voiceRef: null, voiceRequest: null,
     earbuds: false, calibrated: false, wantsReady: false,
     situation: '', transcript: [], level: 0, pending: null,
@@ -158,7 +158,8 @@ export class Session {
         const visible = viewer == null || viewer === seat;
         return [seat, {
           name: state.name, online: state.online, sim: state.sim, mode: state.mode,
-          drafts: state.drafts, listening: state.listening, transcription: state.transcription, voice: state.voice,
+          drafts: state.drafts, listening: state.listening, roomMicSource: state.roomMicSource,
+          transcription: state.transcription, voice: state.voice,
           earbuds: state.earbuds, calibrated: state.calibrated, ready: this.isReady(seat),
           situation: visible ? state.situation : '',
           transcript: visible ? state.transcript.slice() : [],
@@ -409,6 +410,7 @@ export class Session {
       case 'preset': return this.selectPreset(frame.preset, frame.context);
       case 'cache_ready': return this.cacheReady(seat, frame.activeId);
       case 'voice': return this.recordVoice(seat, frame);
+      case 'voice_preview': return this.previewVoice(seat);
       case 'mic': return this.receiveMic(seat, frame);
       case 'calibration': return this.applyCalibration(frame.profile);
       case 'listen': return this.setListening(seat, frame.enabled === true);
@@ -640,6 +642,28 @@ export class Session {
     try { await this.audio.removeVoice?.(voice); } catch {}
   }
 
+  async previewVoice(seat) {
+    const state = this.seats[seat];
+    if (state.voiceRef?.status !== 'ready' || state.voicePreviewPending || state.sim) return;
+    state.voicePreviewPending = true;
+    const voice = state.voiceRef;
+    const signal = this.liveScope([seat]);
+    try {
+      const text = 'Hi, this is my Telepathy voice. Take a moment to hear how I sound at a normal speaking volume.';
+      const url = toUrl(await withDeadline(requestSignal => this.audio.speech(seat, text, {
+        voice, role: 'voice-preview', signal: requestSignal,
+      }), 8000, signal));
+      if (!signal.aborted && state.voiceRef === voice) {
+        if (url) this.cue(seat, null, { kind: 'voice_preview', text, url });
+        else this.emitSeat(seat, { type: 'voice_preview_error' });
+      }
+    } catch {
+      if (!signal.aborted) this.emitSeat(seat, { type: 'voice_preview_error' });
+    } finally {
+      state.voicePreviewPending = false;
+    }
+  }
+
   addTranscript(seat, value, generation = this.generation) {
     const state = this.seats[seat];
     if (this.closed || generation !== this.generation || this.canned || this.phase === 'reveal' || !state.online) return;
@@ -653,9 +677,9 @@ export class Session {
     return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
   }
 
-  async receiveMic(seat, frame) {
+  async receiveMic(seat, frame, source = 'phone') {
     const state = this.seats[seat];
-    if (!state.listening || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
+    if (!state.listening || state.roomMicSource !== source || typeof frame.audio !== 'string' || frame.audio.length > 48_000) return;
     state.level = this.levelValue(frame.level);
     const generation = this.generation;
     const listen_version = state.listenVersion;
@@ -666,18 +690,25 @@ export class Session {
     } catch {}
   }
 
-  async setListening(seat, enabled) {
+  async setListening(seat, enabled, source = 'phone') {
+    const state = this.seats[seat];
     if (!enabled) {
+      if (state.roomMicSource !== source) return;
       this.stopListening(seat);
       this.publish();
       return;
     }
-    const state = this.seats[seat];
-    if (state.listeningRequested || state.sim || this.canned || this.phase === 'reveal') return;
+    if (!state.online || state.sim || this.canned || this.phase === 'reveal') return;
+    if (state.listeningRequested) {
+      if (source !== 'companion' || state.roomMicSource === 'companion') return;
+      this.stopListening(seat);
+    }
     const generation = this.generation;
     const listen_version = ++state.listenVersion;
     state.listeningRequested = true;
+    state.roomMicSource = source;
     state.transcription = 'waiting';
+    this.publish();
     try {
       const listening = await this.audio.listen?.(seat, true, text => {
         if (state.listenVersion === listen_version) this.addTranscript(seat, text, generation);
@@ -690,6 +721,7 @@ export class Session {
     }
     if (!state.listening) {
       state.listeningRequested = false;
+      state.roomMicSource = null;
       state.transcription = 'unavailable';
     }
     this.publish();
@@ -709,6 +741,7 @@ export class Session {
     state.listenVersion += 1;
     state.listening = false;
     state.listeningRequested = false;
+    state.roomMicSource = null;
     state.transcription = 'off';
     state.level = 0;
     if (was_requested) {
